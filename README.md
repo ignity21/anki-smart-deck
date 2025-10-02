@@ -20,7 +20,7 @@ AnkiSmartDeck is an automated Anki flashcard generator that leverages Google's e
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.13+
 - [uv](https://github.com/astral-sh/uv) package manager
 - Anki with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) plugin installed
 - Google Cloud Platform account with API access
