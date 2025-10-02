@@ -1,0 +1,2 @@
+# anki-smart-deck
+AnkiSmartDeck
