@@ -6,9 +6,6 @@
 
 .PHONY: test clean-test clean lint lint-fix install install-dev
 
-test:
-	uv run pytest -xvs tests/
-
 clean-test:
 	rm -rf .pytest_cache
 	rm -rf tests/__pycache__
@@ -24,6 +21,14 @@ lint:
 
 lint-fix:
 	uv run ruff check --fix
+
+type-check:
+	uv run basedpyright
+
+format:
+	uv run ruff format
+
+pre-commit: format lint type-check
 
 install:
 	uv pip install

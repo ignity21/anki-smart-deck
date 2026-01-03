@@ -122,17 +122,16 @@ for word in words:
 
 ```bash
 # Install development dependencies
-uv pip install -r requirements-dev.txt
+uv sync
 
 # Run tests
-uv run pytest
+make test
 
 # Format code
-uv run black .
-uv run isort .
+make format
 
 # Type checking
-uv run mypy .
+make type-check
 ```
 
 ## Documentation
