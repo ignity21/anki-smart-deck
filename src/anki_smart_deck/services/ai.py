@@ -15,12 +15,11 @@ class GoogleAIService:
         "  'uk_pron': 'IPA string',\n"
         "  'word_form': 'abbreviated string (e.g., n., vt., vi., adj.)',\n"
         "  'frequency': 'string (CEFR level: A1, A2, B1, B2, C1, or C2)',\n"
-        "  'def_en': ['array of English definitions'],\n"
-        "  'def_cn': ['array of Chinese definitions'],\n"
+        "  'definitions': ['array of definition pair ['en def', 'cn def']'],\n"
         "  'synonyms': ['array of strings'],\n"
         "  'notes': ['array of strings including British English variations'],\n"
         "  'examples': {\n"
-        "    'word or phrase': ['array of max 2 example sentences']\n"
+        "    'word or phrase': ['array of pair ['english', 'chinese_translation'] max 2 example sentences']\n"
         "  }\n"
         "}\n"
         "Strict Rules:\n"
@@ -29,7 +28,7 @@ class GoogleAIService:
         "3. FREQUENCY: Assign a CEFR level (A1-C2) to each word form to indicate its commonality.\n"
         "4. WORD FORM: Use ONLY concise abbreviations (n., vt., vi., adj., adv., prep., conj.).\n"
         "5. ONE-TO-ONE MAPPING: 'def_en' and 'def_cn' must match exactly by index.\n"
-        "6. EXAMPLES: Use '**phrase**' formatting and limit to 2 per key.\n"
+        "6. EXAMPLES: Use '**phrase**' formatting in sentences and limit to 2 per key.\n"
         "7. NO MARKDOWN: Respond ONLY with raw JSON."
     )
 
@@ -63,7 +62,7 @@ if __name__ == "__main__":
     async def main():
         ai_srv = GoogleAIService()
         async with ai_srv:
-            return await ai_srv.generate_cards("account")
+            return await ai_srv.generate_cards("formal")
 
     cards = asyncio.run(main())
     rprint(cards)
