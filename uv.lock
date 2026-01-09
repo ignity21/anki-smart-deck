@@ -120,7 +120,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", specifier = ">=3.12.15" },
+    { name = "aiohttp", specifier = ">=3.13.2" },
     { name = "click", specifier = ">=8.2.0" },
     { name = "google-cloud-texttospeech", specifier = ">=2.31.0" },
     { name = "google-genai", extras = ["aiohttp"], specifier = ">=1.40.0" },
