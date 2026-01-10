@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.scripts]
-anki-gen = "anki_smart_deck.cli:main"
+anki-deck = "anki_smart_deck.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/anki_smart_deck"]

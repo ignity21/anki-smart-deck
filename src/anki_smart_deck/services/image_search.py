@@ -108,32 +108,106 @@ class GoogleImageSearchService:
         Returns:
             图片信息列表
         """
-        # 优化搜索词，增加 "definition" 或 "illustration" 提高相关性
-        search_query = f"{word} definition illustration"
+        # 优化搜索词策略：
+        # 1. 优先搜索简单的概念图示
+        # 2. 使用 "meaning" 而不是具体词，避免返回社交媒体内容
+        # 3. 过滤掉明显不相关的结果
+        # 4. 使用 "-word" 排除包含单词文本的图片
+
+        # 如果是多词短语，只取第一个实词
+        search_word = word.split()[0] if " " in word else word
+
+        # 构建排除词列表（排除包含单词文本的图片）
+        # 不能直接在搜索词中排除，因为我们还是要搜这个词的图
+        # 但可以在 title/context 中过滤
+
+        # 过滤不相关结果的辅助函数
+        def is_relevant_image(img_info: Dict) -> bool:
+            """检查图片是否相关"""
+            title = img_info.get("title", "").lower()
+            context = img_info.get("context_link", "").lower()
+
+            # 过滤掉包含单词文本的图片（可能是定义截图或文字图）
+            # 但要注意：对于像 "apple" 这样的词，"apple" 可能出现在正常图片标题中
+            # 所以我们主要过滤包含 "definition", "meaning", "word" 等关键词的组合
+            word_lower = search_word.lower()
+            suspicious_combinations = [
+                f"{word_lower} definition",
+                f"{word_lower} meaning",
+                f"{word_lower} word",
+                f"define {word_lower}",
+                f"what is {word_lower}",
+                "dictionary",
+                "vocabulary",
+            ]
+
+            for combo in suspicious_combinations:
+                if combo in title or combo in context:
+                    return False
+
+            # 过滤掉社交媒体和视频网站
+            blacklist = [
+                "tiktok", "youtube", "instagram", "facebook",
+                "twitter", "reddit", "pinterest",
+                "video", "deal", "rooftop", "restaurant",
+                "journal", "article", "paper", "research",
+                "screenshot", "app", "download", "template",
+                "poster", "flyer", "card design", "typography",
+            ]
+
+            for item in blacklist:
+                if item in title or item in context:
+                    return False
+
+            return True
 
         # 如果优先简单图片，先尝试搜索 clipart
         if prefer_simple:
-            rprint(f"🎨 [bold cyan]搜索简单图示:[/bold cyan] [yellow]{word}[/yellow]")
+            rprint(f"🎨 [bold cyan]搜索简单图示:[/bold cyan] [yellow]{search_word}[/yellow]")
+
+            # 策略1: 搜索词义相关的 clipart（避免文字图片）
             images = self.search_images(
-                query=search_query,
-                num_results=num_results,
+                query=f"{search_word} icon clipart -text -definition -dictionary",
+                num_results=num_results * 3,  # 多搜索一些，然后过滤
                 img_size=img_size,
                 img_type="clipart",
             )
 
-            # 如果 clipart 结果不够，再搜索普通图片
+            # 过滤相关图片
+            images = [img for img in images if is_relevant_image(img)][:num_results]
+
+            # 策略2: 如果结果不够，搜索 illustration
             if len(images) < num_results:
-                rprint("[dim]📸 补充搜索普通图片...[/dim]")
+                rprint("[dim]🎨 补充搜索插图...[/dim]")
                 additional_images = self.search_images(
-                    query=search_query,
-                    num_results=num_results - len(images),
+                    query=f"{search_word} illustration symbol -text -typography",
+                    num_results=(num_results - len(images)) * 3,
+                    img_size=img_size,
+                    img_type="clipart",
+                )
+                additional_images = [img for img in additional_images if is_relevant_image(img)]
+                images.extend(additional_images[:num_results - len(images)])
+
+            # 策略3: 如果还不够，尝试图标搜索
+            if len(images) < num_results:
+                rprint("[dim]🔍 补充搜索图标...[/dim]")
+                additional_images = self.search_images(
+                    query=f"{search_word} icon vector -word -dictionary",
+                    num_results=(num_results - len(images)) * 3,
                     img_size=img_size,
                 )
-                images.extend(additional_images)
+                additional_images = [img for img in additional_images if is_relevant_image(img)]
+                images.extend(additional_images[:num_results - len(images)])
         else:
             images = self.search_images(
-                query=search_query, num_results=num_results, img_size=img_size
+                query=f"{search_word} image -text -definition",
+                num_results=num_results * 3,
+                img_size=img_size,
             )
+            images = [img for img in images if is_relevant_image(img)][:num_results]
+
+
+
 
         return images
 

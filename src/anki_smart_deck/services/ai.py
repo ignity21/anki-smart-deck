@@ -15,6 +15,7 @@ class GoogleAIService:
         '  "uk_pron": "IPA string",\n'
         '  "word_form": "abbreviated string (e.g., n., vt., vi., adj., adv., prep., conj.)",\n'
         '  "frequency": "CEFR level (A1, A2, B1, B2, C1, or C2)",\n'
+        '  "syllabication": "syllable breakdown with hyphens (e.g., ser-en-dip-i-ty)",\n'
         '  "definitions": [\n'
         '    ["English definition", "Chinese definition"]\n'
         "  ],\n"
@@ -31,11 +32,12 @@ class GoogleAIService:
         '2. BRITISH ENGLISH: If a British variant exists, add it to "notes" in the format: "BrE: <word>".\n'
         "3. FREQUENCY: Assign exactly ONE CEFR level (A1–C2) for each word form.\n"
         "4. WORD FORM: Use ONLY the following abbreviations: n., vt., vi., adj., adv., prep., conj.\n"
-        "5. DEFINITIONS MAPPING: Each English definition must align one-to-one with its Chinese translation by array index.\n"
-        "6. EXAMPLES:\n"
-        "   - Highlight the target word or phrase using <b>...</b> in English sentences.\n"
+        "5. SYLLABICATION: Provide the correct syllable breakdown with hyphens (e.g., 'formal' → 'for-mal').\n"
+        "6. DEFINITIONS MAPPING: Each English definition must align one-to-one with its Chinese translation by array index.\n"
+        "7. EXAMPLES:\n"
+        "   - Provide natural example sentences without any HTML formatting.\n"
         "   - Each key may contain a maximum of 2 example sentence pairs.\n"
-        "7. OUTPUT FORMAT: Respond ONLY with valid raw JSON. Do NOT include explanations, comments, or markdown."
+        "8. OUTPUT FORMAT: Respond ONLY with valid raw JSON. Do NOT include explanations, comments, or markdown."
     )
 
     def __init__(self, model_id: str = "gemini-3-flash-preview"):

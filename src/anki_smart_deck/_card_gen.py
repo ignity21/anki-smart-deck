@@ -8,6 +8,7 @@ from rich import print as rprint
 
 from anki_smart_deck.services.ai import GoogleAIService
 from anki_smart_deck.services.anki_connect import AnkiConnectClient
+from anki_smart_deck.services.image_search import GoogleImageSearchService
 from anki_smart_deck.services.tts import GoogleTTSService
 
 
@@ -19,6 +20,7 @@ class CardGenerator:
         ai_service: GoogleAIService,
         anki_client: AnkiConnectClient,
         tts_service: GoogleTTSService,
+        image_service: GoogleImageSearchService,
         deck_name: str,
         model_name: str = "AI Word (R)",
     ):
@@ -28,12 +30,14 @@ class CardGenerator:
             ai_service: Google AI service for generating card content
             anki_client: AnkiConnect client for adding cards
             tts_service: Google TTS service for generating audio
+            image_service: Google Image Search service for finding images
             deck_name: Target Anki deck name
             model_name: Anki note type name
         """
         self._ai_service = ai_service
         self._anki_client = anki_client
         self._tts_service = tts_service
+        self._image_service = image_service
         self._deck_name = deck_name
         self._model_name = model_name
 
@@ -59,27 +63,53 @@ class CardGenerator:
         # Join with <br> for proper HTML line breaks in Anki
         return "<br>".join(en_defs), "<br>".join(cn_defs)
 
-    def _format_examples(self, examples: dict[str, list[list[str]]]) -> str:
-        """Format examples into a single string with HTML formatting.
+    async def _format_examples(
+        self, examples: dict[str, list[list[str]]], word: str
+    ) -> str:
+        """Format examples into a single string with HTML formatting and TTS audio.
 
         Args:
             examples: Dict mapping phrase to [en, cn] example pairs
+            word: The word being defined (for TTS generation)
 
         Returns:
-            Formatted examples string with HTML tags
+            Formatted examples string with HTML tags and audio
         """
         if not examples:
             return ""
 
         formatted = []
-        for _, example_pairs in examples.items():
+        example_count = sum(len(pairs) for pairs in examples.values())
+        current_example = 0
+
+        for phrase, example_pairs in examples.items():
             for en, cn in example_pairs:
-                # Add bullet point with line breaks
-                # AI already returns <b>word</b> format, no conversion needed
-                formatted.append(f"• {en}")
-                formatted.append(
-                    f"&nbsp;&nbsp;{cn}"
-                )  # Use non-breaking space for indentation
+                current_example += 1
+
+                # Generate TTS audio for the example sentence (without HTML)
+                audio_tag = ""
+                try:
+                    audio_result = await self._generate_audio(
+                        text=en, language_code="en-US", audio_type="sentence"
+                    )
+                    if audio_result:
+                        audio_tag = f" {audio_result[1]}"
+                except Exception as e:
+                    rprint(
+                        f"[yellow]⚠️  Failed to generate audio for example:[/yellow] {str(e)}"
+                    )
+
+                # Add bold formatting to the phrase in the English sentence
+                en_formatted = en.replace(phrase, f"<b>{phrase}</b>")
+
+                # Add bullet point with English sentence and audio
+                formatted.append(f"• {en_formatted}{audio_tag}")
+                # Add Chinese translation with indentation
+                formatted.append(f"&nbsp;&nbsp;{cn}")
+
+                # Add separator after each example group (except the last one)
+                if current_example < example_count:
+                    formatted.append("<hr>")
 
         # Join with <br> for proper line breaks in Anki
         return "<br>".join(formatted)
@@ -94,6 +124,104 @@ class CardGenerator:
             Comma-separated synonyms
         """
         return ", ".join(synonyms) if synonyms else ""
+
+    async def _search_and_store_images(self, word: str, num_images: int = 2) -> str:
+        """Search for images and store them in Anki.
+
+        Args:
+            word: The word to search images for
+            num_images: Number of images to search and store
+
+        Returns:
+            HTML string with image tags for Anki
+        """
+        try:
+            # Search for images
+            images = self._image_service.search_word_image(
+                word=word, num_results=num_images, img_size="SMALL", prefer_simple=True
+            )
+
+            if not images:
+                rprint("[yellow]  ⚠️  No images found[/yellow]")
+                return ""
+
+            image_tags = []
+            for i, img_info in enumerate(images[:num_images], 1):
+                try:
+                    # Use thumbnail URL instead of original URL to avoid 403 errors
+                    thumbnail_url = img_info.get("thumbnail", "")
+                    if not thumbnail_url:
+                        rprint(f"[yellow]  ⚠️  No thumbnail for image {i}[/yellow]")
+                        continue
+
+                    # Download thumbnail image
+                    image_data = self._image_service.download_image(thumbnail_url)
+
+                    if image_data:
+                        # Generate filename
+                        file_id = shortuuid.uuid()
+                        # Thumbnails are usually JPEG
+                        filename = f"img_{word}_{file_id}.jpg"
+
+                        # Store in Anki media folder
+                        stored_filename = await self._anki_client.store_media_file(
+                            filename=filename, data=image_data
+                        )
+
+                        # Add image tag
+                        image_tags.append(f'<img src="{stored_filename}">')
+                        rprint(
+                            f"  [green]✓[/green] Stored image {i}: [dim]{stored_filename}[/dim]"
+                        )
+
+                except Exception as e:
+                    rprint(f"[yellow]  ⚠️  Failed to process image {i}:[/yellow] {str(e)}")
+                    continue
+
+            # Join images with space
+            return " ".join(image_tags) if image_tags else ""
+
+        except Exception as e:
+            rprint(f"[yellow]⚠️  Image search failed:[/yellow] {str(e)}")
+            return ""
+
+    def _generate_syllabication(self, word: str, us_pron: str) -> str:
+        """Generate syllabication from word and pronunciation.
+
+        Args:
+            word: The word to syllabicate
+            us_pron: US pronunciation (IPA) for reference
+
+        Returns:
+            Syllabicated word (e.g., "ser-en-dip-i-ty")
+        """
+        # This is a simple heuristic approach
+        # For production, you might want to use a proper syllabication library
+        # or add syllabication to the AI prompt
+
+        # For now, we'll use a basic pattern based on common syllable breaks
+        # This could be improved with AI generation or a syllabication library
+
+        # Simple heuristic: split on vowel-consonant boundaries
+        # But this is very basic - ideally syllabication should come from AI
+        syllabified = word.lower()
+
+        # Add hyphens before consonants that follow vowels
+        # This is a placeholder - real syllabication is complex
+        vowels = "aeiouAEIOU"
+        result = []
+        prev_vowel = False
+
+        for i, char in enumerate(syllabified):
+            is_vowel = char in vowels
+            if i > 0 and not is_vowel and prev_vowel and i < len(syllabified) - 1:
+                # Check if next char is also consonant
+                if i + 1 < len(syllabified) and syllabified[i + 1] not in vowels:
+                    result.append("-")
+            result.append(char)
+            prev_vowel = is_vowel
+
+        return "".join(result)
 
     def _format_notes(self, notes: list[str]) -> str:
         """Format notes list into a string with HTML formatting.
@@ -111,28 +239,29 @@ class CardGenerator:
         return "<br>".join(f"• {note}" for note in notes)
 
     async def _generate_audio(
-        self, word: str, language_code: str
+        self, text: str, language_code: str, audio_type: str = "word"
     ) -> tuple[str, str] | None:
         """Generate audio file for word pronunciation.
 
         Args:
-            word: The word to synthesize
+            text: The text to synthesize
             language_code: Language code ("en-US" or "en-GB")
+            audio_type: Type of audio ("word" or "sentence")
 
         Returns:
             Tuple of (filename, anki_sound_tag) or None if failed
         """
         try:
-            # Generate unique filename using shortuuid
+            # Generate unique filename with prefix
             file_id = shortuuid.uuid()
-            filename = f"{file_id}.mp3"
+            filename = f"tts_{audio_type}_{file_id}.mp3"
 
             # Synthesize speech with random WaveNet voice
             (
                 audio_data,
                 voice_name,
             ) = await self._tts_service.synthesize_with_random_voice(
-                text=word,
+                text=text,
                 language_code=language_code,
             )
 
@@ -143,9 +272,7 @@ class CardGenerator:
 
             # Return Anki sound tag format
             anki_sound_tag = f"[sound:{stored_filename}]"
-            rprint(
-                f"[green]✓[/green] Generated audio: [dim]{stored_filename} ({voice_name})[/dim]"
-            )
+            rprint(f"  [green]✓[/green] Generated audio: [dim]{stored_filename}[/dim]")
 
             return stored_filename, anki_sound_tag
 
@@ -214,7 +341,7 @@ class CardGenerator:
         return ""
 
     async def generate_card(
-        self, word: str, tags: list[str] | None = None, force_new: bool = False
+        self, word: str, tags: list[str] | None = None, force_new: bool = False, include_images: bool = True
     ) -> tuple[int, bool]:
         """Generate and add a card for the given word.
 
@@ -222,6 +349,7 @@ class CardGenerator:
             word: The word to create a card for
             tags: Optional tags to add to the card
             force_new: If True, always create new card even if one exists
+            include_images: If True, search and add images to the card (default: True)
 
         Returns:
             Tuple of (note_id, is_updated) where is_updated is True if an existing note was updated
@@ -274,13 +402,13 @@ class CardGenerator:
 
         # Generate US audio
         us_audio_result = await self._generate_audio(
-            word=card_data.get("word", word), language_code="en-US"
+            text=card_data.get("word", word), language_code="en-US", audio_type="word"
         )
         us_audio = us_audio_result[1] if us_audio_result else ""
 
         # Generate UK audio
         uk_audio_result = await self._generate_audio(
-            word=card_data.get("word", word), language_code="en-GB"
+            text=card_data.get("word", word), language_code="en-GB", audio_type="word"
         )
         uk_audio = uk_audio_result[1] if uk_audio_result else ""
 
@@ -290,6 +418,29 @@ class CardGenerator:
 
         def_en, def_cn = self._format_definitions(card_data.get("definitions", []))
         frequency = card_data.get("frequency", "")
+
+        # Generate examples with TTS audio (async)
+        examples_formatted = await self._format_examples(
+            card_data.get("examples", {}), card_data.get("word", word)
+        )
+
+        # Get syllabication from AI or generate as fallback
+        syllabication = card_data.get("syllabication", "")
+        if not syllabication:
+            syllabication = self._generate_syllabication(
+                card_data.get("word", word), card_data.get("us_pron", "")
+            )
+
+        # Step 5: Search and download images (optional)
+        images_html = ""
+        if include_images:
+            step_num += 1
+            rprint(f"\n[cyan]Step {step_num}:[/cyan] Searching for images...")
+            images_html = await self._search_and_store_images(
+                card_data.get("word", word), num_images=2
+            )
+        else:
+            rprint("\n[dim]ℹ️  Skipping image search (include_images=False)[/dim]")
 
         fields = {
             "Word": card_data.get("word", word),
@@ -301,16 +452,17 @@ class CardGenerator:
             "Definition EN": def_en,
             "Definition CN": def_cn,
             "Synonyms": self._format_synonyms(card_data.get("synonyms", [])),
-            "Examples": self._format_examples(card_data.get("examples", {})),
-            "Images": "",  # Will be added later with image search
+            "Examples": examples_formatted,
+            "Images": images_html,
             "Notes": self._format_notes(card_data.get("notes", [])),
             "User Notes": "",  # Will be preserved if updating
             "Frequency": frequency,
+            "Syllabication": syllabication,
         }
 
         rprint(f"[green]✓[/green] Formatted {len(fields)} fields")
 
-        # Step 5: Prepare tags (include frequency tag)
+        # Step N: Prepare tags (include frequency tag)
         step_num += 1
         rprint(f"\n[cyan]Step {step_num}:[/cyan] Preparing tags...")
 
@@ -374,7 +526,7 @@ class CardGenerator:
                 raise RuntimeError(f"Failed to add card to Anki: {str(e)}") from e
 
     async def generate_cards_batch(
-        self, words: list[str], tags: list[str] | None = None, force_new: bool = False
+        self, words: list[str], tags: list[str] | None = None, force_new: bool = False, include_images: bool = True
     ) -> dict[str, tuple[int | None, bool]]:
         """Generate cards for multiple words.
 
@@ -382,6 +534,7 @@ class CardGenerator:
             words: List of words to create cards for
             tags: Optional tags to add to all cards
             force_new: If True, always create new cards even if they exist
+            include_images: If True, search and add images to cards (default: True)
 
         Returns:
             Dict mapping word to (note_id, is_updated) tuple (None if failed)
@@ -395,7 +548,7 @@ class CardGenerator:
 
             try:
                 note_id, is_updated = await self.generate_card(
-                    word, tags, force_new=force_new
+                    word, tags, force_new=force_new, include_images=include_images
                 )
                 results[word] = (note_id, is_updated)
             except Exception as e:
@@ -424,6 +577,7 @@ if __name__ == "__main__":
         ai_service = GoogleAIService()
         anki_client = AnkiConnectClient()
         tts_service = GoogleTTSService()
+        image_service = GoogleImageSearchService()
 
         async with ai_service, anki_client:
             # Create card generator
@@ -431,6 +585,7 @@ if __name__ == "__main__":
                 ai_service=ai_service,
                 anki_client=anki_client,
                 tts_service=tts_service,
+                image_service=image_service,
                 deck_name="English::AI Words",
                 model_name="AI Word (R)",
             )

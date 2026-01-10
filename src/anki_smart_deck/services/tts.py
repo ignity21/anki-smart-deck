@@ -46,7 +46,6 @@ class GoogleTTSService:
         """
         # 如果已缓存，直接返回
         if language_code in self._wavenet_voices_cache:
-            rprint(f"[dim]📦 使用缓存的 {language_code} 语音列表[/dim]")
             return self._wavenet_voices_cache[language_code]
 
         # 获取所有语音
@@ -96,15 +95,6 @@ class GoogleTTSService:
         # 随机选择一个语音
         selected_voice = random.choice(available_voices)
 
-        gender_name = texttospeech_v1.SsmlVoiceGender(selected_voice.ssml_gender).name
-        gender_emoji = (
-            "👨" if "MALE" in gender_name else "👩" if "FEMALE" in gender_name else "🎭"
-        )
-
-        rprint(
-            f"🎤 [bold cyan]随机选择:[/bold cyan] [yellow]{selected_voice.name}[/yellow] {gender_emoji} [dim]({gender_name})[/dim]"
-        )
-
         # 配置合成输入
         synthesis_input = texttospeech_v1.SynthesisInput(text=text)
 
@@ -122,9 +112,6 @@ class GoogleTTSService:
         response = self._tts_cli.synthesize_speech(
             input=synthesis_input, voice=voice, audio_config=audio_config
         )
-
-        audio_size_kb = len(response.audio_content) / 1024
-        rprint(f"✅ [green]合成成功[/green] [dim]({audio_size_kb:.1f} KB)[/dim]")
 
         return response.audio_content, selected_voice.name
 
@@ -181,8 +168,6 @@ class GoogleTTSService:
         Returns:
             音频内容
         """
-        rprint(f"🎯 [bold cyan]使用指定语音:[/bold cyan] [yellow]{voice_name}[/yellow]")
-
         synthesis_input = texttospeech_v1.SynthesisInput(text=text)
 
         voice = texttospeech_v1.VoiceSelectionParams(
@@ -196,9 +181,6 @@ class GoogleTTSService:
         response = self._tts_cli.synthesize_speech(
             input=synthesis_input, voice=voice, audio_config=audio_config
         )
-
-        audio_size_kb = len(response.audio_content) / 1024
-        rprint(f"✅ [green]合成成功[/green] [dim]({audio_size_kb:.1f} KB)[/dim]")
 
         return response.audio_content
 
