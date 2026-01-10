@@ -3,13 +3,12 @@
 This module generates Anki cards using AI services and AnkiConnect.
 """
 
-import re
-from typing import Any
-
+import shortuuid
 from rich import print as rprint
 
 from anki_smart_deck.services.ai import GoogleAIService
 from anki_smart_deck.services.anki_connect import AnkiConnectClient
+from anki_smart_deck.services.tts import GoogleTTSService
 
 
 class CardGenerator:
@@ -19,6 +18,7 @@ class CardGenerator:
         self,
         ai_service: GoogleAIService,
         anki_client: AnkiConnectClient,
+        tts_service: GoogleTTSService,
         deck_name: str,
         model_name: str = "AI Word (R)",
     ):
@@ -27,11 +27,13 @@ class CardGenerator:
         Args:
             ai_service: Google AI service for generating card content
             anki_client: AnkiConnect client for adding cards
+            tts_service: Google TTS service for generating audio
             deck_name: Target Anki deck name
             model_name: Anki note type name
         """
         self._ai_service = ai_service
         self._anki_client = anki_client
+        self._tts_service = tts_service
         self._deck_name = deck_name
         self._model_name = model_name
 
@@ -70,7 +72,7 @@ class CardGenerator:
             return ""
 
         formatted = []
-        for phrase, example_pairs in examples.items():
+        for _, example_pairs in examples.items():
             for en, cn in example_pairs:
                 # Add bullet point with line breaks
                 # AI already returns <b>word</b> format, no conversion needed
@@ -107,6 +109,51 @@ class CardGenerator:
 
         # Join with <br> for proper line breaks in Anki
         return "<br>".join(f"• {note}" for note in notes)
+
+    async def _generate_audio(
+        self, word: str, language_code: str
+    ) -> tuple[str, str] | None:
+        """Generate audio file for word pronunciation.
+
+        Args:
+            word: The word to synthesize
+            language_code: Language code ("en-US" or "en-GB")
+
+        Returns:
+            Tuple of (filename, anki_sound_tag) or None if failed
+        """
+        try:
+            # Generate unique filename using shortuuid
+            file_id = shortuuid.uuid()
+            filename = f"{file_id}.mp3"
+
+            # Synthesize speech with random WaveNet voice
+            (
+                audio_data,
+                voice_name,
+            ) = await self._tts_service.synthesize_with_random_voice(
+                text=word,
+                language_code=language_code,
+            )
+
+            # Store in Anki media folder
+            stored_filename = await self._anki_client.store_media_file(
+                filename=filename, data=audio_data
+            )
+
+            # Return Anki sound tag format
+            anki_sound_tag = f"[sound:{stored_filename}]"
+            rprint(
+                f"[green]✓[/green] Generated audio: [dim]{stored_filename} ({voice_name})[/dim]"
+            )
+
+            return stored_filename, anki_sound_tag
+
+        except Exception as e:
+            rprint(
+                f"[yellow]⚠️  Failed to generate {language_code} audio:[/yellow] {str(e)}"
+            )
+            return None
 
     async def _find_existing_note(self, word: str, word_form: str) -> int | None:
         """Find existing note with matching word and word form.
@@ -221,18 +268,35 @@ class CardGenerator:
         else:
             rprint("\n[cyan]Step 2:[/cyan] Skipped (force_new=True)")
 
-        # Step 3: Format fields according to note type
+        # Step 3: Generate TTS audio
         step_num = 3 if not force_new else 2
+        rprint(f"\n[cyan]Step {step_num}:[/cyan] Generating TTS audio...")
+
+        # Generate US audio
+        us_audio_result = await self._generate_audio(
+            word=card_data.get("word", word), language_code="en-US"
+        )
+        us_audio = us_audio_result[1] if us_audio_result else ""
+
+        # Generate UK audio
+        uk_audio_result = await self._generate_audio(
+            word=card_data.get("word", word), language_code="en-GB"
+        )
+        uk_audio = uk_audio_result[1] if uk_audio_result else ""
+
+        # Step 4: Format fields according to note type
+        step_num += 1
         rprint(f"\n[cyan]Step {step_num}:[/cyan] Formatting card fields...")
 
         def_en, def_cn = self._format_definitions(card_data.get("definitions", []))
+        frequency = card_data.get("frequency", "")
 
         fields = {
             "Word": card_data.get("word", word),
             "US Pronunciation": card_data.get("us_pron", ""),
             "UK Pronunciation": card_data.get("uk_pron", ""),
-            "US Audio": "",  # Will be added later with TTS
-            "UK Audio": "",  # Will be added later with TTS
+            "US Audio": us_audio,
+            "UK Audio": uk_audio,
             "Word Form": card_data.get("word_form", ""),
             "Definition EN": def_en,
             "Definition CN": def_cn,
@@ -241,13 +305,27 @@ class CardGenerator:
             "Images": "",  # Will be added later with image search
             "Notes": self._format_notes(card_data.get("notes", [])),
             "User Notes": "",  # Will be preserved if updating
+            "Frequency": frequency,
         }
 
         rprint(f"[green]✓[/green] Formatted {len(fields)} fields")
 
-        # Step 4: Add or update in Anki
+        # Step 5: Prepare tags (include frequency tag)
         step_num += 1
-        is_updated = False
+        rprint(f"\n[cyan]Step {step_num}:[/cyan] Preparing tags...")
+
+        all_tags = tags.copy() if tags else []
+        all_tags.append("ai-generated")
+
+        # Add frequency tag if available
+        if frequency:
+            all_tags.append(frequency)
+            rprint(f"[dim]  → Added frequency tag: {frequency}[/dim]")
+
+        rprint(f"[green]✓[/green] Tags: [dim]{', '.join(all_tags)}[/dim]")
+
+        # Step 6: Add or update in Anki
+        step_num += 1
 
         if existing_note_id:
             # UPDATE existing note
@@ -283,7 +361,7 @@ class CardGenerator:
                     deck_name=self._deck_name,
                     model_name=self._model_name,
                     fields=fields,
-                    tags=tags or ["ai-generated"],
+                    tags=all_tags,
                 )
 
                 rprint(
@@ -329,7 +407,7 @@ class CardGenerator:
         updated = sum(1 for nid, upd in results.values() if nid and upd)
         failed = sum(1 for nid, _ in results.values() if not nid)
 
-        rprint(f"\n[bold cyan]═══ Batch Summary ═══[/bold cyan]")
+        rprint("[bold cyan]═══ Batch Summary ═══[/bold cyan]")
         rprint(f"[green]✓ Created:[/green] {created}")
         rprint(f"[yellow]↻ Updated:[/yellow] {updated}")
         rprint(f"[red]✗ Failed:[/red] {failed}")
@@ -345,12 +423,14 @@ if __name__ == "__main__":
         # Initialize services
         ai_service = GoogleAIService()
         anki_client = AnkiConnectClient()
+        tts_service = GoogleTTSService()
 
         async with ai_service, anki_client:
             # Create card generator
             generator = CardGenerator(
                 ai_service=ai_service,
                 anki_client=anki_client,
+                tts_service=tts_service,
                 deck_name="English::AI Words",
                 model_name="AI Word (R)",
             )

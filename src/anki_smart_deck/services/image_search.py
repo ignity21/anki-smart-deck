@@ -113,9 +113,7 @@ class GoogleImageSearchService:
 
         # 如果优先简单图片，先尝试搜索 clipart
         if prefer_simple:
-            rprint(
-                f"🎨 [bold cyan]搜索简单图示:[/bold cyan] [yellow]{word}[/yellow]"
-            )
+            rprint(f"🎨 [bold cyan]搜索简单图示:[/bold cyan] [yellow]{word}[/yellow]")
             images = self.search_images(
                 query=search_query,
                 num_results=num_results,

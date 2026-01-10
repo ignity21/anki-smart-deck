@@ -16,6 +16,8 @@
 | **Definition CN**    | Chinese definition                 |                                                     |
 | **Synonyms**         | Related words                      | `luck, fortune, chance`                             |
 | **Examples**         | Example sentences with translation | `A fortunate stroke of serendipity...`              |
-| **Images**           | Visual memory aid                  |                              |
+| **Images**           | Visual memory aid                  |                                                     |
 | **Notes**            | AI notes/mnemonics                 | `Word root breakdown...`                            |
 | **User Notes**       | Personal notes/mnemonics           | `Word root breakdown...`                            |
+| **Frequency**        | Frequency level                    | `Common`                                            |
+| **Syllabication**    | Syllable breakdown                 | `ser-en-dip-i-ty`                                   |

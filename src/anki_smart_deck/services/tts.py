@@ -1,3 +1,4 @@
+import asyncio
 import random
 from typing import List, Tuple
 from anki_smart_deck.config import get_config
@@ -65,7 +66,7 @@ class GoogleTTSService:
 
         return wavenet_voices
 
-    def synthesize_with_random_voice(
+    def _synthesize_with_random_voice_sync(
         self,
         text: str,
         language_code: str = "en-US",
@@ -74,7 +75,7 @@ class GoogleTTSService:
         pitch: float = 0.0,
     ) -> Tuple[bytes, str]:
         """
-        使用随机 WaveNet 语音合成文本
+        使用随机 WaveNet 语音合成文本（同步版本）
 
         Args:
             text: 要合成的文本
@@ -127,7 +128,37 @@ class GoogleTTSService:
 
         return response.audio_content, selected_voice.name
 
-    def synthesize_with_specific_voice(
+    async def synthesize_with_random_voice(
+        self,
+        text: str,
+        language_code: str = "en-US",
+        audio_encoding: texttospeech_v1.AudioEncoding = texttospeech_v1.AudioEncoding.MP3,
+        speaking_rate: float = 1.0,
+        pitch: float = 0.0,
+    ) -> Tuple[bytes, str]:
+        """
+        使用随机 WaveNet 语音合成文本（异步版本）
+
+        Args:
+            text: 要合成的文本
+            language_code: 语言代码
+            audio_encoding: 音频编码格式（MP3, LINEAR16, OGG_OPUS 等）
+            speaking_rate: 语速 (0.25 到 4.0，1.0 为正常)
+            pitch: 音调 (-20.0 到 20.0，0.0 为正常)
+
+        Returns:
+            (音频内容, 使用的语音名称)
+        """
+        # Run synchronous TTS in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: self._synthesize_with_random_voice_sync(
+                text, language_code, audio_encoding, speaking_rate, pitch
+            ),
+        )
+
+    def _synthesize_with_specific_voice_sync(
         self,
         text: str,
         voice_name: str,
@@ -137,7 +168,7 @@ class GoogleTTSService:
         pitch: float = 0.0,
     ) -> bytes:
         """
-        使用指定语音合成文本
+        使用指定语音合成文本（同步版本）
 
         Args:
             text: 要合成的文本
@@ -171,7 +202,39 @@ class GoogleTTSService:
 
         return response.audio_content
 
+    async def synthesize_with_specific_voice(
+        self,
+        text: str,
+        voice_name: str,
+        language_code: str = "en-US",
+        audio_encoding: texttospeech_v1.AudioEncoding = texttospeech_v1.AudioEncoding.MP3,
+        speaking_rate: float = 1.0,
+        pitch: float = 0.0,
+    ) -> bytes:
+        """
+        使用指定语音合成文本（异步版本）
+
+        Args:
+            text: 要合成的文本
+            voice_name: 语音名称，如 "en-US-Wavenet-A"
+            language_code: 语言代码
+            audio_encoding: 音频编码格式
+            speaking_rate: 语速
+            pitch: 音调
+
+        Returns:
+            音频内容
+        """
+        # Run synchronous TTS in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: self._synthesize_with_specific_voice_sync(
+                text, voice_name, language_code, audio_encoding, speaking_rate, pitch
+            ),
+        )
+
     def clear_cache(self):
         """清除语音缓存"""
         self._wavenet_voices_cache.clear()
-        rprint("[yellow]🗑️  已清除语音缓存[/yellow]")
+        rprint("[yellow] 已清除语音缓存[/yellow]")

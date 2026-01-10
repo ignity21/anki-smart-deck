@@ -61,7 +61,7 @@ class AnkiConnectClient:
             async with session.post(self._url, json=payload) as response:
                 response.raise_for_status()
                 result = await response.json()
-        except (aiohttp.ClientError, aiohttp.ServerDisconnectedError) as e:
+        except (aiohttp.ClientError, aiohttp.ServerDisconnectedError):
             # Session might be stale, recreate and retry once
             if self._session:
                 await self._session.close()
