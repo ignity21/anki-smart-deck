@@ -19,6 +19,7 @@ classifiers = [
 dependencies = [
     "aiohttp>=3.13.2",
     "click>=8.2.0",
+    "google-cloud-aiplatform>=1.133.0",
     "google-cloud-texttospeech>=2.31.0",
     "google-genai[aiohttp]>=1.40.0",
     "google-images-search>=1.4.7",

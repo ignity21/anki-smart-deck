@@ -5,3 +5,4 @@
 - Please use the latest type annotations, such as `dict[str, int]` and `str | None` instead of using `Optional[str]`
 - Prefer f-string & t-string
 - Use python new features whenever possible (Python version 3.14)
+- Use only english in code (include comments)

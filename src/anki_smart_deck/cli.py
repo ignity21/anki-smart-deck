@@ -7,14 +7,15 @@ from pathlib import Path
 import click
 from rich import print as rprint
 from rich.console import Console
+from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from anki_smart_deck._card_gen import CardGenerator
 from anki_smart_deck.services.ai import GoogleAIService
 from anki_smart_deck.services.anki_connect import AnkiConnectClient
 from anki_smart_deck.services.image_search import GoogleImageSearchService
 from anki_smart_deck.services.tts import GoogleTTSService
+from anki_smart_deck.card_gen import CardGenerator
 
 console = Console()
 
@@ -39,9 +40,7 @@ def print_summary(results: dict[str, tuple[int | None, bool]]) -> None:
     Args:
         results: Dictionary mapping words to (note_id, is_updated) tuples
     """
-    table = Table(
-        title="Generation Summary", show_header=True, header_style="bold cyan"
-    )
+    table = Table(title="Generation Summary", show_header=True, header_style="bold cyan")
     table.add_column("Word", style="yellow", width=20)
     table.add_column("Status", style="green", width=15)
     table.add_column("Note ID", style="dim", width=15)
@@ -140,6 +139,11 @@ def main():
     help="Skip image search and generation",
 )
 @click.option(
+    "--no-example-audio",
+    is_flag=True,
+    help="Skip TTS audio generation for example sentences",
+)
+@click.option(
     "--tags",
     "-t",
     multiple=True,
@@ -151,23 +155,16 @@ def main():
     is_flag=True,
     help="Force create new card even if one exists",
 )
-def generate(
-    word: str,
-    deck: str,
-    model: str,
-    no_images: bool,
-    tags: tuple[str, ...],
-    force: bool,
-):
+def generate(word: str, deck: str, model: str, no_images: bool, no_example_audio: bool, tags: tuple[str, ...], force: bool):
     """Generate a single Anki card for the specified WORD.
 
     Examples:
 
-        $ anki-deck generate serendipity
+        $ anki-deck generate basketball
 
         $ anki-deck generate "hungry artist" --no-images
 
-        $ anki-deck generate ephemeral -t poetry -t beautiful-word
+        $ anki-deck generate ephemeral -t poetry -t beautiful-word --no-example-audio
     """
     print_banner()
 
@@ -176,6 +173,7 @@ def generate(
 
         try:
             include_images = not no_images
+            include_example_audio = not no_example_audio
             tags_list = list(tags) if tags else None
 
             note_id, is_updated = await generator.generate_card(
@@ -183,6 +181,7 @@ def generate(
                 tags=tags_list,
                 force_new=force,
                 include_images=include_images,
+                include_example_audio=include_example_audio,
             )
 
             # Print result
@@ -227,6 +226,11 @@ def generate(
     help="Skip image search for all cards",
 )
 @click.option(
+    "--no-example-audio",
+    is_flag=True,
+    help="Skip TTS audio generation for example sentences",
+)
+@click.option(
     "--tags",
     "-t",
     multiple=True,
@@ -238,9 +242,7 @@ def generate(
     is_flag=True,
     help="Force create new cards even if they exist",
 )
-def interactive(
-    deck: str, model: str, no_images: bool, tags: tuple[str, ...], force: bool
-):
+def interactive(deck: str, model: str, no_images: bool, no_example_audio: bool, tags: tuple[str, ...], force: bool):
     """Interactive mode - add multiple words with prompts.
 
     Keep adding words one by one with options to:
@@ -252,7 +254,7 @@ def interactive(
 
         $ anki-deck interactive
 
-        $ anki-deck interactive --no-images -t vocabulary
+        $ anki-deck interactive --no-images --no-example-audio -t vocabulary
     """
     print_banner()
 
@@ -268,6 +270,7 @@ def interactive(
 
             tags_list = list(tags) if tags else None
             default_include_images = not no_images
+            include_example_audio = not no_example_audio
 
             while True:
                 try:
@@ -293,6 +296,7 @@ def interactive(
                             tags=tags_list,
                             force_new=force,
                             include_images=include_images,
+                            include_example_audio=include_example_audio,
                         )
                         results[word] = (note_id, is_updated)
 
@@ -308,9 +312,7 @@ def interactive(
                             )
 
                     except Exception as e:
-                        rprint(
-                            f"[red]Failed to generate card for '{word}':[/red] {str(e)}"
-                        )
+                        rprint(f"[red]Failed to generate card for '{word}':[/red] {str(e)}")
                         results[word] = (None, False)
 
                     # Ask to continue
@@ -354,6 +356,11 @@ def interactive(
     help="Skip image search for all cards",
 )
 @click.option(
+    "--no-example-audio",
+    is_flag=True,
+    help="Skip TTS audio generation for example sentences",
+)
+@click.option(
     "--tags",
     "-t",
     multiple=True,
@@ -365,23 +372,16 @@ def interactive(
     is_flag=True,
     help="Force create new cards even if they exist",
 )
-def batch(
-    words: tuple[str, ...],
-    deck: str,
-    model: str,
-    no_images: bool,
-    tags: tuple[str, ...],
-    force: bool,
-):
+def batch(words: tuple[str, ...], deck: str, model: str, no_images: bool, no_example_audio: bool, tags: tuple[str, ...], force: bool):
     """Generate multiple cards in batch mode.
 
     Provide multiple words as arguments to generate cards for all of them.
 
     Examples:
 
-        $ anki-deck batch serendipity ephemeral eloquent
+        $ anki-deck batch basketball football tennis
 
-        $ anki-deck batch word1 word2 word3 --no-images -t batch-2024
+        $ anki-deck batch word1 word2 word3 --no-images --no-example-audio -t batch-2024
     """
     print_banner()
 
@@ -392,6 +392,7 @@ def batch(
             words_list = list(words)
             tags_list = list(tags) if tags else None
             include_images = not no_images
+            include_example_audio = not no_example_audio
 
             rprint(f"\n[cyan]Generating {len(words_list)} cards...[/cyan]\n")
 
@@ -400,6 +401,7 @@ def batch(
                 tags=tags_list,
                 force_new=force,
                 include_images=include_images,
+                include_example_audio=include_example_audio,
             )
 
             # Print summary
@@ -437,6 +439,11 @@ def batch(
     help="Skip image search for all cards",
 )
 @click.option(
+    "--no-example-audio",
+    is_flag=True,
+    help="Skip TTS audio generation for example sentences",
+)
+@click.option(
     "--tags",
     "-t",
     multiple=True,
@@ -448,14 +455,7 @@ def batch(
     is_flag=True,
     help="Force create new cards even if they exist",
 )
-def from_file(
-    file: str,
-    deck: str,
-    model: str,
-    no_images: bool,
-    tags: tuple[str, ...],
-    force: bool,
-):
+def from_file(file: str, deck: str, model: str, no_images: bool, no_example_audio: bool, tags: tuple[str, ...], force: bool):
     """Generate cards from a word list file.
 
     The file should contain one word per line. Empty lines and lines
@@ -465,7 +465,7 @@ def from_file(
 
         $ anki-deck from-file words.txt
 
-        $ anki-deck from-file vocabulary.txt --no-images -t chapter-5
+        $ anki-deck from-file vocabulary.txt --no-images --no-example-audio -t chapter-5
     """
     print_banner()
 
@@ -485,9 +485,7 @@ def from_file(
             rprint("[red]Error: No valid words found in file[/red]")
             sys.exit(1)
 
-        rprint(
-            f"[green]✓[/green] Loaded {len(words_list)} words from {file_path.name}\n"
-        )
+        rprint(f"[green]✓[/green] Loaded {len(words_list)} words from {file_path.name}\n")
 
     except Exception as e:
         rprint(f"[red]Error reading file:[/red] {str(e)}")
@@ -499,12 +497,14 @@ def from_file(
         try:
             tags_list = list(tags) if tags else None
             include_images = not no_images
+            include_example_audio = not no_example_audio
 
             results = await generator.generate_cards_batch(
                 words=words_list,
                 tags=tags_list,
                 force_new=force,
                 include_images=include_images,
+                include_example_audio=include_example_audio,
             )
 
             # Print summary

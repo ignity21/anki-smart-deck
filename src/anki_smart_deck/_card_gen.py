@@ -41,39 +41,43 @@ class CardGenerator:
         self._deck_name = deck_name
         self._model_name = model_name
 
-    def _format_definitions(self, definitions: list[list[str]]) -> tuple[str, str]:
-        """Format definition pairs into EN and CN strings.
+    def _format_definitions(self, definitions: list[list[str]]) -> str:
+        """Format definition pairs into a single string with Chinese following English.
 
         Args:
             definitions: List of [en, cn] definition pairs
 
         Returns:
-            Tuple of (english_definitions, chinese_definitions)
+            Formatted definitions string with EN and CN combined
         """
         if not definitions:
-            return "", ""
+            return ""
 
-        en_defs = []
-        cn_defs = []
+        formatted_defs = []
 
         for i, (en, cn) in enumerate(definitions, 1):
-            en_defs.append(f"{i}. {en}")
-            cn_defs.append(f"{i}. {cn}")
+            # Format: 1. English definition<br>   中文释义
+            formatted_defs.append(f"{i}. {en}")
+            formatted_defs.append(f"&nbsp;&nbsp;&nbsp;{cn}")
 
-        # Join with <br> for proper HTML line breaks in Anki
-        return "<br>".join(en_defs), "<br>".join(cn_defs)
+        # Join with <br> for proper line breaks in Anki
+        return "<br>".join(formatted_defs)
 
     async def _format_examples(
-        self, examples: dict[str, list[list[str]]], word: str
+        self,
+        examples: dict[str, list[list[str]]],
+        word: str,
+        include_audio: bool = True,
     ) -> str:
-        """Format examples into a single string with HTML formatting and TTS audio.
+        """Format examples into a single string with HTML formatting and optional TTS audio.
 
         Args:
             examples: Dict mapping phrase to [en, cn] example pairs
             word: The word being defined (for TTS generation)
+            include_audio: If True, generate TTS audio for example sentences
 
         Returns:
-            Formatted examples string with HTML tags and audio
+            Formatted examples string with HTML tags and optional audio
         """
         if not examples:
             return ""
@@ -86,18 +90,19 @@ class CardGenerator:
             for en, cn in example_pairs:
                 current_example += 1
 
-                # Generate TTS audio for the example sentence (without HTML)
+                # Generate TTS audio for the example sentence (if enabled)
                 audio_tag = ""
-                try:
-                    audio_result = await self._generate_audio(
-                        text=en, language_code="en-US", audio_type="sentence"
-                    )
-                    if audio_result:
-                        audio_tag = f" {audio_result[1]}"
-                except Exception as e:
-                    rprint(
-                        f"[yellow]⚠️  Failed to generate audio for example:[/yellow] {str(e)}"
-                    )
+                if include_audio:
+                    try:
+                        audio_result = await self._generate_audio(
+                            text=en, language_code="en-US", audio_type="sentence"
+                        )
+                        if audio_result:
+                            audio_tag = f" {audio_result[1]}"
+                    except Exception as e:
+                        rprint(
+                            f"[yellow]⚠️  Failed to generate audio for example:[/yellow] {str(e)}"
+                        )
 
                 # Add bold formatting to the phrase in the English sentence
                 en_formatted = en.replace(phrase, f"<b>{phrase}</b>")
@@ -175,7 +180,9 @@ class CardGenerator:
                         )
 
                 except Exception as e:
-                    rprint(f"[yellow]  ⚠️  Failed to process image {i}:[/yellow] {str(e)}")
+                    rprint(
+                        f"[yellow]  ⚠️  Failed to process image {i}:[/yellow] {str(e)}"
+                    )
                     continue
 
             # Join images with space
@@ -341,7 +348,12 @@ class CardGenerator:
         return ""
 
     async def generate_card(
-        self, word: str, tags: list[str] | None = None, force_new: bool = False, include_images: bool = True
+        self,
+        word: str,
+        tags: list[str] | None = None,
+        force_new: bool = False,
+        include_images: bool = True,
+        include_example_audio: bool = True,
     ) -> tuple[int, bool]:
         """Generate and add a card for the given word.
 
@@ -350,6 +362,7 @@ class CardGenerator:
             tags: Optional tags to add to the card
             force_new: If True, always create new card even if one exists
             include_images: If True, search and add images to the card (default: True)
+            include_example_audio: If True, generate TTS audio for example sentences (default: True)
 
         Returns:
             Tuple of (note_id, is_updated) where is_updated is True if an existing note was updated
@@ -416,12 +429,19 @@ class CardGenerator:
         step_num += 1
         rprint(f"\n[cyan]Step {step_num}:[/cyan] Formatting card fields...")
 
-        def_en, def_cn = self._format_definitions(card_data.get("definitions", []))
+        definitions = self._format_definitions(card_data.get("definitions", []))
         frequency = card_data.get("frequency", "")
 
-        # Generate examples with TTS audio (async)
+        # Generate examples with optional TTS audio (async)
+        if include_example_audio:
+            rprint("[dim]  → Including example sentence audio[/dim]")
+        else:
+            rprint("[dim]  → Skipping example sentence audio[/dim]")
+
         examples_formatted = await self._format_examples(
-            card_data.get("examples", {}), card_data.get("word", word)
+            card_data.get("examples", {}),
+            card_data.get("word", word),
+            include_audio=include_example_audio,
         )
 
         # Get syllabication from AI or generate as fallback
@@ -449,8 +469,7 @@ class CardGenerator:
             "US Audio": us_audio,
             "UK Audio": uk_audio,
             "Word Form": card_data.get("word_form", ""),
-            "Definition EN": def_en,
-            "Definition CN": def_cn,
+            "Definitions": definitions,
             "Synonyms": self._format_synonyms(card_data.get("synonyms", [])),
             "Examples": examples_formatted,
             "Images": images_html,
@@ -526,7 +545,12 @@ class CardGenerator:
                 raise RuntimeError(f"Failed to add card to Anki: {str(e)}") from e
 
     async def generate_cards_batch(
-        self, words: list[str], tags: list[str] | None = None, force_new: bool = False, include_images: bool = True
+        self,
+        words: list[str],
+        tags: list[str] | None = None,
+        force_new: bool = False,
+        include_images: bool = True,
+        include_example_audio: bool = True,
     ) -> dict[str, tuple[int | None, bool]]:
         """Generate cards for multiple words.
 
@@ -535,6 +559,7 @@ class CardGenerator:
             tags: Optional tags to add to all cards
             force_new: If True, always create new cards even if they exist
             include_images: If True, search and add images to cards (default: True)
+            include_example_audio: If True, generate TTS audio for example sentences (default: True)
 
         Returns:
             Dict mapping word to (note_id, is_updated) tuple (None if failed)
@@ -548,7 +573,11 @@ class CardGenerator:
 
             try:
                 note_id, is_updated = await self.generate_card(
-                    word, tags, force_new=force_new, include_images=include_images
+                    word,
+                    tags,
+                    force_new=force_new,
+                    include_images=include_images,
+                    include_example_audio=include_example_audio,
                 )
                 results[word] = (note_id, is_updated)
             except Exception as e:
@@ -591,9 +620,12 @@ if __name__ == "__main__":
             )
 
             # Generate a single card (will update if exists)
-            word = "serendipity"
+            word = "basketball"
             note_id, is_updated = await generator.generate_card(
-                word, tags=["example", "beautiful-word"]
+                word,
+                tags=["example", "sports"],
+                include_images=False,
+                include_example_audio=False,
             )
 
             if is_updated:

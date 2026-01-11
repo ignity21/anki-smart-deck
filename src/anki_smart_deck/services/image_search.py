@@ -1,62 +1,60 @@
-from typing import List, Dict, Optional
-from anki_smart_deck.config import get_config
+from typing import Literal
 
+from anki_smart_deck.config import get_config
 from googleapiclient.discovery import build
 from rich import print as rprint
 
 
 class GoogleImageSearchService:
+    """Generic Google Custom Search API wrapper for image search."""
+
     def __init__(self):
         app_config = get_config()
         self._api_key = app_config.google_search_key
         self._cse_id = app_config.google_cse_id
         self._service = build("customsearch", "v1", developerKey=self._api_key)
 
-    def search_images(
+    def search(
         self,
         query: str,
         num_results: int = 5,
-        img_size: str = "MEDIUM",
-        img_type: Optional[str] = None,
-        safe: str = "active",
-    ) -> List[Dict]:
+        img_size: Literal[
+            "ICON", "SMALL", "MEDIUM", "LARGE", "XLARGE", "XXLARGE", "HUGE"
+        ] = "SMALL",
+        img_type: Literal["clipart", "face", "lineart", "stock", "photo", "animated"]
+        | None = None,
+        safe: Literal["active", "off"] = "active",
+    ) -> list[dict]:
         """
-        搜索图片
+        Search for images using Google Custom Search API.
 
         Args:
-            query: 搜索关键词
-            num_results: 返回结果数量 (1-10)
-            img_size: 图片大小 (ICON, SMALL, MEDIUM, LARGE, XLARGE, XXLARGE, HUGE)
-            img_type: 图片类型 (clipart, face, lineart, stock, photo, animated)
-            safe: 安全搜索级别 (active, off)
+            query: Search query string
+            num_results: Number of results to return (1-10)
+            img_size: Image size constraint
+            img_type: Image type filter
+            safe: Safe search level
 
         Returns:
-            图片信息列表，每个元素包含 url, title, width, height 等信息
+            List of image info dictionaries with keys: url, title, thumbnail, width, height, context_link, mime_type
         """
-        # 确保 img_size 是大写
-        img_size = img_size.upper()
-
-        rprint(f"🔍 [bold cyan]搜索图片:[/bold cyan] [yellow]{query}[/yellow]")
+        rprint(f"🔍 [cyan]Searching:[/cyan] [yellow]{query}[/yellow]")
 
         try:
-            # 构建搜索请求
             search_params = {
                 "q": query,
                 "cx": self._cse_id,
                 "searchType": "image",
-                "num": min(num_results, 10),  # API 最多返回 10 个结果
+                "num": min(num_results, 10),
                 "imgSize": img_size,
                 "safe": safe,
             }
 
-            # 添加可选参数
             if img_type:
                 search_params["imgType"] = img_type
 
-            # 执行搜索
             result = self._service.cse().list(**search_params).execute()
 
-            # 解析结果
             images = []
             if "items" in result:
                 for item in result["items"]:
@@ -71,162 +69,32 @@ class GoogleImageSearchService:
                     }
                     images.append(image_info)
 
-                rprint(
-                    f"✅ [green]找到 {len(images)} 张图片[/green] [dim](大小: {img_size})[/dim]"
-                )
-
-                # 显示前3个结果的预览
-                for i, img in enumerate(images[:3], 1):
-                    rprint(
-                        f"  [cyan]{i}.[/cyan] [dim]{img['title'][:50]}... ({img['width']}x{img['height']})[/dim]"
-                    )
+                rprint(f"✅ [green]Found {len(images)} images[/green]")
             else:
-                rprint("[yellow]⚠️  没有找到相关图片[/yellow]")
+                rprint("[yellow]⚠️  No images found[/yellow]")
 
             return images
 
         except Exception as e:
-            rprint(f"[red]❌ 搜索失败: {str(e)}[/red]")
+            rprint(f"[red]❌ Search failed: {str(e)}[/red]")
             return []
 
-    def search_word_image(
-        self,
-        word: str,
-        num_results: int = 3,
-        img_size: str = "SMALL",
-        prefer_simple: bool = True,
-    ) -> List[Dict]:
+    def download_image(self, image_url: str, timeout: int = 10) -> bytes | None:
         """
-        专门用于搜索单词相关的图片（适合 Anki 卡片）
+        Download image from URL.
 
         Args:
-            word: 单词
-            num_results: 返回结果数量
-            img_size: 图片大小 (建议 ICON, SMALL, MEDIUM)
-            prefer_simple: 是否优先搜索简单图片（clipart/lineart）
+            image_url: Image URL
+            timeout: Request timeout in seconds
 
         Returns:
-            图片信息列表
-        """
-        # 优化搜索词策略：
-        # 1. 优先搜索简单的概念图示
-        # 2. 使用 "meaning" 而不是具体词，避免返回社交媒体内容
-        # 3. 过滤掉明显不相关的结果
-        # 4. 使用 "-word" 排除包含单词文本的图片
-
-        # 如果是多词短语，只取第一个实词
-        search_word = word.split()[0] if " " in word else word
-
-        # 构建排除词列表（排除包含单词文本的图片）
-        # 不能直接在搜索词中排除，因为我们还是要搜这个词的图
-        # 但可以在 title/context 中过滤
-
-        # 过滤不相关结果的辅助函数
-        def is_relevant_image(img_info: Dict) -> bool:
-            """检查图片是否相关"""
-            title = img_info.get("title", "").lower()
-            context = img_info.get("context_link", "").lower()
-
-            # 过滤掉包含单词文本的图片（可能是定义截图或文字图）
-            # 但要注意：对于像 "apple" 这样的词，"apple" 可能出现在正常图片标题中
-            # 所以我们主要过滤包含 "definition", "meaning", "word" 等关键词的组合
-            word_lower = search_word.lower()
-            suspicious_combinations = [
-                f"{word_lower} definition",
-                f"{word_lower} meaning",
-                f"{word_lower} word",
-                f"define {word_lower}",
-                f"what is {word_lower}",
-                "dictionary",
-                "vocabulary",
-            ]
-
-            for combo in suspicious_combinations:
-                if combo in title or combo in context:
-                    return False
-
-            # 过滤掉社交媒体和视频网站
-            blacklist = [
-                "tiktok", "youtube", "instagram", "facebook",
-                "twitter", "reddit", "pinterest",
-                "video", "deal", "rooftop", "restaurant",
-                "journal", "article", "paper", "research",
-                "screenshot", "app", "download", "template",
-                "poster", "flyer", "card design", "typography",
-            ]
-
-            for item in blacklist:
-                if item in title or item in context:
-                    return False
-
-            return True
-
-        # 如果优先简单图片，先尝试搜索 clipart
-        if prefer_simple:
-            rprint(f"🎨 [bold cyan]搜索简单图示:[/bold cyan] [yellow]{search_word}[/yellow]")
-
-            # 策略1: 搜索词义相关的 clipart（避免文字图片）
-            images = self.search_images(
-                query=f"{search_word} icon clipart -text -definition -dictionary",
-                num_results=num_results * 3,  # 多搜索一些，然后过滤
-                img_size=img_size,
-                img_type="clipart",
-            )
-
-            # 过滤相关图片
-            images = [img for img in images if is_relevant_image(img)][:num_results]
-
-            # 策略2: 如果结果不够，搜索 illustration
-            if len(images) < num_results:
-                rprint("[dim]🎨 补充搜索插图...[/dim]")
-                additional_images = self.search_images(
-                    query=f"{search_word} illustration symbol -text -typography",
-                    num_results=(num_results - len(images)) * 3,
-                    img_size=img_size,
-                    img_type="clipart",
-                )
-                additional_images = [img for img in additional_images if is_relevant_image(img)]
-                images.extend(additional_images[:num_results - len(images)])
-
-            # 策略3: 如果还不够，尝试图标搜索
-            if len(images) < num_results:
-                rprint("[dim]🔍 补充搜索图标...[/dim]")
-                additional_images = self.search_images(
-                    query=f"{search_word} icon vector -word -dictionary",
-                    num_results=(num_results - len(images)) * 3,
-                    img_size=img_size,
-                )
-                additional_images = [img for img in additional_images if is_relevant_image(img)]
-                images.extend(additional_images[:num_results - len(images)])
-        else:
-            images = self.search_images(
-                query=f"{search_word} image -text -definition",
-                num_results=num_results * 3,
-                img_size=img_size,
-            )
-            images = [img for img in images if is_relevant_image(img)][:num_results]
-
-
-
-
-        return images
-
-    def download_image(self, image_url: str) -> Optional[bytes]:
-        """
-        下载图片
-
-        Args:
-            image_url: 图片 URL
-
-        Returns:
-            图片二进制数据，失败返回 None
+            Image binary data, or None if failed
         """
         import urllib.request
 
         try:
-            rprint(f"⬇️  [cyan]下载图片:[/cyan] [dim]{image_url[:60]}...[/dim]")
+            rprint(f"⬇️  [cyan]Downloading:[/cyan] [dim]{image_url[:60]}...[/dim]")
 
-            # 添加 User-Agent 避免被某些网站拒绝
             req = urllib.request.Request(
                 image_url,
                 headers={
@@ -234,14 +102,186 @@ class GoogleImageSearchService:
                 },
             )
 
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
                 image_data = response.read()
 
             image_size_kb = len(image_data) / 1024
-            rprint(f"✅ [green]下载成功[/green] [dim]({image_size_kb:.1f} KB)[/dim]")
+            rprint(f"✅ [green]Downloaded[/green] [dim]({image_size_kb:.1f} KB)[/dim]")
 
             return image_data
 
         except Exception as e:
-            rprint(f"[red]❌ 下载失败: {str(e)}[/red]")
+            rprint(f"[red]❌ Download failed: {str(e)}[/red]")
             return None
+
+
+class WordImageSearchService:
+    """Service for searching images suitable for vocabulary learning (Anki cards)."""
+
+    def __init__(self, image_service: GoogleImageSearchService):
+        self._image_service = image_service
+
+    def search(
+        self,
+        word: str,
+        definition: str | None = None,
+        num_results: int = 3,
+        img_size: Literal[
+            "ICON", "SMALL", "MEDIUM", "LARGE", "XLARGE", "XXLARGE", "HUGE"
+        ] = "SMALL",
+        img_type: Literal["clipart", "face", "lineart", "stock", "photo", "animated"]
+        | None = "clipart",
+        keywords: list[str] | None = None,
+        exclude_terms: list[str] | None = None,
+    ) -> list[dict]:
+        """
+        Search for word-related images.
+
+        Args:
+            word: The word to search for
+            definition: Optional definition for context
+            num_results: Number of results desired
+            img_size: Image size preference
+            img_type: Image type preference (clipart recommended for vocabulary)
+            keywords: Optional AI-provided keywords for better targeting
+            exclude_terms: Optional terms to exclude from search
+
+        Returns:
+            List of image info dictionaries
+        """
+        # Build search query
+        if keywords and len(keywords) > 0:
+            # Use AI-provided keywords
+            context = f" ({definition[:40]}...)" if definition else ""
+            rprint(
+                f"🎯 [bold cyan]Searching '{word}'{context}:[/bold cyan] [yellow]{', '.join(keywords)}[/yellow]"
+            )
+
+            all_images = []
+            for keyword in keywords:
+                query = self._build_query(keyword, exclude_terms)
+                images = self._image_service.search(
+                    query=query,
+                    num_results=num_results * 2,  # Get more to filter
+                    img_size=img_size,
+                    img_type=img_type,
+                )
+                all_images.extend(images)
+
+                if len(all_images) >= num_results:
+                    break
+
+            return all_images[:num_results]
+
+        else:
+            # Fallback: use word directly
+            query = self._build_query(word, exclude_terms)
+            images = self._image_service.search(
+                query=query,
+                num_results=num_results,
+                img_size=img_size,
+                img_type=img_type,
+            )
+            return images
+
+    def _build_query(self, base_term: str, exclude_terms: list[str] | None) -> str:
+        """
+        Build search query with exclusions.
+
+        Args:
+            base_term: Main search term
+            exclude_terms: Terms to exclude (will be prefixed with -)
+
+        Returns:
+            Formatted query string
+        """
+        query = base_term
+
+        if exclude_terms:
+            exclusions = " ".join(f"-{term}" for term in exclude_terms)
+            query = f"{query} {exclusions}"
+
+        return query
+
+    def filter_results(
+        self,
+        images: list[dict],
+        blacklist_keywords: list[str] | None = None,
+    ) -> list[dict]:
+        """
+        Filter image results based on title and context.
+
+        Args:
+            images: List of image info dictionaries
+            blacklist_keywords: Keywords to filter out
+
+        Returns:
+            Filtered list of images
+        """
+        if not blacklist_keywords:
+            return images
+
+        filtered = []
+        for img in images:
+            title = img.get("title", "").lower()
+            context = img.get("context_link", "").lower()
+
+            # Check if any blacklist keyword appears
+            is_blacklisted = any(
+                keyword.lower() in title or keyword.lower() in context
+                for keyword in blacklist_keywords
+            )
+
+            if not is_blacklisted:
+                filtered.append(img)
+
+        return filtered
+
+
+if __name__ == "__main__":
+    # Initialize services
+    google_service = GoogleImageSearchService()
+    word_service = WordImageSearchService(google_service)
+
+    # rprint("\n[bold cyan]═══ Image Search Demo ═══[/bold cyan]\n")
+
+    # Demo 1: Simple search with keywords
+    rprint("[bold magenta]Demo 1: Search 'apple' with keywords[/bold magenta]")
+    images = word_service.search(
+        word="apple",
+        definition="a round fruit",
+        img_size="MEDIUM",
+        num_results=3,
+        keywords=["red apple fruit", "apple illustration"],
+        exclude_terms=["logo", "brand"],
+    )
+    rprint(f"Found {len(images)} images\n")
+
+    # Demo 2: Search without keywords
+    # rprint("[bold magenta]Demo 2: Search 'umbrella' without keywords[/bold magenta]")
+    # images = word_service.search(
+    #     word="umbrella",
+    #     num_results=3,
+    #     exclude_terms=["shop", "buy"],
+    # )
+    # rprint(f"Found {len(images)} images\n")
+
+    # Demo 3: Filter results
+    # rprint("[bold magenta]Demo 3: Search and filter 'cat'[/bold magenta]")
+    # images = word_service.search(word="cat", num_results=3)
+    # filtered = word_service.filter_results(
+    #     images, blacklist_keywords=["meme", "funny", "video"]
+    # )
+    # rprint(f"Found {len(images)} images, {len(filtered)} after filtering\n")
+
+    # Demo 4: Download image
+    for idx, image in enumerate(images):
+        image_data = google_service.download_image(image["thumbnail"])
+        if image_data:
+            rprint(
+                f"[green]Image {idx + 1}: Downloaded {len(image_data)} bytes[/green]"
+            )
+            with open(f"image_{idx + 1}.jpg", "wb") as f:
+                f.write(image_data)
+
+    rprint("\n[bold green]✅ Demo completed![/bold green]")

@@ -1,19 +1,18 @@
-# Note Types
+* Note Types
 
-## AI Word (R)
+** AI Word (R)
 
-### Fields
+*** Fields
 
 | Field Name           | Description                        | Example                                             |
-|----------------------|------------------------------------|-----------------------------------------------------|
+|----------------------+------------------------------------+-----------------------------------------------------|
 | **Word**             | Target vocabulary word             | `serendipity`                                       |
 | **US Pronunciation** | American English phonetic          | `/ˌserənˈdɪpəti/`                                   |
-| **UK Pronunciation** | British English phonetic           | `/ˌserənˈdɪpɪti/`                                   |
+| **UK Pronunciation** | British English phonetic           | `/ˌserənˈdɪpɪti/`                                    |
 | **US Audio**         | US pronunciation audio             | `[sound:serendipity_us.mp3]`                        |
 | **UK Audio**         | UK pronunciation audio             | `[sound:serendipity_uk.mp3]`                        |
 | **Word Form**        | Part of speech                     | `n. (noun)`                                         |
-| **Definition EN**    | English definition                 | `The occurrence of events by chance in a happy way` |
-| **Definition CN**    | Chinese definition                 |                                                     |
+| **Definitions**      | word definition                    | `The occurrence of events by chance in a happy way` |
 | **Synonyms**         | Related words                      | `luck, fortune, chance`                             |
 | **Examples**         | Example sentences with translation | `A fortunate stroke of serendipity...`              |
 | **Images**           | Visual memory aid                  |                                                     |
