@@ -7,15 +7,14 @@ from pathlib import Path
 import click
 from rich import print as rprint
 from rich.console import Console
-from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from anki_smart_deck.services.ai import GoogleAIService
+from anki_smart_deck.services.ai import AIWordDictService
 from anki_smart_deck.services.anki_connect import AnkiConnectClient
 from anki_smart_deck.services.image_search import GoogleImageSearchService
 from anki_smart_deck.services.tts import GoogleTTSService
-from anki_smart_deck.card_gen import CardGenerator
+from anki_smart_deck._card_gen import CardGenerator
 
 console = Console()
 
@@ -73,7 +72,7 @@ async def initialize_services(deck_name: str, model_name: str) -> CardGenerator:
     """
     rprint("\n[cyan]Initializing services...[/cyan]")
 
-    ai_service = GoogleAIService()
+    ai_service = AIWordDictService()
     anki_client = AnkiConnectClient()
     tts_service = GoogleTTSService()
     image_service = GoogleImageSearchService()
@@ -396,7 +395,7 @@ def batch(words: tuple[str, ...], deck: str, model: str, no_images: bool, no_exa
 
             rprint(f"\n[cyan]Generating {len(words_list)} cards...[/cyan]\n")
 
-            results = await generator.generate_cards_batch(
+            results = await generator.analyze_word_batch(
                 words=words_list,
                 tags=tags_list,
                 force_new=force,
@@ -499,7 +498,7 @@ def from_file(file: str, deck: str, model: str, no_images: bool, no_example_audi
             include_images = not no_images
             include_example_audio = not no_example_audio
 
-            results = await generator.generate_cards_batch(
+            results = await generator.analyze_word_batch(
                 words=words_list,
                 tags=tags_list,
                 force_new=force,

@@ -10,7 +10,7 @@ from anki_smart_deck.services.ai import GoogleAIService
 async def main():
     ai_srv = GoogleAIService()
     async with ai_srv:
-        return await ai_srv.generate_cards("word")
+        return await ai_srv.analyze_word("word")
 
 
 if __name__ == "__main__":

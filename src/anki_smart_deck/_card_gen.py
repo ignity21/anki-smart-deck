@@ -6,7 +6,7 @@ This module generates Anki cards using AI services and AnkiConnect.
 import shortuuid
 from rich import print as rprint
 
-from anki_smart_deck.services.ai import GoogleAIService
+from anki_smart_deck.services.ai import AIWordDictService
 from anki_smart_deck.services.anki_connect import AnkiConnectClient
 from anki_smart_deck.services.image_search import GoogleImageSearchService
 from anki_smart_deck.services.tts import GoogleTTSService
@@ -17,7 +17,7 @@ class CardGenerator:
 
     def __init__(
         self,
-        ai_service: GoogleAIService,
+        ai_service: AIWordDictService,
         anki_client: AnkiConnectClient,
         tts_service: GoogleTTSService,
         image_service: GoogleImageSearchService,
@@ -377,7 +377,7 @@ class CardGenerator:
 
         # Step 1: Generate card data using AI
         rprint("\n[cyan]Step 1:[/cyan] Generating card content with AI...")
-        ai_response = await self._ai_service.generate_cards(word)
+        ai_response = await self._ai_service.analyze_word(word)
 
         if not ai_response or not isinstance(ai_response, list) or not ai_response:
             raise ValueError(f"Invalid AI response for word: {word}")
@@ -544,7 +544,7 @@ class CardGenerator:
                 rprint(f"[red]✗ Failed to add card:[/red] {str(e)}")
                 raise RuntimeError(f"Failed to add card to Anki: {str(e)}") from e
 
-    async def generate_cards_batch(
+    async def analyze_word_batch(
         self,
         words: list[str],
         tags: list[str] | None = None,
@@ -639,6 +639,6 @@ if __name__ == "__main__":
 
             # Or generate multiple cards
             # words = ["serendipity", "ephemeral", "eloquent"]
-            # results = await generator.generate_cards_batch(words)
+            # results = await generator.analyze_word_batch(words)
 
     asyncio.run(main())
