@@ -20,3 +20,68 @@
 | **User Notes**       | Personal notes/mnemonics           | `Word root breakdown...`                            |
 | **Frequency**        | Frequency level                    | `Common`                                            |
 | **Syllabication**    | Syllable breakdown                 | `ser-en-dip-i-ty`                                   |
+
+*** JSON Schema
+#+begin_src js
+{
+  "type": "object",
+  "properties": {
+    "word": {
+      "type": "string",
+      "description": "The word being analyzed"
+    },
+    "word_form": {
+      "type": "string",
+      "description": "Part of speech (n., v., adj., etc.)"
+    },
+    "us_pron": {
+      "type": "string",
+      "description": "US pronunciation in IPA format, MUST include slashes: /phonetic/",
+      "pattern": "^/.*/$"
+    },
+    "uk_pron": {
+      "type": "string",
+      "description": "UK pronunciation in IPA format, MUST include slashes: /phonetic/",
+      "pattern": "^/.*/$"
+    },
+    "syllabication": {
+      "type": "string",
+      "description": "Syllable breaks (e.g., ap-ple)"
+    },
+    "frequency": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "Word frequency level"
+    },
+    "definitions": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {"type": "boolean", "description": "Whether this definition is image-friendly"}
+          {"type": "string", "description": "English definition"},
+          {"type": "string", "description": "Chinese translation"},
+        ],
+        "minItems": 3,
+        "maxItems": 3
+      },
+      "description": "List of [English, Chinese, image_friendly] definition tuples"
+    },
+    "synonyms": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "List of synonyms"
+    },
+    "examples": {
+      "type": "object",
+      "description": "Example sentences organized by phrase"
+    },
+    "notes": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Additional notes (BrE variants, etc.)"
+    }
+  },
+  "required": ["word", "word_form", "us_pron", "uk_pron", "definitions"]
+}
+#+end_src

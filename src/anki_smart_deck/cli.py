@@ -75,17 +75,15 @@ async def initialize_services(deck_name: str, model_name: str) -> CardGenerator:
     ai_service = AIWordDictService()
     anki_client = AnkiConnectClient()
     tts_service = GoogleTTSService()
-    image_service = GoogleImageSearchService()
 
     # Enter async contexts
     await ai_service.__aenter__()
     await anki_client.__aenter__()
 
     generator = CardGenerator(
-        ai_service=ai_service,
+        word_service=ai_service,
         anki_client=anki_client,
         tts_service=tts_service,
-        image_service=image_service,
         deck_name=deck_name,
         model_name=model_name,
     )
@@ -101,7 +99,7 @@ async def cleanup_services(generator: CardGenerator) -> None:
         generator: CardGenerator instance to cleanup
     """
     rprint("\n[cyan]Cleaning up...[/cyan]")
-    await generator._ai_service.__aexit__(None, None, None)
+    await generator._word_service.__aexit__(None, None, None)
     await generator._anki_client.__aexit__(None, None, None)
     rprint("[green]✓[/green] Cleanup complete")
 

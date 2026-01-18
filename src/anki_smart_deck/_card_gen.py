@@ -8,7 +8,6 @@ from rich import print as rprint
 
 from anki_smart_deck.services.ai import AIWordDictService
 from anki_smart_deck.services.anki_connect import AnkiConnectClient
-from anki_smart_deck.services.image_search import GoogleImageSearchService
 from anki_smart_deck.services.tts import GoogleTTSService
 
 
@@ -17,10 +16,9 @@ class CardGenerator:
 
     def __init__(
         self,
-        ai_service: AIWordDictService,
+        word_service: AIWordDictService,
         anki_client: AnkiConnectClient,
         tts_service: GoogleTTSService,
-        image_service: GoogleImageSearchService,
         deck_name: str,
         model_name: str = "AI Word (R)",
     ):
@@ -34,18 +32,17 @@ class CardGenerator:
             deck_name: Target Anki deck name
             model_name: Anki note type name
         """
-        self._ai_service = ai_service
+        self._word_service = word_service
         self._anki_client = anki_client
         self._tts_service = tts_service
-        self._image_service = image_service
         self._deck_name = deck_name
         self._model_name = model_name
 
-    def _format_definitions(self, definitions: list[list[str]]) -> str:
-        """Format definition pairs into a single string with Chinese following English.
+    def _format_definitions(self, definitions: list[list]) -> str:
+        """Format definition tuples into a single string with Chinese following English.
 
         Args:
-            definitions: List of [en, cn] definition pairs
+            definitions: List of [image_friendly, en, cn] definition tuples
 
         Returns:
             Formatted definitions string with EN and CN combined
@@ -55,7 +52,16 @@ class CardGenerator:
 
         formatted_defs = []
 
-        for i, (en, cn) in enumerate(definitions, 1):
+        for i, definition in enumerate(definitions, 1):
+            # New format: [image_friendly, en, cn]
+            if len(definition) >= 3:
+                image_friendly, en, cn = definition[0], definition[1], definition[2]
+            # Fallback for old format: [en, cn]
+            elif len(definition) >= 2:
+                en, cn = definition[0], definition[1]
+            else:
+                continue
+
             # Format: 1. English definition<br>   中文释义
             formatted_defs.append(f"{i}. {en}")
             formatted_defs.append(f"&nbsp;&nbsp;&nbsp;{cn}")
@@ -130,105 +136,73 @@ class CardGenerator:
         """
         return ", ".join(synonyms) if synonyms else ""
 
-    async def _search_and_store_images(self, word: str, num_images: int = 2) -> str:
-        """Search for images and store them in Anki.
+    async def _search_and_store_images(self, word: str, definitions: list[list]) -> str:
+        """Generate and store images for image-friendly definitions.
 
         Args:
-            word: The word to search images for
-            num_images: Number of images to search and store
+            word: The word to generate images for
+            definitions: List of [image_friendly, en, cn] definition tuples
 
         Returns:
             HTML string with image tags for Anki
         """
-        try:
-            # Search for images
-            images = self._image_service.search_word_image(
-                word=word, num_results=num_images, img_size="SMALL", prefer_simple=True
-            )
-
-            if not images:
-                rprint("[yellow]  ⚠️  No images found[/yellow]")
-                return ""
-
-            image_tags = []
-            for i, img_info in enumerate(images[:num_images], 1):
-                try:
-                    # Use thumbnail URL instead of original URL to avoid 403 errors
-                    thumbnail_url = img_info.get("thumbnail", "")
-                    if not thumbnail_url:
-                        rprint(f"[yellow]  ⚠️  No thumbnail for image {i}[/yellow]")
-                        continue
-
-                    # Download thumbnail image
-                    image_data = self._image_service.download_image(thumbnail_url)
-
-                    if image_data:
-                        # Generate filename
-                        file_id = shortuuid.uuid()
-                        # Thumbnails are usually JPEG
-                        filename = f"img_{word}_{file_id}.jpg"
-
-                        # Store in Anki media folder
-                        stored_filename = await self._anki_client.store_media_file(
-                            filename=filename, data=image_data
-                        )
-
-                        # Add image tag
-                        image_tags.append(f'<img src="{stored_filename}">')
-                        rprint(
-                            f"  [green]✓[/green] Stored image {i}: [dim]{stored_filename}[/dim]"
-                        )
-
-                except Exception as e:
-                    rprint(
-                        f"[yellow]  ⚠️  Failed to process image {i}:[/yellow] {str(e)}"
-                    )
-                    continue
-
-            # Join images with space
-            return " ".join(image_tags) if image_tags else ""
-
-        except Exception as e:
-            rprint(f"[yellow]⚠️  Image search failed:[/yellow] {str(e)}")
+        if not definitions:
             return ""
 
-    def _generate_syllabication(self, word: str, us_pron: str) -> str:
-        """Generate syllabication from word and pronunciation.
+        image_tags = []
 
-        Args:
-            word: The word to syllabicate
-            us_pron: US pronunciation (IPA) for reference
+        for i, definition in enumerate(definitions, 1):
+            # Check if this definition is image-friendly
+            # New format: [image_friendly, en, cn]
+            if len(definition) < 3:
+                rprint(
+                    f"  [dim]→ Skipping image for definition {i} (invalid format)[/dim]"
+                )
+                continue
 
-        Returns:
-            Syllabicated word (e.g., "ser-en-dip-i-ty")
-        """
-        # This is a simple heuristic approach
-        # For production, you might want to use a proper syllabication library
-        # or add syllabication to the AI prompt
+            image_friendly, en_definition, cn_definition = (
+                definition[0],
+                definition[1],
+                definition[2],
+            )
 
-        # For now, we'll use a basic pattern based on common syllable breaks
-        # This could be improved with AI generation or a syllabication library
+            if not image_friendly:
+                rprint(
+                    f"  [dim]→ Skipping image for definition {i} (not image-friendly)[/dim]"
+                )
+                continue
 
-        # Simple heuristic: split on vowel-consonant boundaries
-        # But this is very basic - ideally syllabication should come from AI
-        syllabified = word.lower()
+            try:
+                rprint(f"  [cyan]→ Generating image for definition {i}...[/cyan]")
 
-        # Add hyphens before consonants that follow vowels
-        # This is a placeholder - real syllabication is complex
-        vowels = "aeiouAEIOU"
-        result = []
-        prev_vowel = False
+                # Generate image using AI service
+                image_data: bytes = await self._word_service.generate_word_image(
+                    word=word,
+                    definition=en_definition,
+                )
 
-        for i, char in enumerate(syllabified):
-            is_vowel = char in vowels
-            if i > 0 and not is_vowel and prev_vowel and i < len(syllabified) - 1:
-                # Check if next char is also consonant
-                if i + 1 < len(syllabified) and syllabified[i + 1] not in vowels:
-                    result.append("-")
-            result.append(char)
-            prev_vowel = is_vowel
+                # Generate filename
+                file_id = shortuuid.uuid()
+                filename = f"img_{word}_{i}_{file_id}.png"
 
-        return "".join(result)
+                # Store in Anki media folder
+                stored_filename = await self._anki_client.store_media_file(
+                    filename=filename, data=image_data
+                )
+
+                image_tags.append(f'<img src="{stored_filename}">')
+                rprint(
+                    f"  [green]✓[/green] Stored image {i}: [dim]{stored_filename}[/dim]"
+                )
+
+            except Exception as e:
+                rprint(
+                    f"[yellow]  ⚠️  Failed to generate/process image for definition {i}:[/yellow] {str(e)}"
+                )
+                continue
+
+        # Join images with space
+        return " ".join(image_tags) if image_tags else ""
 
     def _format_notes(self, notes: list[str]) -> str:
         """Format notes list into a string with HTML formatting.
@@ -377,7 +351,7 @@ class CardGenerator:
 
         # Step 1: Generate card data using AI
         rprint("\n[cyan]Step 1:[/cyan] Generating card content with AI...")
-        ai_response = await self._ai_service.analyze_word(word)
+        ai_response = await self._word_service.analyze_word(word)
 
         if not ai_response or not isinstance(ai_response, list) or not ai_response:
             raise ValueError(f"Invalid AI response for word: {word}")
@@ -444,28 +418,31 @@ class CardGenerator:
             include_audio=include_example_audio,
         )
 
-        # Get syllabication from AI or generate as fallback
+        # Get syllabication from AI (required field now)
         syllabication = card_data.get("syllabication", "")
-        if not syllabication:
-            syllabication = self._generate_syllabication(
-                card_data.get("word", word), card_data.get("us_pron", "")
-            )
+
+        # AI already returns pronunciations with slashes
+        us_pron = card_data.get("us_pron", "")
+        uk_pron = card_data.get("uk_pron", "")
 
         # Step 5: Search and download images (optional)
         images_html = ""
         if include_images:
             step_num += 1
-            rprint(f"\n[cyan]Step {step_num}:[/cyan] Searching for images...")
+            rprint(
+                f"\n[cyan]Step {step_num}:[/cyan] Generating images for image-friendly definitions..."
+            )
             images_html = await self._search_and_store_images(
-                card_data.get("word", word), num_images=2
+                word=card_data.get("word", word),
+                definitions=card_data.get("definitions", []),
             )
         else:
-            rprint("\n[dim]ℹ️  Skipping image search (include_images=False)[/dim]")
+            rprint("\n[dim]ℹ️  Skipping image generation (include_images=False)[/dim]")
 
         fields = {
             "Word": card_data.get("word", word),
-            "US Pronunciation": card_data.get("us_pron", ""),
-            "UK Pronunciation": card_data.get("uk_pron", ""),
+            "US Pronunciation": us_pron,
+            "UK Pronunciation": uk_pron,
             "US Audio": us_audio,
             "UK Audio": uk_audio,
             "Word Form": card_data.get("word_form", ""),
@@ -595,50 +572,3 @@ class CardGenerator:
         rprint(f"[red]✗ Failed:[/red] {failed}")
 
         return results
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    async def main():
-        """Example usage of CardGenerator."""
-        # Initialize services
-        ai_service = GoogleAIService()
-        anki_client = AnkiConnectClient()
-        tts_service = GoogleTTSService()
-        image_service = GoogleImageSearchService()
-
-        async with ai_service, anki_client:
-            # Create card generator
-            generator = CardGenerator(
-                ai_service=ai_service,
-                anki_client=anki_client,
-                tts_service=tts_service,
-                image_service=image_service,
-                deck_name="English::AI Words",
-                model_name="AI Word (R)",
-            )
-
-            # Generate a single card (will update if exists)
-            word = "basketball"
-            note_id, is_updated = await generator.generate_card(
-                word,
-                tags=["example", "sports"],
-                include_images=False,
-                include_example_audio=False,
-            )
-
-            if is_updated:
-                rprint(
-                    f"\n[bold yellow]Card updated successfully![/bold yellow] Note ID: {note_id}"
-                )
-            else:
-                rprint(
-                    f"\n[bold green]Card created successfully![/bold green] Note ID: {note_id}"
-                )
-
-            # Or generate multiple cards
-            # words = ["serendipity", "ephemeral", "eloquent"]
-            # results = await generator.analyze_word_batch(words)
-
-    asyncio.run(main())

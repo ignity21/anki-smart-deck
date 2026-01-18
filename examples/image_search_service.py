@@ -1,54 +1,58 @@
 #!/usr/bin/env python
 from rich import print as rprint
 
-from anki_smart_deck.services.image_search import GoogleImageSearchService
+from anki_smart_deck.services.image_search import (
+    WordImageSearchService,
+    GoogleImageSearchService,
+)
 
 
 def main():
-    # 使用示例
-    rprint("\n" + "=" * 60)
-    rprint("Google Image Search Service - 使用示例")
-    rprint("=" * 60 + "\n")
+    google_service = GoogleImageSearchService()
+    word_service = WordImageSearchService(google_service)
 
-    # 创建服务实例
-    service = GoogleImageSearchService()
+    # rprint("\n[bold cyan]═══ Image Search Demo ═══[/bold cyan]\n")
 
-    # 示例 1: 搜索单词图片
-    rprint("\n[bold]--- 示例 1: 搜索单词图片 (适合 Anki) ---[/bold]")
-    word = "apple"
-    images = service.search_word_image(
-        word=word, num_results=2, img_size="MEDIUM", prefer_simple=True
+    # Demo 1: Simple search with keywords
+    rprint("[bold magenta]Demo 1: Search 'apple' with keywords[/bold magenta]")
+    images = word_service.search(
+        word="apple",
+        definition="a round fruit",
+        img_size="MEDIUM",
+        num_results=3,
+        keywords=["red apple fruit", "apple illustration"],
+        exclude_terms=["logo", "brand"],
     )
+    rprint(f"Found {len(images)} images\n")
 
-    if images:
-        rprint(f"\n找到 {len(images)} 张图片:")
-        for i, img in enumerate(images, 1):
-            rprint(f"[cyan]{i}.[/cyan] {img['title']}")
-            rprint(f"   URL: {img['url']}")
-            rprint(f"   尺寸: {img['width']}x{img['height']}")
-            rprint()
+    # Demo 2: Search without keywords
+    # rprint("[bold magenta]Demo 2: Search 'umbrella' without keywords[/bold magenta]")
+    # images = word_service.search(
+    #     word="umbrella",
+    #     num_results=3,
+    #     exclude_terms=["shop", "buy"],
+    # )
+    # rprint(f"Found {len(images)} images\n")
 
-    # 示例 2: 搜索普通图片
-    rprint("\n[bold]--- 示例 2: 搜索普通图片 ---[/bold]")
-    images = service.search_images(
-        query="python programming", num_results=2, img_size="MEDIUM"
-    )
+    # Demo 3: Filter results
+    # rprint("[bold magenta]Demo 3: Search and filter 'cat'[/bold magenta]")
+    # images = word_service.search(word="cat", num_results=3)
+    # filtered = word_service.filter_results(
+    #     images, blacklist_keywords=["meme", "funny", "video"]
+    # )
+    # rprint(f"Found {len(images)} images, {len(filtered)} after filtering\n")
 
-    # 示例 3: 下载图片
-    rprint("\n[bold]--- 示例 3: 下载图片 ---[/bold]")
-    if images and len(images) > 0:
-        first_image = images[0]
-        image_data = service.download_image(first_image["url"])
+    # Demo 4: Download image
+    for idx, image in enumerate(images):
+        image_data = google_service.download_image(image["thumbnail"])
         if image_data:
-            # 保存到文件
-            output_file = "downloaded_image.jpg"
-            with open(output_file, "wb") as f:
+            rprint(
+                f"[green]Image {idx + 1}: Downloaded {len(image_data)} bytes[/green]"
+            )
+            with open(f"image_{idx + 1}.jpg", "wb") as f:
                 f.write(image_data)
-            rprint(f"[green]💾 图片已保存到: {output_file}[/green]")
 
-    rprint("\n" + "=" * 60)
-    rprint("示例运行完成!")
-    rprint("=" * 60 + "\n")
+    rprint("\n[bold green]✅ Demo completed![/bold green]")
 
 
 if __name__ == "__main__":

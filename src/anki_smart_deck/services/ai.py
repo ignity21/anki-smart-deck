@@ -1,4 +1,3 @@
-from collections import defaultdict
 import json
 
 from google import genai
@@ -15,14 +14,13 @@ class AIWordDictService:
         "Each object MUST strictly follow the structure below and use double quotes for all JSON keys and values:\n\n"
         "{\n"
         '  "word": "string",\n'
-        '  "us_pron": "IPA string",\n'
-        '  "uk_pron": "IPA string",\n'
+        '  "us_pron": "/IPA string/",\n'
+        '  "uk_pron": "/IPA string/",\n'
         '  "word_form": "abbreviated string (e.g., n., vt., vi., adj., adv., prep., conj.)",\n'
         '  "frequency": "CEFR level (A1, A2, B1, B2, C1, or C2)",\n'
         '  "syllabication": "syllable breakdown with hyphens (e.g., ser-en-dip-i-ty)",\n'
-        '  "image_friendly": boolean,\n'
         '  "definitions": [\n'
-        '    ["English definition", "Chinese definition"]\n'
+        '    [image_friendly, "English definition", "Chinese definition"]\n'
         "  ],\n"
         '  "synonyms": ["string"],\n'
         '  "notes": ["string (including British English variations if applicable)"],\n'
@@ -43,7 +41,7 @@ class AIWordDictService:
         "8. IMAGE FRIENDLY:\n"
         '   - Set "image_friendly" to true if the word represents a concrete, visible concept (e.g., apple, car, mountain, smile).\n'
         '   - Set "image_friendly" to false for abstract concepts (e.g., justice, concept, ability, although).\n'
-        "   - Consider the PRIMARY meaning when determining image friendliness.\n"
+        "   - Every definition must have its own image_friendly boolean in the definitions array.\n"
         "   - Guideline: Concrete nouns, most verbs with visible actions, and adjectives describing visual properties are typically image-friendly.\n"
         "9. EXAMPLES:\n"
         "   - Provide natural example sentences without any HTML formatting.\n"
@@ -136,7 +134,7 @@ class AIWordDictService:
             response = await self._aclient.models.generate_content(
                 model="gemini-2.5-flash-image",
                 contents=prompt,
-                config={
+                config={  # pyright: ignore[reportArgumentType]
                     "safety_settings": [
                         {
                             "category": "HARM_CATEGORY_HATE_SPEECH",
@@ -160,8 +158,8 @@ class AIWordDictService:
 
             # 从响应的 Parts 中提取图像数据
             image_data = None
-            if response.candidates and response.candidates[0].content.parts:
-                for part in response.candidates[0].content.parts:
+            if response.candidates and response.candidates[0].content.parts:  # pyright: ignore[reportOptionalMemberAccess]
+                for part in response.candidates[0].content.parts:  # pyright: ignore[reportOptionalMemberAccess]
                     if part.inline_data:
                         # 在 google-genai SDK 中，inline_data.data 会自动处理为 bytes
                         image_data = part.inline_data.data
@@ -177,8 +175,9 @@ class AIWordDictService:
 
             # 保持原有的 PIL 缩放逻辑
             try:
-                from PIL import Image
                 import io
+
+                from PIL import Image
 
                 img = Image.open(io.BytesIO(image_data))
                 if img.size != (image_size, image_size):
@@ -198,55 +197,3 @@ class AIWordDictService:
 
         except Exception as e:
             raise ValueError(f"Failed to generate image for word '{word}': {e}") from e
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    async def main():
-        service = AIWordDictService()
-        all_cards: dict[str, list[dict]] = defaultdict(list)
-        async with service:
-            # Test with multiple words
-            words = ["apple"]
-            # words = ["formal", "apple", "justice"]
-
-            for word in words:
-                rprint(f"\n[bold magenta]{'=' * 60}[/bold magenta]")
-                cards = await service.analyze_word(word)
-                all_cards[word] = cards
-
-                for idx, card in enumerate(cards, 1):
-                    rprint(f"\n[bold cyan]Card {idx}:[/bold cyan]")
-                    rprint(f"  Word: {card.get('word')}")
-                    rprint(f"  Form: {card.get('word_form')}")
-                    rprint(f"  Frequency: {card.get('frequency')}")
-                    rprint(f"  Image Friendly: {card.get('image_friendly')}")
-                    if card.get("image_keywords"):
-                        rprint(f"  Keywords: {', '.join(card['image_keywords'])}")
-                    rprint(
-                        f"  Definitions: {len(card.get('definitions', []))} meanings"
-                    )
-
-        for word, cards in all_cards.items():
-            rprint(f"\n[bold yellow]first card for '{word}':[/bold yellow]")
-            rprint(cards[0])
-
-        # Demo: Generate image for a word
-        rprint(f"\n[bold magenta]{'=' * 60}[/bold magenta]")
-        rprint("[bold cyan]Demo: Generate AI image for 'pickleball'[/bold cyan]")
-        async with service:
-            try:
-                image_data = await service.generate_word_image(
-                    word="pickleball",
-                    definition="a paddle sport that combines elements of badminton, tennis, and table tennis"
-                )
-                # Save the generated image
-                with open("ai_generated.png", "wb") as f:
-                    f.write(image_data)
-                rprint("[bold green]✅ Image saved as 'ai_generated.png'[/bold green]")
-            except Exception as e:
-                rprint(f"[red]❌ Image generation failed: {e}[/red]")
-
-    asyncio.run(main())
-    rprint("\n[bold green]✅ Demo completed![/bold green]")
