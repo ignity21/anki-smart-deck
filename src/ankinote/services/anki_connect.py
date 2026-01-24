@@ -14,16 +14,13 @@ class AnkiConnectClient:
             url: AnkiConnect server URL
         """
         self._url = url
-        self._session: aiohttp.ClientSession | None = None
-        self._timeout = aiohttp.ClientTimeout(total=30.0)
+        self._session = aiohttp.ClientSession(timeout=30)
 
     async def __aenter__(self):
-        # Create session on enter
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=self._timeout)
+        await self._session.__aenter__()
         return self
 
-    async def __aexit__(self, exc_type, exc, tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         # Close session on exit
         if self._session and not self._session.closed:
             await self._session.close()

@@ -4,7 +4,7 @@
 # @file
 # @version 0.1
 
-.PHONY: test clean-test clean lint lint-fix install install-dev
+.PHONY: test clean-test clean lint lint-fix install install-dev type-check format pre-commit help
 
 clean-test:
 	rm -rf .pytest_cache
@@ -12,6 +12,9 @@ clean-test:
 	rm -rf tests/**/__pycache__
 	rm -rf .coverage
 	rm -rf htmlcov
+
+test:
+	uv run pytest
 
 clean: clean-test
 	rm -rf __pycache__
@@ -46,4 +49,4 @@ help:
 	@echo "  install      - Install dependencies"
 	@echo "  install-dev  - Install development dependencies"
 
-# end
+# end of Makefile

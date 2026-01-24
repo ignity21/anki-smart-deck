@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from anki_smart_deck.services.tts import GoogleTTSService
+from ankinote.services.tts import GoogleTTSService
 from rich import print as rprint
 
 

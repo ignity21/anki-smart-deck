@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 from rich import print as rprint
 
-from anki_smart_deck._card_gen import CardGenerator
-from anki_smart_deck.services import (
+from ankinote._card_gen import CardGenerator
+from ankinote.services import (
     AIWordDictService,
     AnkiConnectClient,
     GoogleTTSService,

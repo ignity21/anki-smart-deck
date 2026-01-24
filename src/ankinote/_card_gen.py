@@ -6,9 +6,9 @@ This module generates Anki cards using AI services and AnkiConnect.
 import shortuuid
 from rich import print as rprint
 
-from anki_smart_deck.services.ai import AIWordDictService
-from anki_smart_deck.services.anki_connect import AnkiConnectClient
-from anki_smart_deck.services.tts import GoogleTTSService
+from ankinote.services.ai import AIWordDictService
+from ankinote.services.anki_connect import AnkiConnectClient
+from ankinote.services.tts import GoogleTTSService
 
 
 class CardGenerator:

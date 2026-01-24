@@ -1,7 +1,7 @@
 import asyncio
 import random
 from typing import List, Tuple
-from anki_smart_deck.config import get_config
+from ankinote.config import get_config
 
 from google.cloud import texttospeech_v1
 from rich import print as rprint

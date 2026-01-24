@@ -1,6 +1,6 @@
 from typing import Literal
 
-from anki_smart_deck.config import get_config
+from ankinote.config import get_config
 from googleapiclient.discovery import build
 from rich import print as rprint
 

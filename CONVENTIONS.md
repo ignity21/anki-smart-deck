@@ -1,8 +1,8 @@
 - Annotate types wherever possible
+- Please use the latest type annotations, such as `dict[str, int]` and `str | None` instead of using `Optional[str]`
 - Make good use of the `asyncio` library for asynchronous programming
 - Use Google Style for code formatting
 - Prefer exception over returning error code or None
-- Please use the latest type annotations, such as `dict[str, int]` and `str | None` instead of using `Optional[str]`
-- Prefer f-string & t-string
-- Use python new features whenever possible (Python version 3.14)
+- Prefer t-string & f-string
+- Use python new features whenever possible (Python version 3.13+)
 - Use only english in code (include comments)

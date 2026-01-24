@@ -1,5 +1,6 @@
 [project]
-name = "anki-smart-deck"
+name = "ankinote-ai"
+dynamic = ["version"]
 description = "AI-powered Anki vocabulary card generator using Google's suite of APIs"
 requires-python = ">=3.13"
 license = { text = "MIT" }
@@ -29,10 +30,13 @@ dependencies = [
 ]
 
 [project.scripts]
-anki-deck = "anki_smart_deck.cli:main"
+anki-deck = "ankinote:main"
+
+[tool.hatch.version]
+path = "src/ankinote/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/anki_smart_deck"]
+packages = ["src/ankinote"]
 
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple/"
@@ -44,7 +48,7 @@ dev = [
     "ruff>=0.12.7",
     "pytest>=8.4.1",
     "pytest-cov>=6.1.1",
-    "ipython>=9.5.0",
+    "pytest-asyncio>=1.3.0",
 ]
 
 [build-system]
@@ -56,12 +60,12 @@ line-length = 88
 target-version = "py313"
 
 [tool.pyright]
-include = ["src/anki_smart_deck"]
+include = ["src/ankinote"]
 exclude = [
     ".ruff_cache",
     "**/__pycache__",
 ]
-typeCheckingMode = "basic"
+typeCheckingMode = "strict"
 
 [tool.pytest.ini_options]
 minversion = "8.4.1"

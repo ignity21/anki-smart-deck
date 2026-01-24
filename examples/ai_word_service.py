@@ -3,7 +3,7 @@ import asyncio
 
 from rich import print as rprint
 
-from anki_smart_deck.services import AIWordDictService
+from ankinote.services import AIWordDictService
 
 
 # Example usage and testing

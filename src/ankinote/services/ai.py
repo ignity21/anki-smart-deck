@@ -3,7 +3,7 @@ import json
 from google import genai
 from rich import print as rprint
 
-from anki_smart_deck.config import get_config
+from ankinote.config import get_config
 
 
 class AIWordDictService:

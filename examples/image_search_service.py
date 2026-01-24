@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from rich import print as rprint
 
-from anki_smart_deck.services.image_search import (
+from ankinote.services.image_search import (
     WordImageSearchService,
     GoogleImageSearchService,
 )
