@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.scripts]
-anki-deck = "ankinote:main"
+anki-deck = "ankinote.entry.cli:main"
 
 [tool.hatch.version]
 path = "src/ankinote/__init__.py"
