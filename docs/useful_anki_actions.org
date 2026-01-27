@@ -1,0 +1,38 @@
+#+title: Useful Anki Actions
+
+* Model(Note Type)
+- modelNames
+- createModel
+- findModelsByName
+
+** Fields
+- modelFieldNames: list fields
+- modelFieldRename
+- Field Font(Optional)
+  - modelFieldSetFont
+  - modelFieldSetFontSize
+  - modelFieldSetDescription
+
+** Templates
+- updateModelTemplates
+- modelTemplateAdd
+- modelTemplateRemove
+
+** Styling
+- updateModelStyling
+
+* Note
+- addNote
+- addNotes
+- updateNote
+- updateNoteModel (Change note type)
+- clearUnusedTags
+- replaceTagsInAllNotes
+- removeEmptyNotes
+
+* Deck
+- createDeck(if it does not exist)
+- getDeckConfig/saveDeckConfig
+
+* Media
+- storeMediaFile
