@@ -1,6 +1,5 @@
-from .httpcli import get_session, close_session
+from ._http_session import http
 
 __all__ = [
-    "get_session",
-    "close_session",
+    "http",
 ]

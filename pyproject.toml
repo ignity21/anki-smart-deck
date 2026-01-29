@@ -25,6 +25,7 @@ dependencies = [
     "google-genai[aiohttp]>=1.40.0",
     "google-images-search>=1.4.7",
     "loguru>=0.7.3",
+    "pytest-mock>=3.15.1",
     "python-dotenv>=1.1.1",
     "shortuuid>=1.0.13",
 ]

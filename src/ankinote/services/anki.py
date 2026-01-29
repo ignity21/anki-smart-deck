@@ -1,11 +1,18 @@
+import base64
 from dataclasses import dataclass, field
 from typing import Any
 
-from ankinote.utils import get_session
+from ankinote.utils import http
 
 
-class ModelAlreadyExistsError(Exception):
+class ModelAlreadyExists(Exception):
     """Raised when attempting to create a model that already exists."""
+
+    pass
+
+
+class ModelNotFound(Exception):
+    """Raised when a requested model is not found."""
 
     pass
 
@@ -48,14 +55,18 @@ class NoteModel:
     name: str
     type: int = field(doc="Model type (0 for standard)", default=0)
     sort_field: int = field(doc="Index of the field used for sorting", default=0)
-    deck_id: int | None = field(doc="Optional default deck for this note type", default=None)
+    deck_id: int | None = field(
+        doc="Optional default deck for this note type", default=None
+    )
     templates: list[Template] = field(default_factory=list, repr=False)
     fields: list[Field] = field(default_factory=list)
     css: str = field(doc="CSS styling for cards", default="", repr=False)
     latex_pre: str = field(doc="LaTeX preamble", default="")
     latex_post: str = field(doc="LaTeX postamble", default="")
     latex_svg: bool = field(doc="Whether to render LaTeX as SVG", default=False)
-    requirements: list[list[Any]] = field(doc="Card generation requirements", default_factory=list)
+    requirements: list[list[Any]] = field(
+        doc="Card generation requirements", default_factory=list
+    )
 
 
 class ModelClient:
@@ -204,9 +215,7 @@ class ModelClient:
         except RuntimeError as e:
             error_msg = str(e)
             if "already exists" in error_msg.lower():
-                raise ModelAlreadyExistsError(
-                    f"Model '{model_name}' already exists"
-                ) from e
+                raise ModelAlreadyExists(f"Model '{model_name}' already exists") from e
             raise
 
     async def update_templates(self, model: NoteModel) -> None:
@@ -250,9 +259,8 @@ class ModelClient:
             "updateModelStyling",
             params={
                 "model": {
-                    model_name: {
-                        "css": css,
-                    }
+                    "name": model_name,
+                    "css": css,
                 }
             },
         )
@@ -291,7 +299,6 @@ class MediaClient:
             ...     data = f.read()
             >>> filename = await client.media.store_file("word_image.png", data)
         """
-        import base64
 
         encoded_data = base64.b64encode(data).decode("utf-8")
         return await self._client._invoke(
@@ -353,7 +360,13 @@ class NoteClient:
             "tags": tags or [],
         }
 
-        return await self._client._invoke("addNote", params={"note": note_data})
+        try:
+            return await self._client._invoke("addNote", params={"note": note_data})
+        except RuntimeError as e:
+            error_msg = str(e)
+            if error_msg.startswith("model was not found"):
+                raise ModelNotFound(f"Model '{model_name}' not found") from e
+            raise
 
     async def update(
         self,
@@ -427,7 +440,7 @@ class AnkiConnectClient:
         payload = {"action": action, "version": 6}
         if params is not None:
             payload["params"] = params
-        session = await get_session()
+        session = http.get_session()
 
         async with session.post(self._url, json=payload) as response:
             result = await response.json()
