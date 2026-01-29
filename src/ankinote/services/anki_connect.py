@@ -4,6 +4,12 @@ from typing import Any
 from ankinote.utils import get_session
 
 
+class ModelAlreadyExistsError(Exception):
+    """Raised when attempting to create a model that already exists."""
+
+    pass
+
+
 @dataclass
 class Field:
     """Represents a field in an Anki note model."""
@@ -42,18 +48,14 @@ class NoteModel:
     name: str
     type: int = field(doc="Model type (0 for standard)", default=0)
     sort_field: int = field(doc="Index of the field used for sorting", default=0)
-    deck_id: int | None = field(
-        doc="Optional default deck for this note type", default=None
-    )
+    deck_id: int | None = field(doc="Optional default deck for this note type", default=None)
     templates: list[Template] = field(default_factory=list, repr=False)
     fields: list[Field] = field(default_factory=list)
     css: str = field(doc="CSS styling for cards", default="", repr=False)
-    latex_pre: str = field(doc="LaTeX preamble", default="", repr=False)
-    latex_post: str = field(doc="LaTeX postamble", default="", repr=False)
+    latex_pre: str = field(doc="LaTeX preamble", default="")
+    latex_post: str = field(doc="LaTeX postamble", default="")
     latex_svg: bool = field(doc="Whether to render LaTeX as SVG", default=False)
-    requirements: list[list[Any]] = field(
-        doc="Card generation requirements", default_factory=list
-    )
+    requirements: list[list[Any]] = field(doc="Card generation requirements", default_factory=list)
 
 
 class AnkiConnectClient:
@@ -175,3 +177,110 @@ class AnkiConnectClient:
             latex_svg=model_dict["latexsvg"],
             requirements=model_dict["req"],
         )
+
+    async def update_model_templates(self, model: NoteModel) -> None:
+        """Update the templates of a note model.
+
+        Args:
+            model: The note model with updated templates
+
+        Raises:
+            RuntimeError: If AnkiConnect returns an error
+        """
+        templates_dict = {
+            tmpl.name: {
+                "Front": tmpl.question_format,
+                "Back": tmpl.answer_format,
+            }
+            for tmpl in model.templates
+        }
+
+        await self._invoke(
+            "updateModelTemplates",
+            params={
+                "model": {
+                    "name": model.name,
+                    "templates": templates_dict,
+                }
+            },
+        )
+
+    async def update_model_styling(
+        self, model_name: str, css: str
+    ) -> None:
+        """Update the CSS styling of a note model.
+
+        Args:
+            model_name: The name of the note model
+            css: The new CSS styling
+
+        Raises:
+            RuntimeError: If AnkiConnect returns an error
+        """
+        await self._invoke(
+            "updateModelStyling",
+            params={
+                "model": {
+                    model_name: {
+                        "css": css,
+                    }
+                }
+            },
+        )
+
+    async def create_model(
+        self,
+        model_name: str,
+        fields: list[str],
+        templates: list[dict[str, str]],
+        css: str = "",
+        is_cloze: bool = False,
+    ) -> dict[str, Any]:
+        """Create a new note model.
+
+        Args:
+            model_name: Name of the new model
+            fields: List of field names in order
+            templates: List of card templates, each with 'Name', 'Front', 'Back' keys
+            css: Optional CSS styling (defaults to builtin CSS if empty)
+            is_cloze: Whether this is a cloze deletion model
+
+        Returns:
+            The created model information
+
+        Raises:
+            ModelAlreadyExistsError: If a model with this name already exists
+            RuntimeError: For other AnkiConnect errors
+
+        Example:
+            >>> templates = [
+            ...     {
+            ...         "Name": "Card 1",
+            ...         "Front": "{{Field1}}",
+            ...         "Back": "{{FrontSide}}<hr>{{Field2}}"
+            ...     }
+            ... ]
+            >>> await client.create_model(
+            ...     model_name="My Model",
+            ...     fields=["Field1", "Field2"],
+            ...     templates=templates
+            ... )
+        """
+        try:
+            return await self._invoke(
+                "createModel",
+                params={
+                    "modelName": model_name,
+                    "inOrderFields": fields,
+                    "css": css,
+                    "isCloze": is_cloze,
+                    "cardTemplates": templates,
+                },
+            )
+        except RuntimeError as e:
+            error_msg = str(e)
+            if "already exists" in error_msg.lower():
+                raise ModelAlreadyExistsError(
+                    f"Model '{model_name}' already exists"
+                ) from e
+            raise
