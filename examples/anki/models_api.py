@@ -59,12 +59,7 @@ async def main():
             await anki_cli.models.update_templates(model_name, new_templates)
 
             # update model styling
-            new_css = """
-            .card {
-                font-size: 24px;
-                color: blue;
-            }
-            """
+            new_css = " .card { font-size: 24px; color: blue; }"
             await anki_cli.models.update_styling(model_name, new_css)
 
 

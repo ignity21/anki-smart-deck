@@ -11,43 +11,50 @@ async def main():
     async with http:
         client = AnkiConnectClient()
 
-        # ========== Notes API 示例 ==========
+        # ========== Notes API Examples ==========
+        deck_name = "My Test Deck"
+        model_name = "My Test Model"
 
-        # 添加新笔记
-        note_id = await client.notes.add(
-            deck_name="Default",
-            model_name="MyVocab Test",
-            fields={"Front": "hello", "Back": "你好"},
-            tags=["chinese", "vocabulary"],
+        # Create a deck if it doesn't exist
+        deck_id = await client.notes.create_deck(deck_name)
+        print(f"Deck ID: {deck_id}")
+
+        # Check if the model exists
+        note_id = await client.notes.find(
+            deck_name=deck_name, unique_fields={"Front": "hello"}
         )
-        rprint(f"Created note with ID: {note_id}")
+        if note_id:
+            print(f"Found note ID: {note_id}")
 
-        # 更新笔记的字段
-        await client.notes.update(
+        if not note_id:
+            # Create a new note
+            note_id = await client.notes.add(
+                deck_name=deck_name,
+                model_name=model_name,
+                fields={"Front": "hello", "Back": "你好"},
+                tags=["chinese", "vocabulary"],
+                allow_duplicate=False,
+            )
+            rprint(f"Created note with ID: {note_id}")
+
+        await client.notes.update_fields(
             note_id=note_id, fields={"Front": "hello (updated)", "Back": "你好 (更新)"}
         )
         rprint(f"Updated note {note_id} fields")
 
-        # 更新笔记的标签
-        await client.notes.update(
+        # tag apis
+        await client.notes.clear_all_unused_tags()
+        await client.notes.update_tags(
             note_id=note_id, tags=["chinese", "vocabulary", "updated"]
         )
         rprint(f"Updated note {note_id} tags")
 
-        # 同时更新字段和标签
-        await client.notes.update(
-            note_id=note_id,
-            fields={"Front": "hello (final)"},
-            tags=["chinese", "greetings"],
-        )
-        rprint(f"Updated note {note_id} fields and tags")
+        # # ========== Media API Examples ==========
 
-        # ========== Media API 示例 ==========
-
-        # 存储文本文件
-        text_data = b"Hello, this is a test file!"
-        filename1 = await client.media.store_file("_test_file.txt", text_data)
-        rprint(f"Stored text file: {filename1}")
+        # # 存储文本文件
+        # text_data = b"Hello, this is a test file!"
+        # filename1 = await client.media.store_file("_test_file.txt", text_data)
+        # rprint(f"Stored text file: {filename1}")
 
         # 存储图片文件（假设你有一个图片）
         # with open("example.png", "rb") as f:
@@ -62,7 +69,7 @@ async def main():
         #
         # # 在笔记中引用音频
         # note_id_with_audio = await client.notes.add(
-        #     deck_name="Default",
+        #     deck_name=deck_name,
         #     model_name="Basic",
         #     fields={
         #         "Front": f"hello [sound:{audio_filename}]",

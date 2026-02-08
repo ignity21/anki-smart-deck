@@ -387,12 +387,52 @@ class NoteClient:
         """
         return await self._client._invoke("createDeck", params={"deck": deck_name})
 
+    async def find(self, deck_name: str, unique_fields: dict[str, str]) -> int | None:
+        """Query for a note ID based on unique field values.
+
+        Args:
+            deck_name: Name of the deck to search within
+            unique_fields: Dictionary of field names and their unique values
+
+        Returns:
+            The ID of the matching note or None if no match is found
+
+        Raises:
+            RuntimeError: If AnkiConnect returns an error or if no matching note is found
+
+        Example:
+            >>> note_id = await client.notes.query(
+            ...     deck_name="My Vocabulary",
+            ...     unique_fields={"Front": "hello"}
+            ... )
+        """
+        query_parts = [f'deck:"{deck_name}"']
+        for field_, value in unique_fields.items():
+            query_parts.append(f'{field_}:"{value}"')
+        query_str = " ".join(query_parts)
+
+        try:
+            note_ids = await self._client._invoke(
+                "findNotes", params={"query": query_str}
+            )
+        except RuntimeError:
+            raise
+        else:
+            if not note_ids:
+                return None
+            if len(note_ids) > 1:
+                raise KeyError(
+                    f"Expected exactly one note matching {unique_fields} in deck '{deck_name}', but found {len(note_ids)}"
+                )
+            return note_ids[0]
+
     async def add(
         self,
         deck_name: str,
         model_name: str,
         fields: dict[str, str],
         tags: list[str] | None = None,
+        allow_duplicate: bool = False,
     ) -> int:
         """Add a new note to Anki.
 
@@ -424,6 +464,7 @@ class NoteClient:
             "modelName": model_name,
             "fields": fields,
             "tags": tags or [],
+            "options": {"allowDuplicate": allow_duplicate},
         }
 
         try:
@@ -434,46 +475,57 @@ class NoteClient:
                 raise ModelNotFound(f"Model '{model_name}' not found") from e
             raise
 
-    async def update(
-        self,
-        note_id: int,
-        fields: dict[str, str] | None = None,
-        tags: list[str] | None = None,
-    ) -> None:
-        """Update an existing note.
+    async def update_fields(self, note_id: int, fields: dict[str, str]) -> None:
+        """Update the fields of an existing note.
 
         Args:
             note_id: ID of the note to update
-            fields: Optional dictionary of fields to update
-            tags: Optional list of tags to replace existing tags
+            fields: Dictionary of field names and their new values
 
         Raises:
             RuntimeError: If AnkiConnect returns an error
-            ValueError: If neither fields nor tags are provided
-
-        Warning:
-            Do not view the note in Anki's browser while updating it,
-            as this can cause the update to fail.
-
-        Example:
-            >>> await client.notes.update(
-            ...     note_id=1234567890,
-            ...     fields={"Front": "updated hello"},
-            ...     tags=["chinese", "greetings", "updated"]
-            ... )
         """
-        if fields is None and tags is None:
-            raise ValueError("At least one of 'fields' or 'tags' must be provided")
-
-        note_data: dict[str, Any] = {"id": note_id}
-
-        if fields is not None:
-            note_data["fields"] = fields
-
-        if tags is not None:
-            note_data["tags"] = tags
-
+        note_data: dict[str, Any] = {"id": note_id, "fields": fields}
         await self._client._invoke("updateNote", params={"note": note_data})
+
+    async def update_tags(self, note_id: int, tags: list[str]) -> None:
+        """Update the tags of an existing note.
+
+        Args:
+            note_id: ID of the note to update
+            tags: List of tags to replace existing tags
+
+        Raises:
+            RuntimeError: If AnkiConnect returns an error
+        """
+        note_data: dict[str, Any] = {"id": note_id, "tags": tags}
+        await self._client._invoke("updateNote", params={"note": note_data})
+
+    async def replace_tag_in_all_notes(self, to_replace: str, replacement: str) -> None:
+        """Replace a tag with another tag across all notes.
+
+        Args:
+            to_replace: The tag to be replaced
+            replacement: The tag to replace with
+
+        Raises:
+            RuntimeError: If AnkiConnect returns an error
+        """
+        await self._client._invoke(
+            "replaceTagsInAllNotes",
+            params={
+                "tag_to_replace": to_replace,
+                "replace_with_tag": replacement,
+            },
+        )
+
+    async def clear_all_unused_tags(self) -> None:
+        """Clear all tags that are not currently used by any notes.
+
+        Raises:
+            RuntimeError: If AnkiConnect returns an error
+        """
+        await self._client._invoke("clearUnusedTags")
 
 
 class AnkiConnectClient:
