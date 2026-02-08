@@ -12,13 +12,13 @@ class ModelAlreadyExists(Exception):
 
 
 class ModelNotFound(Exception):
-    """Raised when a requested model is not found."""
+    """Raised when a specified model is not found."""
 
     pass
 
 
 @dataclass
-class Field:
+class ModelField:
     """Represents a field in an Anki note model."""
 
     id: int
@@ -37,13 +37,13 @@ class Field:
 
 
 @dataclass
-class Template:
+class ModelTemplate:
     """Represents a card template in an Anki note model."""
 
-    id: int
     name: str
     question_format: str = field(doc="HTML/template for the question side")
     answer_format: str = field(doc="HTML/template for the answer side")
+    id: int | None = field(doc="Template ID (assigned by Anki)", default=None)
     order: int | None = field(doc="Display order of this template", default=None)
 
 
@@ -58,8 +58,8 @@ class NoteModel:
     deck_id: int | None = field(
         doc="Optional default deck for this note type", default=None
     )
-    templates: list[Template] = field(default_factory=list, repr=False)
-    fields: list[Field] = field(default_factory=list)
+    templates: list[ModelTemplate] = field(default_factory=list, repr=False)
+    fields: list[ModelField] = field(default_factory=list)
     css: str = field(doc="CSS styling for cards", default="", repr=False)
     latex_pre: str = field(doc="LaTeX preamble", default="")
     latex_post: str = field(doc="LaTeX postamble", default="")
@@ -88,8 +88,23 @@ class ModelClient:
         """
         return await self._client._invoke("modelNames")
 
-    async def find(self, model_name: str) -> NoteModel:
-        """Find a note type (model) by name.
+    async def exists(self, model_name: str) -> bool:
+        try:
+            models = await self._client._invoke(
+                "findModelsByName",
+                params={
+                    "modelNames": [
+                        model_name,
+                    ]
+                },
+            )
+            assert len(models) == 1
+            return True
+        except RuntimeError:
+            return False
+
+    async def info(self, model_name: str) -> NoteModel:
+        """get details of a note type (model) by name.
 
         Args:
             model_name: The note type name
@@ -98,30 +113,28 @@ class ModelClient:
             NoteModel instance
 
         Raises:
-            ValueError: If model not found or multiple models found
+            KeyError: If model not found
         """
-        model_list = await self._client._invoke(
-            "findModelsByName",
-            params={
-                "modelNames": [
-                    model_name,
-                ]
-            },
-        )
-
-        if not model_list:
-            raise ValueError(f"Model '{model_name}' not found")
-
-        if len(model_list) > 1:
-            raise ValueError(
-                f"Multiple models found for name '{model_name}': {len(model_list)}"
+        try:
+            model_list = await self._client._invoke(
+                "findModelsByName",
+                params={
+                    "modelNames": [
+                        model_name,
+                    ]
+                },
             )
+        except RuntimeError:
+            raise KeyError(f"Model '{model_name}' not found")
 
         model_dict = model_list[0]
+        return self._model_dict_to_notemodel(model_dict)
 
+    def _model_dict_to_notemodel(self, model_dict: dict[str, Any]) -> NoteModel:
+        """Convert a model dictionary from AnkiConnect to a NoteModel instance."""
         # Convert field dictionaries to Field objects
         fields = [
-            Field(
+            ModelField(
                 id=fld["id"],
                 name=fld["name"],
                 description=fld["description"],
@@ -137,7 +150,7 @@ class ModelClient:
 
         # Convert template dictionaries to Template objects
         templates = [
-            Template(
+            ModelTemplate(
                 id=tmpl["id"],
                 name=tmpl["name"],
                 question_format=tmpl["qfmt"],
@@ -170,7 +183,7 @@ class ModelClient:
         templates: list[dict[str, str]],
         css: str = "",
         is_cloze: bool = False,
-    ) -> dict[str, Any]:
+    ) -> NoteModel:
         """Create a new note model.
 
         Args:
@@ -181,7 +194,7 @@ class ModelClient:
             is_cloze: Whether this is a cloze deletion model
 
         Returns:
-            The created model information
+            The created NoteModel instance
 
         Raises:
             ModelAlreadyExistsError: If a model with this name already exists
@@ -202,7 +215,7 @@ class ModelClient:
             ... )
         """
         try:
-            return await self._client._invoke(
+            model_dict = await self._client._invoke(
                 "createModel",
                 params={
                     "modelName": model_name,
@@ -212,38 +225,79 @@ class ModelClient:
                     "cardTemplates": templates,
                 },
             )
-        except RuntimeError as e:
-            error_msg = str(e)
+        except RuntimeError as exc_:
+            error_msg = str(exc_)
             if "already exists" in error_msg.lower():
-                raise ModelAlreadyExists(f"Model '{model_name}' already exists") from e
+                raise ModelAlreadyExists(
+                    f"Model '{model_name}' already exists"
+                ) from exc_
             raise
+        else:
+            return self._model_dict_to_notemodel(model_dict)
 
-    async def update_templates(self, model: NoteModel) -> None:
+    async def update_templates(self, model_name: str, templates: list[ModelTemplate]):
         """Update the templates of a note model.
 
         Args:
-            model: The note model with updated templates
+            model_name: The name of the note model
+            templates: List of ModelTemplate instances with updated templates
 
         Raises:
             RuntimeError: If AnkiConnect returns an error
         """
-        templates_dict = {
-            tmpl.name: {
-                "Front": tmpl.question_format,
-                "Back": tmpl.answer_format,
-            }
-            for tmpl in model.templates
-        }
-
-        await self._client._invoke(
-            "updateModelTemplates",
+        existing_templates = await self._client._invoke(
+            "modelTemplates",
             params={
-                "model": {
-                    "name": model.name,
-                    "templates": templates_dict,
-                }
+                "modelName": model_name,
             },
         )
+        front_to_tmpl_name = {
+            tmpl["Front"]: name for name, tmpl in existing_templates.items()
+        }
+        for tmpl in templates:
+            existing_name = front_to_tmpl_name.get(tmpl.question_format, None)
+            # If no existing template has the same question format, we consider it a new template and add it.
+            if existing_name is None:
+                # Add new template
+                await self._client._invoke(
+                    "modelTemplateAdd",
+                    params={
+                        "modelName": model_name,
+                        "template": {
+                            "Name": tmpl.name,
+                            "Front": tmpl.question_format,
+                            "Back": tmpl.answer_format,
+                        },
+                    },
+                )
+                continue
+
+            # If the question format matches an existing template, we consider it an update.
+            if tmpl.name != existing_name:
+                # Rename first
+                await self._client._invoke(
+                    "modelTemplateRename",
+                    params={
+                        "modelName": model_name,
+                        "oldTemplateName": existing_name,
+                        "newTemplateName": tmpl.name,
+                    },
+                )
+            # Update
+            await self._client._invoke(
+                "updateModelTemplates",
+                params={
+                    "model": {
+                        "name": model_name,
+                        "templates": {
+                            tmpl.name: {
+                                "Front": tmpl.question_format,
+                                "Back": tmpl.answer_format,
+                            }
+                        },
+                    }
+                },
+            )
 
     async def update_styling(self, model_name: str, css: str) -> None:
         """Update the CSS styling of a note model.
@@ -320,6 +374,18 @@ class NoteClient:
             client: The parent AnkiConnectClient instance
         """
         self._client = client
+
+    async def create_deck(self, deck_name: str) -> int:
+        """Create a new deck in Anki.
+
+        Args:
+            deck_name: Name of the deck to create
+
+        Returns:
+            The ID of the created deck
+
+        """
+        return await self._client._invoke("createDeck", params={"deck": deck_name})
 
     async def add(
         self,

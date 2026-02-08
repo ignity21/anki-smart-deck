@@ -3,7 +3,7 @@ import asyncio
 
 from rich import print as rprint
 
-from ankinote.services.anki import AnkiConnectClient, ModelAlreadyExists
+from ankinote.services.anki import AnkiConnectClient, ModelTemplate
 from ankinote.utils import http
 
 
@@ -11,63 +11,61 @@ async def main():
     async with http:
         anki_cli = AnkiConnectClient()
 
-        # 使用新的 API 结构
+        model_name = "My Test Model"
 
-        # 获取所有 Note Type 名称
-        # models = await client.models.list()
-        # rprint("All models:", models)
+        # list all models
+        models = await anki_cli.models.list()
+        rprint("All models:", models)
 
-        # 查找现有模型
-        model = await anki_cli.models.find("AI Word (R)")
-        # rprint("Found model:", model)
+        # check if model exists
+        exists = await anki_cli.models.exists(model_name)
+        if exists:
+            rprint("Found model:", model_name)
+            rprint("Model details:", await anki_cli.models.info(model_name))
+        else:
+            rprint("Model not found:", model_name)
 
-        # 创建新的 Note Model
-        templates = [
-            {
-                "Name": "Word F->B",
-                "Front": "{{Word}}",
-                "Back": "{{FrontSide}}<hr id=answer><div>{{Definition}}</div>",
-            },
-            {
-                "Name": "Word B->F",
-                "Front": "{{Definition}}",
-                "Back": "{{FrontSide}}<hr id=answer><div>{{Word}}</div>",
-            },
-        ]
-
-        css = """
-    .card {
-        font-family: Arial, sans-serif;
-        font-size: 20px;
-        text-align: center;
-        color: #333;
-        background-color: #fff;
-    }
-        """
-
-        try:
+        # create model if it doesn't exist
+        if not exists:
             result = await anki_cli.models.create(
-                model_name="MyVocab Test",
-                fields=["Word", "Definition", "Example", "Notes"],
-                templates=templates,
-                css=css,
+                model_name=model_name,
+                fields=["Front", "Back"],
+                templates=[
+                    {
+                        "Name": "Card 1",
+                        "Front": "{{Front}}",
+                        "Back": "{{FrontSide}}<hr id=answer><div>{{Back}}</div>",
+                    }
+                ],
+                css=".card { font-size: 20px; }",
                 is_cloze=False,
             )
-        except ModelAlreadyExists:
-            print("Model 'MyVocab Test' already exists.")
-            return  # Exit if model exists
+            rprint("Created model:", result)
 
-        rprint("Created model:", result)
+        if exists:
+            # update model templates
+            new_templates = [
+                ModelTemplate(
+                    name="Test F->B",
+                    question_format="{{Front}}",
+                    answer_format="{{FrontSide}}<hr id=answer><div>{{Back}}</div>",
+                ),
+                ModelTemplate(
+                    name="Test B->F",
+                    question_format="{{Back}}",
+                    answer_format="{{FrontSide}}<hr id=answer><div>{{Front}}</div>",
+                ),
+            ]
+            await anki_cli.models.update_templates(model_name, new_templates)
 
-        # 更新模板
-        model.templates[0].question_format = "<h1>{{Word}}</h1>"
-        await anki_cli.models.update_templates(model)
-        rprint("Updated templates")
-
-        # 更新样式
-        new_css = ".card { font-size: 24px; }"
-        await anki_cli.models.update_styling("MyVocab Test", new_css)
-        rprint("Updated styling")
+            # update model styling
+            new_css = """
+            .card {
+                font-size: 24px;
+                color: blue;
+            }
+            """
+            await anki_cli.models.update_styling(model_name, new_css)
 
 
 if __name__ == "__main__":
