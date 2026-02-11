@@ -2,7 +2,7 @@ import base64
 from dataclasses import dataclass, field
 from typing import Any
 
-from ankinote.utils import http
+from ankinote.utils.httpcli import get_session
 
 
 class ModelAlreadyExists(Exception):
@@ -558,8 +558,8 @@ class AnkiConnectClient:
         payload = {"action": action, "version": 6}
         if params is not None:
             payload["params"] = params
-        session = http.get_session()
 
+        session = get_session()
         async with session.post(self._url, json=payload) as response:
             result = await response.json()
         error = result["error"]

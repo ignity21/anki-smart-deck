@@ -4,11 +4,11 @@ import asyncio
 from rich import print as rprint
 
 from ankinote.services.anki import AnkiConnectClient
-from ankinote.utils import http
+from ankinote.app import Application
 
 
 async def main():
-    async with http:
+    async with Application():
         client = AnkiConnectClient()
 
         # ========== Notes API Examples ==========
