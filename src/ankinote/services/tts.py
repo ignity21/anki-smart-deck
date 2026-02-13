@@ -1,222 +1,124 @@
-import asyncio
 import random
-from typing import List, Tuple
-from ankinote.config import get_config
+from typing import Self
 
-from google.cloud import texttospeech_v1
-from rich import print as rprint
+from google.api_core.client_options import ClientOptions
+from google.cloud.texttospeech import (
+    AudioConfig,
+    AudioEncoding,
+    SynthesisInput,
+    TextToSpeechAsyncClient,
+    VoiceSelectionParams,
+)
+
+from ankinote.config import envs
 
 
 class GoogleTTSService:
-    def __init__(self):
-        app_config = get_config()
-        self._tts_cli = texttospeech_v1.TextToSpeechClient(
-            client_options={"api_key": app_config.google_tts_key}
-        )
-        # 缓存 WaveNet 语音列表，避免重复调用 API
-        self._wavenet_voices_cache = {}
-
-    def list_all_voices(self, language_code="en-US"):
-        """列出所有可用的 WaveNet 语音"""
-        voices = self._tts_cli.list_voices(language_code=language_code)
-
-        wavenet_voices = []
-        for voice in voices.voices:
-            if "Wavenet" in voice.name or "WaveNet" in voice.name:
-                wavenet_voices.append(voice.name)
-
-        if wavenet_voices:
-            rprint(
-                f"\n[cyan]WaveNet 语音[/cyan] [yellow]({len(wavenet_voices)} 个)[/yellow]:"
-            )
-            for name in sorted(wavenet_voices):
-                rprint(f"  [green]✓[/green] {name}")
-
-        return wavenet_voices
-
-    def get_wavenet_voices(self, language_code="en-US") -> List:
+    def __init__(self, language_code: str = "en-US", model: str = "Neural2"):
         """
-        获取 WaveNet 语音列表（带缓存）
+        Initialize the Google TTS service with the specified language and model.
 
         Args:
-            language_code: 语言代码，如 "en-US", "zh-CN" 等
+            language_code: BCP-47 language tag (e.g. "en-US", "ja-JP").
+            model: Voice model family to filter by (e.g. "Neural2", "Wavenet").
+        """
+        client_options = ClientOptions(api_key=envs.GOOGLE_TTS_KEY)
+        self._tts_cli = TextToSpeechAsyncClient(client_options=client_options)
+        self._lang_code = language_code
+        self._model = model
+        self._available_voices: list[str] = []
+
+    async def __aenter__(self) -> Self:
+        """
+        Async context manager entry. Pre-fetches and caches the list of
+        available voices so that subsequent calls to synthesize are fast.
+        """
+        self._available_voices = await self._get_all_voices()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Async context manager exit. Reserved for future cleanup logic."""
+        self._available_voices = []
+
+    async def _get_all_voices(self) -> list[str]:
+        """
+        Fetch and return all voice names that match the configured language
+        code and model family.  Results are cached on the instance so the API
+        is called at most once per service lifetime.
 
         Returns:
-            WaveNet 语音对象列表
+            A list of voice name strings (e.g. ["en-US-Neural2-A", ...]).
         """
-        # 如果已缓存，直接返回
-        if language_code in self._wavenet_voices_cache:
-            return self._wavenet_voices_cache[language_code]
+        if self._available_voices:
+            return self._available_voices
 
-        # 获取所有语音
-        voices = self._tts_cli.list_voices(language_code=language_code)
+        response = await self._tts_cli.list_voices(language_code=self._lang_code)
+        for voice in response.voices:
+            if self._model in voice.name:
+                self._available_voices.append(voice.name)
 
-        # 筛选 WaveNet 语音
-        wavenet_voices = []
-        for voice in voices.voices:
-            if "Wavenet" in voice.name or "WaveNet" in voice.name:
-                wavenet_voices.append(voice)
-
-        # 缓存结果
-        self._wavenet_voices_cache[language_code] = wavenet_voices
-        rprint(
-            f"[dim]💾 已缓存 {len(wavenet_voices)} 个 {language_code} WaveNet 语音[/dim]"
-        )
-
-        return wavenet_voices
-
-    def _synthesize_with_random_voice_sync(
-        self,
-        text: str,
-        language_code: str = "en-US",
-        audio_encoding: texttospeech_v1.AudioEncoding = texttospeech_v1.AudioEncoding.MP3,
-        speaking_rate: float = 1.0,
-        pitch: float = 0.0,
-    ) -> Tuple[bytes, str]:
-        """
-        使用随机 WaveNet 语音合成文本（同步版本）
-
-        Args:
-            text: 要合成的文本
-            language_code: 语言代码
-            audio_encoding: 音频编码格式（MP3, LINEAR16, OGG_OPUS 等）
-            speaking_rate: 语速 (0.25 到 4.0，1.0 为正常)
-            pitch: 音调 (-20.0 到 20.0，0.0 为正常)
-
-        Returns:
-            (音频内容, 使用的语音名称)
-        """
-        # 获取可用的 WaveNet 语音
-        available_voices = self.get_wavenet_voices(language_code)
-
-        if not available_voices:
-            raise ValueError(f"没有找到 {language_code} 的 WaveNet 语音")
-
-        # 随机选择一个语音
-        selected_voice = random.choice(available_voices)
-
-        # 配置合成输入
-        synthesis_input = texttospeech_v1.SynthesisInput(text=text)
-
-        # 使用选中的语音
-        voice = texttospeech_v1.VoiceSelectionParams(
-            language_code=language_code, name=selected_voice.name
-        )
-
-        # 配置音频输出
-        audio_config = texttospeech_v1.AudioConfig(
-            audio_encoding=audio_encoding, speaking_rate=speaking_rate, pitch=pitch
-        )
-
-        # 执行合成
-        response = self._tts_cli.synthesize_speech(
-            input=synthesis_input, voice=voice, audio_config=audio_config
-        )
-
-        return response.audio_content, selected_voice.name
+        return self._available_voices
 
     async def synthesize_with_random_voice(
         self,
         text: str,
-        language_code: str = "en-US",
-        audio_encoding: texttospeech_v1.AudioEncoding = texttospeech_v1.AudioEncoding.MP3,
-        speaking_rate: float = 1.0,
-        pitch: float = 0.0,
-    ) -> Tuple[bytes, str]:
-        """
-        使用随机 WaveNet 语音合成文本（异步版本）
-
-        Args:
-            text: 要合成的文本
-            language_code: 语言代码
-            audio_encoding: 音频编码格式（MP3, LINEAR16, OGG_OPUS 等）
-            speaking_rate: 语速 (0.25 到 4.0，1.0 为正常)
-            pitch: 音调 (-20.0 到 20.0，0.0 为正常)
-
-        Returns:
-            (音频内容, 使用的语音名称)
-        """
-        # Run synchronous TTS in thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: self._synthesize_with_random_voice_sync(
-                text, language_code, audio_encoding, speaking_rate, pitch
-            ),
-        )
-
-    def _synthesize_with_specific_voice_sync(
-        self,
-        text: str,
-        voice_name: str,
-        language_code: str = "en-US",
-        audio_encoding: texttospeech_v1.AudioEncoding = texttospeech_v1.AudioEncoding.MP3,
+        audio_encoding: AudioEncoding = AudioEncoding.MP3,
         speaking_rate: float = 1.0,
         pitch: float = 0.0,
     ) -> bytes:
         """
-        使用指定语音合成文本（同步版本）
+        Synthesize *text* using a voice chosen at random from the available
+        voices that match the configured language and model.
+
+        The voice list is populated lazily when the service is used as an async
+        context manager (``async with``).  If the service is used without a
+        context manager, the list is populated on the first call to this method.
 
         Args:
-            text: 要合成的文本
-            voice_name: 语音名称，如 "en-US-Wavenet-A"
-            language_code: 语言代码
-            audio_encoding: 音频编码格式
-            speaking_rate: 语速
-            pitch: 音调
+            text:           The plain text to synthesize.
+            audio_encoding: Output audio format. Defaults to MP3.
+                            Other options: LINEAR16, OGG_OPUS, MULAW, ALAW.
+            speaking_rate:  Playback speed multiplier in the range [0.25, 4.0].
+                            1.0 is normal speed.
+            pitch:          Pitch shift in semitones, in the range [-20.0, 20.0].
+                            0.0 is the default pitch.
 
         Returns:
-            音频内容
+            raw audio content
+
+        Raises:
+            RuntimeError: If no voices are available for the configured
+                          language code and model family.
         """
-        synthesis_input = texttospeech_v1.SynthesisInput(text=text)
+        # Populate the voice list if this method is called outside a context manager.
+        if not self._available_voices:
+            await self._get_all_voices()
 
-        voice = texttospeech_v1.VoiceSelectionParams(
-            language_code=language_code, name=voice_name
+        if not self._available_voices:
+            raise RuntimeError(
+                f"No voices found for language '{self._lang_code}' "
+                f"and model '{self._model}'."
+            )
+
+        voice_name = random.choice(self._available_voices)
+
+        synthesis_input = SynthesisInput(text=text)
+
+        voice_params = VoiceSelectionParams(
+            language_code=self._lang_code,
+            name=voice_name,
         )
 
-        audio_config = texttospeech_v1.AudioConfig(
-            audio_encoding=audio_encoding, speaking_rate=speaking_rate, pitch=pitch
+        audio_config = AudioConfig(
+            audio_encoding=audio_encoding,
+            speaking_rate=speaking_rate,
+            pitch=pitch,
         )
 
-        response = self._tts_cli.synthesize_speech(
-            input=synthesis_input, voice=voice, audio_config=audio_config
+        response = await self._tts_cli.synthesize_speech(
+            input=synthesis_input,
+            voice=voice_params,
+            audio_config=audio_config,
         )
 
         return response.audio_content
-
-    async def synthesize_with_specific_voice(
-        self,
-        text: str,
-        voice_name: str,
-        language_code: str = "en-US",
-        audio_encoding: texttospeech_v1.AudioEncoding = texttospeech_v1.AudioEncoding.MP3,
-        speaking_rate: float = 1.0,
-        pitch: float = 0.0,
-    ) -> bytes:
-        """
-        使用指定语音合成文本（异步版本）
-
-        Args:
-            text: 要合成的文本
-            voice_name: 语音名称，如 "en-US-Wavenet-A"
-            language_code: 语言代码
-            audio_encoding: 音频编码格式
-            speaking_rate: 语速
-            pitch: 音调
-
-        Returns:
-            音频内容
-        """
-        # Run synchronous TTS in thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: self._synthesize_with_specific_voice_sync(
-                text, voice_name, language_code, audio_encoding, speaking_rate, pitch
-            ),
-        )
-
-    def clear_cache(self):
-        """清除语音缓存"""
-        self._wavenet_voices_cache.clear()
-        rprint("[yellow] 已清除语音缓存[/yellow]")

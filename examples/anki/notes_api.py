@@ -49,36 +49,6 @@ async def main():
         )
         rprint(f"Updated note {note_id} tags")
 
-        # # ========== Media API Examples ==========
-
-        # # 存储文本文件
-        # text_data = b"Hello, this is a test file!"
-        # filename1 = await client.media.store_file("_test_file.txt", text_data)
-        # rprint(f"Stored text file: {filename1}")
-
-        # 存储图片文件（假设你有一个图片）
-        # with open("example.png", "rb") as f:
-        #     image_data = f.read()
-        # filename2 = await client.media.store_file("example_image.png", image_data)
-        # rprint(f"Stored image file: {filename2}")
-
-        # 存储音频文件并在笔记中使用
-        # with open("pronunciation.mp3", "rb") as f:
-        #     audio_data = f.read()
-        # audio_filename = await client.media.store_file("hello_pronunciation.mp3", audio_data)
-        #
-        # # 在笔记中引用音频
-        # note_id_with_audio = await client.notes.add(
-        #     deck_name=deck_name,
-        #     model_name="Basic",
-        #     fields={
-        #         "Front": f"hello [sound:{audio_filename}]",
-        #         "Back": "你好"
-        #     },
-        #     tags=["audio"]
-        # )
-        # rprint(f"Created note with audio: {note_id_with_audio}")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

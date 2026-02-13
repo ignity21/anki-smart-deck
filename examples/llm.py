@@ -6,6 +6,7 @@ from litellm import acompletion, aimage_generation
 from rich import print as rprint
 
 from ankinote.app import Application
+from ankinote.utils import img
 
 
 async def main():
@@ -27,15 +28,16 @@ async def main():
             model=f"gemini/{image_model_id}",
             prompt=image_prompt,
             n=1,
-            size="512x512", # or 1024x1024
-            quality="standard",
+            size="512x512",  # or 1024x1024
         )
+        rprint(f"Usage: {image_response.usage}")
+
         img_b64: str = image_response.data[0].b64_json  # pyright: ignore[reportAssignmentType, reportOptionalSubscript]
         img_bytes = base64.b64decode(img_b64)
-        with open("generated_image.png", "wb") as f:
-            f.write(img_bytes)
 
-        rprint(f"Usage: {image_response.usage}")
+        img_scaled = img.scale(img_bytes, target_size=128)
+        with open("generated_image.png", "wb") as f:
+            f.write(img_scaled)
 
 
 if __name__ == "__main__":

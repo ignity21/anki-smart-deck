@@ -1,54 +1,52 @@
 #!/usr/bin/env python
-from ankinote.services.tts import GoogleTTSService
+import asyncio
+
 from rich import print as rprint
 
+from ankinote.app import Application
+from ankinote.services.tts import GoogleTTSService
 
-def main():
-    rprint("\n[bold magenta]═══════════════════════════════════════[/bold magenta]")
-    rprint("[bold magenta]  Google Cloud TTS - WaveNet 服务[/bold magenta]")
-    rprint("[bold magenta]═══════════════════════════════════════[/bold magenta]\n")
 
-    tts_service = GoogleTTSService()
+async def main():
+    language_code = "en-US"
+    model = "Wavenet"
+    async with Application():
+        # 2. Random voice synthesis (English)
+        async with GoogleTTSService(
+            language_code=language_code,
+            model=model,
+        ) as us_tts:
+            rprint("[bold blue]📋 Available Voices[/bold blue]")
+            voices = await us_tts._get_all_voices()
+            rprint(voices)
 
-    # 1. 查看可用语音
-    rprint("[bold blue]📋 查看可用语音[/bold blue]")
-    voices = tts_service.list_all_voices("en-US")
-    rprint(voices)
+            rprint("\n[bold blue]🎵 Generate English Audio[/bold blue]")
+            text_en = "Hello! This is a test of Google text to speech."
+            audio_content = await us_tts.synthesize_with_random_voice(text=text_en)
+            output_file = "en-US_test.mp3"
+            with open(output_file, "wb") as f:
+                f.write(audio_content)
+            rprint(f"💾 [green]Saved:[/green] [cyan]{output_file}[/cyan]")
 
-    # 2. 随机语音合成（英语）
-    rprint("\n[bold blue]🎵 生成英语音频[/bold blue]")
-    text_en = "Hello! This is a test of Google WaveNet text to speech."
-    audio_content, voice_name = tts_service.synthesize_with_random_voice(text=text_en)
+        # 3. Random voice synthesis (Japanese)
+        async with GoogleTTSService(
+            language_code="ja-JP",
+            model="Neural2",
+        ) as jp_tts:
+            rprint("[bold blue]📋 Available Voices[/bold blue]")
+            voices = await jp_tts._get_all_voices()
+            rprint(voices)
 
-    output_file = f"output_{voice_name}.mp3"
-    with open(output_file, "wb") as out:
-        out.write(audio_content)
-    rprint(f"💾 [green]已保存:[/green] [cyan]{output_file}[/cyan]")
-
-    # 3. 随机语音合成（中文）
-    rprint("\n[bold blue]🎵 生成中文音频[/bold blue]")
-    text_cn = "你好，这是 Google WaveNet 语音合成测试。"
-    audio_content_cn, voice_name_cn = tts_service.synthesize_with_random_voice(
-        text=text_cn, language_code="zh-CN", speaking_rate=0.9
-    )
-
-    output_file_cn = f"output_{voice_name_cn}.mp3"
-    with open(output_file_cn, "wb") as out:
-        out.write(audio_content_cn)
-    rprint(f"💾 [green]已保存:[/green] [cyan]{output_file_cn}[/cyan]")
-
-    # 4. 使用指定语音
-    rprint("\n[bold blue]🎯 使用指定语音[/bold blue]")
-    audio_specific = tts_service.synthesize_with_specific_voice(
-        text="This uses a specific voice.",
-        voice_name="en-US-Wavenet-D",
-        language_code="en-US",
-    )
-
-    with open("output_specific.mp3", "wb") as out:
-        out.write(audio_specific)
-    rprint("💾 [green]已保存:[/green] [cyan]output_specific.mp3[/cyan]")
+            rprint("\n[bold blue]🎵 Generate Japanese Audio[/bold blue]")
+            text_ja = "こんにちは！これはGoogleテキスト読み上げのテストです。"
+            audio_content_ja = await jp_tts.synthesize_with_random_voice(
+                text=text_ja, speaking_rate=0.9
+            )
+            output_file_ja = "ja-JP_test.mp3"
+            with open(output_file_ja, "wb") as f:
+                f.write(audio_content_ja)
+            rprint(f"💾 [green]Saved:[/green] [cyan]{output_file_ja}[/cyan]")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
