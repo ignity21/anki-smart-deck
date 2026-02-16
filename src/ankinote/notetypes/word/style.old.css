@@ -1,0 +1,196 @@
+/* =========================================
+   1. 全局基础设置 & 颜色变量
+   ========================================= */
+:root {
+  font-size: clamp(14px, 2vw, 20px);
+}
+
+body {
+  --bg-color: #f0f2f5;
+  --section-bg: #ffffff;
+  --text-primary: #2d3436;
+  --text-secondary: #636e72;
+  --border-color: #eee;
+  --section-title-color: #999;
+  --shadow-sm: 0 0.1em 0.3em rgba(0, 0, 0, 0.05);
+  --badge-grammar-bg: #e3f2fd;
+  --badge-grammar-color: #1976d2;
+  --badge-frequency-bg: #f3e5f5;
+  --badge-frequency-color: #7b1fa2;
+}
+
+body.nightMode {
+  --bg-color: #1a1c1e;
+  --section-bg: #242629;
+  --text-primary: #f0f2f5;
+  --text-secondary: #a0a6ac;
+  --border-color: #2f3338;
+  --section-title-color: #666;
+  --shadow-sm: 0 0.2em 0.5em rgba(255, 255, 255, 0.05);
+  --badge-grammar-bg: #0d47a1;
+  --badge-grammar-color: #bbdefb;
+  --badge-frequency-bg: #4a148c;
+  --badge-frequency-color: #e1bee7;
+}
+
+.card {
+  font-size: 1rem;
+  text-align: left;
+  background-color: var(--bg-color) !important;
+  color: var(--text-primary) !important;
+  padding: 1em;
+  margin: 0 auto;
+  max-width: clamp(65vw, 700px, 100vw);
+}
+
+.section-container {
+  font-size: 0.9rem;
+  background: var(--section-bg);
+  border-radius: 0.6em;
+  padding: 0.6em 1em;
+  margin-bottom: 1.2em;
+  box-shadow: var(--shadow-sm);
+  border: 0.1em solid var(--border-color);
+}
+
+/* 单词标题区 */
+.word-header {
+  font-size: 2.2rem;
+  font-weight: bold;
+  text-align: center;
+  padding: 1em 1.5em;
+}
+
+.syllabication {
+  letter-spacing: 0.1em;
+  padding-bottom: 0.2em;
+}
+
+/* =========================================
+   3. 徽章条 (Badges)
+   ========================================= */
+.badge-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.1em;
+  flex-wrap: wrap;
+  margin: 0.1em 0;
+}
+
+.badge {
+  padding: 0.25em 0.75em;
+  border-radius: 0.4em;
+  font-size: 0.7rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+}
+
+/* 词性徽章 */
+.badge-grammar {
+  background-color: var(--badge-grammar-bg);
+  color: var(--badge-grammar-color);
+}
+
+.badge-frequency {
+  background-color: var(--badge-frequency-bg);
+  color: var(--badge-frequency-color);
+}
+
+/* 音标徽章 */
+.badge-phonetic {
+  background: var(--section-bg);
+  color: var(--text-secondary);
+  border: 0.1em solid var(--border-color);
+}
+
+.phonetic-inline {
+  display: inline-flex;
+  gap: 0.1em;
+  align-items: center;
+}
+
+/* =========================================
+   4. 内容细节
+   ========================================= */
+.section-title {
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--section-title-color);
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5em;
+  border-bottom: 0.1em solid var(--border-color);
+  padding-bottom: 0.2em;
+}
+
+.definitions-container {
+  font-size: 1rem;
+}
+
+.notes-container {
+  font-size: 0.9rem;
+  border-top: 0.1em solid var(--border-color);
+  padding-top: 0.2em;
+  color: var(--text-secondary);
+}
+
+.examples-container {
+  font-size: 0.9rem;
+  padding-left: 1em;
+  border-left: 0.3em solid var(--border-color);
+  font-style: italic;
+}
+
+/* 备注区样式 */
+
+/* =========================================
+   5. 拼写输入框样式 (type:Word)
+   ========================================= */
+#typeans {
+  width: 100% !important;
+  max-width: 400px;
+  padding: 10px !important;
+  border-radius: 8px !important;
+  font-size: 1.4rem !important;
+  font-family: monospace !important;
+  text-align: center !important;
+  margin: 15px auto !important;
+  display: block !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+/* 拼写框 Night Mode 特殊处理 */
+.nightMode #typeans {
+  background: #2c2c2c !important;
+  color: #fff !important;
+  border-color: #444 !important;
+}
+
+/* 拼写对错颜色 */
+.typeGood { background-color: #2ecc71 !important; color: white !important; }
+.typeBad { background-color: #e74c3c !important; color: white !important; }
+.typeMissed { background-color: #95a5a6 !important; color: white !important; }
+
+/* =========================================
+   6. 其它优化
+   ========================================= */
+/* 音频播放按钮 SVG */
+.replay-button svg, .audio-btn svg {
+  width: 20px !important;
+  height: 20px !important;
+  vertical-align: middle;
+  fill: #1976d2;
+}
+.nightMode .replay-button svg { fill: #bbdefb !important; }
+
+/* 交互 */
+details summary::-webkit-details-marker { display: none; }
+img { max-width: 100%; height: auto; border-radius: 8px; }
+
+@media (max-width: 600px) {
+  .card { font-size: 16px; padding: 10px; min-height: 100vh; }
+  .word { font-size: 2.2rem; }
+  .section-container { padding: 15px; }
+}

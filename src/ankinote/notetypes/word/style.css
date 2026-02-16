@@ -1,0 +1,325 @@
+/* =========================================
+   1. GLOBAL SETTINGS & CSS VARIABLES
+   ========================================= */
+
+:root {
+  /* Background colors */
+  --bg-primary: #f0f2f5;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #2c2c2c;
+
+  /* Text colors */
+  --text-primary: #2d3436;
+  --text-secondary: #636e72;
+  --text-light: #e0e0e0;
+  --text-muted: #aaa;
+
+  /* Borders and shadows */
+  --border-default: #eee;
+  --border-dark: #333;
+  --shadow-light: rgba(0, 0, 0, 0.05);
+  --shadow-dark: rgba(0, 0, 0, 0.3);
+
+  /* Badge colors - Grammar/Part-of-speech */
+  --badge-grammar-bg: #e3f2fd;
+  --badge-grammar-color: #1976d2;
+
+
+  /* Badge colors - Frequency */
+  --badge-frequency-bg: #f3e5f5;
+  --badge-frequency-color: #7b1fa2;
+  --badge-frequency-dark-bg: #4a148c;
+  --badge-frequency-dark-color: #e1bee7;
+
+  /* Badge colors - Phonetic */
+  --badge-phonetic-bg: #ffffff;
+  --badge-phonetic-color: #636e72;
+  --badge-phonetic-border: #eee;
+  --badge-phonetic-icon: #1976d2;
+  --badge-phonetic-dark-bg: #1e1e1e;
+  --badge-phonetic-dark-color: #aaa;
+  --badge-phonetic-dark-border: #333;
+  --badge-phonetic-dark-icon: #bbdefb;
+
+  /* Input field colors */
+  --input-success-bg: #2ecc71;
+  --input-error-bg: #e74c3c;
+  --input-neutral-bg: #95a5a6;
+  --input-text: #ffffff;
+}
+
+/* Dark mode variable overrides */
+.nightMode {
+  --bg-primary: #121212;
+  --bg-secondary: #1e1e1e;
+  --bg-tertiary: #2c2c2c;
+
+  --text-primary: #e0e0e0;
+  --text-secondary: #aaa;
+
+  --border-default: #333;
+  --shadow-light: rgba(0, 0, 0, 0.3);
+}
+
+/* =========================================
+   2. BASE ELEMENT STYLES
+   ========================================= */
+
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: var(--bg-primary);
+}
+
+.nightMode,
+.nightMode body,
+.nightMode #outer {
+  background-color: var(--bg-primary);
+}
+
+.card {
+  font-family: "Segoe UI", "SF Pro Text", -apple-system, sans-serif;
+  font-size: 18px;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--text-primary);
+  padding: 15px;
+  max-width: 60em;
+  margin: 0 auto;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background-color: var(--bg-primary);
+}
+
+/* =========================================
+   3. SECTION CONTAINER
+   ========================================= */
+
+.section-container {
+  background-color: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-default);
+  box-shadow: 0 1px 3px var(--shadow-light);
+}
+
+/* =========================================
+   4. WORD/MAIN HEADING SECTION
+   ========================================= */
+
+.word-header {
+  text-align: center;
+  padding: 25px 10px;
+}
+
+.word {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* =========================================
+   5. BADGE STYLES
+   ========================================= */
+
+.badge-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.badge {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
+/* Grammar/Part-of-speech badge */
+.badge-grammar {
+  background-color: var(--badge-grammar-bg);
+  color: var(--badge-grammar-color);
+}
+
+.nightMode .badge-grammar {
+  background-color: var(--badge-grammar-dark-bg);
+  color: var(--badge-grammar-dark-color);
+}
+
+/* Frequency badge */
+.badge-frequency {
+  background-color: var(--badge-frequency-bg);
+  color: var(--badge-frequency-color);
+}
+
+.nightMode .badge-frequency {
+  background-color: var(--badge-frequency-dark-bg);
+  color: var(--badge-frequency-dark-color);
+}
+
+/* Phonetic badge */
+.badge-phonetic {
+  background-color: var(--badge-phonetic-bg);
+  color: var(--badge-phonetic-color);
+  border: 1px solid var(--badge-phonetic-border);
+}
+
+.nightMode .badge-phonetic {
+  background-color: var(--badge-phonetic-dark-bg);
+  color: var(--badge-phonetic-dark-color);
+  border: 1px solid var(--badge-phonetic-dark-border);
+}
+
+.phonetic-inline {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* =========================================
+   6. TEXT AND CONTENT STYLES
+   ========================================= */
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #999;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-default);
+  padding-bottom: 4px;
+}
+
+.text-primary {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  font-size: 1.05rem;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+.example {
+  padding-left: 12px;
+  border-left: 4px solid var(--border-default);
+  font-style: italic;
+  color: var(--text-primary);
+}
+
+/* Notes section */
+.notes {
+  border-top: 1px solid var(--border-default);
+  margin-top: 10px;
+  padding-top: 10px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* =========================================
+   7. TEXT INPUT FIELD STYLES (Spelling/Fill-in-the-blank)
+   ========================================= */
+
+#typeans {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 1.4rem;
+  font-family: monospace;
+  text-align: center;
+  margin: 15px auto;
+  display: block;
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.nightMode #typeans {
+  background-color: var(--bg-tertiary);
+  color: var(--text-light);
+  border-color: var(--border-dark);
+}
+
+/* Input field state colors */
+#typeans.input-success {
+  background-color: var(--input-success-bg);
+  color: var(--input-text);
+  border-color: var(--input-success-bg);
+}
+
+#typeans.input-error {
+  background-color: var(--input-error-bg);
+  color: var(--input-text);
+  border-color: var(--input-error-bg);
+}
+
+#typeans.input-neutral {
+  background-color: var(--input-neutral-bg);
+  color: var(--input-text);
+  border-color: var(--input-neutral-bg);
+}
+
+/* =========================================
+   8. INTERACTIVE ELEMENTS (Audio buttons, etc)
+   ========================================= */
+
+.audio-button svg,
+.replay-button svg {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+  fill: var(--badge-phonetic-icon);
+}
+
+.nightMode .audio-button svg,
+.nightMode .replay-button svg {
+  fill: var(--badge-phonetic-dark-icon);
+}
+
+/* =========================================
+   9. MISCELLANEOUS OPTIMIZATIONS
+   ========================================= */
+
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+/* =========================================
+   10. RESPONSIVE DESIGN
+   ========================================= */
+
+@media (max-width: 600px) {
+  .card {
+    font-size: 16px;
+    padding: 10px;
+    min-height: 100vh;
+  }
+
+  .word {
+    font-size: 2.2rem;
+  }
+
+  .section-container {
+    padding: 15px;
+  }
+}
