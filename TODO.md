@@ -9,4 +9,5 @@
 7. Add word by ("word"， "中文释义")
 8. Word highlighting in sentences must account for word inflections, tenses, etc.
 9. Translations are hidden by default.
-10. play American English (US) pronunciation audio by default.
+10. Play American English (US) pronunciation audio by default.
+11. Fields with multiple entries need to be converted to HTML text to implement inline styling.
