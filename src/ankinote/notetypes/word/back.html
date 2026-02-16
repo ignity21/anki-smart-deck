@@ -1,0 +1,54 @@
+{{FrontSide}}
+<hr id="answer">
+{{#Syllabication}}
+<div class="syllabication">{{Syllabication}}</div>
+{{/Syllabication}}
+<div class="badge-row">
+    <div class="badge badge-phonetic">
+        <div class="phonetic-inline">
+            🇺🇸 {{US Pronunciation}} <span class="audio-btn">{{US Audio}}</span>
+            &nbsp;
+            🇬🇧 {{UK Pronunciation}} <span class="audio-btn">{{UK Audio}}</span>
+        </div>
+    </div>
+</div>
+
+{{#Images}}
+<div class="section-container" style="text-align:center;">
+    {{Images}}
+</div>
+{{/Images}}
+
+<div class="section-container">
+    <div class="section-title">Definition</div>
+    {{#Definitions}}
+    <div class="definitions-container">{{Definitions}}</div>
+    {{/Definitions}}
+
+    {{#Notes}}
+    <div class="notes-container">
+        <div style="font-weight: bold;">Note:</div> {{Notes}}
+    </div>
+    {{/Notes}}
+</div>
+
+{{#Examples}}
+<div class="section-container">
+    <div class="section-title">Usage Examples</div>
+    <div class="examples-container">{{Examples}}</div>
+</div>
+{{/Examples}}
+
+{{#Synonyms}}
+<div class="section-container">
+    <div class="section-title">Synonyms</div>
+    <div style="font-size: 0.95rem; color: #16a085;">{{Synonyms}}</div>
+</div>
+{{/Synonyms}}
+
+{{#User Notes}}
+<div class="user-notes-container">
+    <div class="section-title" style="color:#fbc02d;">My Study Notes</div>
+    <div class="cn-text">{{User Notes}}</div>
+</div>
+{{/User Notes}}
