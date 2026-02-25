@@ -105,6 +105,7 @@ dependencies = [
     { name = "litellm" },
     { name = "loguru" },
     { name = "pillow" },
+    { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "shortuuid" },
 ]
@@ -128,6 +129,7 @@ requires-dist = [
     { name = "litellm", specifier = ">=1.81.9" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "pillow", specifier = ">=12.1.0" },
+    { name = "pydantic", specifier = ">=2.12.5" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "shortuuid", specifier = ">=1.0.13" },
 ]

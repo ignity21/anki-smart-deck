@@ -1,11 +1,12 @@
 <div class="word-front">
-    <div class="word">{{Word}}</div>
+    <div class="word">{{word}}</div>
     <div class="badge-row">
-        {{#Frequency}}
-        <div class="badge badge-frequency">{{Frequency}}</div>
-        {{/Frequency}}
-        {{#Word Form}}
-        <div class="badge badge-grammar">{{Word Form}}</div>
-        {{/Word Form}}
+        {{#difficulty}}
+        <div class="badge difficulty-badge">{{difficulty}}</div>
+        {{/difficulty}}
+
+        {{#part_of_speech}}
+        <div class="badge part-of-speech-badge">{{part_of_speech}}</div>
+        {{/part_of_speech}}
     </div>
 </div>

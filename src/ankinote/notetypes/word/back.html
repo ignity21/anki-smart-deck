@@ -1,54 +1,76 @@
 {{FrontSide}}
 <hr id="answer">
-{{#Syllabication}}
-<div class="syllabication">{{Syllabication}}</div>
-{{/Syllabication}}
+
+<!-- Field: syllables -->
+{{#syllables}}
+<div class="syllables-container">{{syllables}}</div>
+{{/syllables}}
+
+<!-- Field: pronunciation & pron_audio -->
+{{#pronunciation}}
 <div class="badge-row">
-    <div class="badge badge-phonetic">
+    <div class="badge pronunciation-badge">
         <div class="phonetic-inline">
-            🇺🇸 {{US Pronunciation}} <span class="audio-btn">{{US Audio}}</span>
-            &nbsp;
-            🇬🇧 {{UK Pronunciation}} <span class="audio-btn">{{UK Audio}}</span>
+            {{pronunciation}}
+            {{#pron_audio}}
+            <span class="audio-btn">{{pron_audio}}</span>
+            {{/pron_audio}}
         </div>
     </div>
 </div>
+{{/pronunciation}}
 
-{{#Images}}
+<!-- Field: images -->
+{{#images}}
 <div class="section-container" style="text-align:center;">
-    {{Images}}
+    {{images}}
 </div>
-{{/Images}}
+{{/images}}
 
+<!-- Field: definitions -->
+{{#definitions}}
 <div class="section-container">
     <div class="section-title">Definition</div>
-    {{#Definitions}}
-    <div class="definitions-container">{{Definitions}}</div>
-    {{/Definitions}}
-
-    {{#Notes}}
-    <div class="notes-container">
-        <div style="font-weight: bold;">Note:</div> {{Notes}}
-    </div>
-    {{/Notes}}
+    <div class="definitions-container">{{definitions}}</div>
 </div>
+{{/definitions}}
 
-{{#Examples}}
-<div class="section-container">
-    <div class="section-title">Usage Examples</div>
-    <div class="examples-container">{{Examples}}</div>
-</div>
-{{/Examples}}
-
-{{#Synonyms}}
+<!-- Field: synonyms -->
+{{#synonyms}}
 <div class="section-container">
     <div class="section-title">Synonyms</div>
-    <div style="font-size: 0.95rem; color: #16a085;">{{Synonyms}}</div>
+    <div class="synonyms-container">{{synonyms}}</div>
 </div>
-{{/Synonyms}}
+{{/synonyms}}
 
-{{#User Notes}}
-<div class="user-notes-container">
-    <div class="section-title" style="color:#fbc02d;">My Study Notes</div>
-    <div class="cn-text">{{User Notes}}</div>
+<!-- Field: examples -->
+{{#examples}}
+<div class="section-container">
+    <div class="section-title">Usage Examples</div>
+    <div class="examples-container">{{examples}}</div>
 </div>
-{{/User Notes}}
+{{/examples}}
+
+<!-- Field: etymology -->
+{{#etymology}}
+<div class="section-container">
+    <div class="section-title">Etymology</div>
+    <div class="etymology-container">{{etymology}}</div>
+</div>
+{{/etymology}}
+
+<!-- Field: notes -->
+{{#notes}}
+<div class="section-container">
+    <div class="section-title">Notes</div>
+    <div class="notes-container">{{notes}}</div>
+</div>
+{{/notes}}
+
+<!-- Field: user_notes -->
+{{#user_notes}}
+<div class="user-notes-container">
+    <div class="section-title user-notes-title">My Study Notes</div>
+    <div>{{user_notes}}</div>
+</div>
+{{/user_notes}}
