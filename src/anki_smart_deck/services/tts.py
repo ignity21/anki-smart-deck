@@ -13,57 +13,57 @@ class GoogleTTSService:
         self._tts_cli = texttospeech_v1.TextToSpeechClient(
             client_options={"api_key": app_config.google_tts_key}
         )
-        # 缓存 WaveNet 语音列表，避免重复调用 API
-        self._wavenet_voices_cache = {}
+        # 缓存 Neural2 语音列表，避免重复调用 API
+        self._neural_voices_cache = {}
 
     def list_all_voices(self, language_code="en-US"):
-        """列出所有可用的 WaveNet 语音"""
+        """列出所有可用的 Neural2 语音"""
         voices = self._tts_cli.list_voices(language_code=language_code)
 
-        wavenet_voices = []
+        neural_voices = []
         for voice in voices.voices:
-            if "Wavenet" in voice.name or "WaveNet" in voice.name:
-                wavenet_voices.append(voice.name)
+            if "Neural2" in voice.name or "Neural2" in voice.name:
+                neural_voices.append(voice.name)
 
-        if wavenet_voices:
+        if neural_voices:
             rprint(
-                f"\n[cyan]WaveNet 语音[/cyan] [yellow]({len(wavenet_voices)} 个)[/yellow]:"
+                f"\n[cyan]Neural2 语音[/cyan] [yellow]({len(neural_voices)} 个)[/yellow]:"
             )
-            for name in sorted(wavenet_voices):
+            for name in sorted(neural_voices):
                 rprint(f"  [green]✓[/green] {name}")
 
-        return wavenet_voices
+        return neural_voices
 
-    def get_wavenet_voices(self, language_code="en-US") -> List:
+    def get_neural_voices(self, language_code="en-US") -> List:
         """
-        获取 WaveNet 语音列表（带缓存）
+        获取 Neural2 语音列表（带缓存）
 
         Args:
             language_code: 语言代码，如 "en-US", "zh-CN" 等
 
         Returns:
-            WaveNet 语音对象列表
+            Neural2 语音对象列表
         """
         # 如果已缓存，直接返回
-        if language_code in self._wavenet_voices_cache:
-            return self._wavenet_voices_cache[language_code]
+        if language_code in self._neural_voices_cache:
+            return self._neural_voices_cache[language_code]
 
         # 获取所有语音
         voices = self._tts_cli.list_voices(language_code=language_code)
 
-        # 筛选 WaveNet 语音
-        wavenet_voices = []
+        # 筛选 Neural2 语音
+        neural_voices = []
         for voice in voices.voices:
-            if "Wavenet" in voice.name or "WaveNet" in voice.name:
-                wavenet_voices.append(voice)
+            if "Neural2" in voice.name or "Neural2" in voice.name:
+                neural_voices.append(voice)
 
         # 缓存结果
-        self._wavenet_voices_cache[language_code] = wavenet_voices
+        self._neural_voices_cache[language_code] = neural_voices
         rprint(
-            f"[dim]💾 已缓存 {len(wavenet_voices)} 个 {language_code} WaveNet 语音[/dim]"
+            f"[dim]💾 已缓存 {len(neural_voices)} 个 {language_code} Neural2 语音[/dim]"
         )
 
-        return wavenet_voices
+        return neural_voices
 
     def _synthesize_with_random_voice_sync(
         self,
@@ -74,7 +74,7 @@ class GoogleTTSService:
         pitch: float = 0.0,
     ) -> Tuple[bytes, str]:
         """
-        使用随机 WaveNet 语音合成文本（同步版本）
+        使用随机 Neural2 语音合成文本（同步版本）
 
         Args:
             text: 要合成的文本
@@ -86,11 +86,11 @@ class GoogleTTSService:
         Returns:
             (音频内容, 使用的语音名称)
         """
-        # 获取可用的 WaveNet 语音
-        available_voices = self.get_wavenet_voices(language_code)
+        # 获取可用的 Neural2 语音
+        available_voices = self.get_neural_voices(language_code)
 
         if not available_voices:
-            raise ValueError(f"没有找到 {language_code} 的 WaveNet 语音")
+            raise ValueError(f"没有找到 {language_code} 的 Neural2 语音")
 
         # 随机选择一个语音
         selected_voice = random.choice(available_voices)
@@ -124,7 +124,7 @@ class GoogleTTSService:
         pitch: float = 0.0,
     ) -> Tuple[bytes, str]:
         """
-        使用随机 WaveNet 语音合成文本（异步版本）
+        使用随机 Neural2 语音合成文本（异步版本）
 
         Args:
             text: 要合成的文本
@@ -159,7 +159,7 @@ class GoogleTTSService:
 
         Args:
             text: 要合成的文本
-            voice_name: 语音名称，如 "en-US-Wavenet-A"
+            voice_name: 语音名称，如 "en-US-Neural2-A"
             language_code: 语言代码
             audio_encoding: 音频编码格式
             speaking_rate: 语速
@@ -198,7 +198,7 @@ class GoogleTTSService:
 
         Args:
             text: 要合成的文本
-            voice_name: 语音名称，如 "en-US-Wavenet-A"
+            voice_name: 语音名称，如 "en-US-Neural2-A"
             language_code: 语言代码
             audio_encoding: 音频编码格式
             speaking_rate: 语速
@@ -218,5 +218,5 @@ class GoogleTTSService:
 
     def clear_cache(self):
         """清除语音缓存"""
-        self._wavenet_voices_cache.clear()
+        self._neural_voices_cache.clear()
         rprint("[yellow] 已清除语音缓存[/yellow]")
