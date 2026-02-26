@@ -35,6 +35,9 @@ class Definition(BaseModel):
 
     target_lang: str
     native_lang: str
+    is_visualizable: (
+        bool  # whether the definition can be easily visualized with an image
+    )
 
 
 class Example(BaseModel):
@@ -55,11 +58,13 @@ class WordModel(BaseModel):
 
     word: str
     part_of_speech: str  # e.g., "n.", "vt.", "adj."
-    pronunciation: str | None  # IPA notation, e.g., "/wɜːrd/" (US pronunciation by default)
+    pronunciation: (
+        str | None
+    )  # IPA notation, e.g., "/wɜːrd/" (US pronunciation by default)
     syllables: list[str]  # syllable breakdown, e.g., ["ex", "am", "ple"]
     difficulty: str  # e.g., "beginner", "intermediate", or CEFR levels
     definitions: list[Definition]
-    synonyms: list[str] # word or phrase synonyms
+    synonyms: list[str]  # word or phrase synonyms
     examples: list[Example]
     etymology: str | None = None  # word origin to enhance learning interest
     notes: list[

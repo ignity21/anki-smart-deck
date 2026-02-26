@@ -16,7 +16,7 @@ async def main():
         model_name = "My Test Model"
 
         # Create a deck if it doesn't exist
-        deck_id = await client.notes.create_deck(deck_name)
+        deck_id = await client.decks.create(deck_name)
         print(f"Deck ID: {deck_id}")
 
         # Check if the model exists

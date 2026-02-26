@@ -364,6 +364,47 @@ class MediaClient:
         )
 
 
+class DeckClient:
+    """Client for managing Anki decks."""
+
+    def __init__(self, client: "AnkiConnectClient") -> None:
+        """Initialize DeckClient.
+
+        Args:
+            client: The parent AnkiConnectClient instance
+        """
+        self._client = client
+
+    async def create(self, deck_name: str) -> int:
+        """Create a new deck if doesn't already exist.
+
+        Args:
+            deck_name: Name of the deck to create
+
+        Returns:
+            The ID of the created deck or the existing deck
+
+        """
+        return await self._client._invoke("createDeck", params={"deck": deck_name})
+
+    async def exists(self, deck_name: str) -> bool:
+        """Check if a deck with the given name exists.
+
+        Args:
+            deck_name: Name of the deck to check
+
+        Returns:
+            True if the deck exists, False otherwise
+        """
+        resp = await self._client._invoke(
+            "getDeckConfig",
+            params={
+                "deck": deck_name,
+            },
+        )
+        return True if resp is not False else False
+
+
 class NoteClient:
     """Client for managing Anki notes."""
 
@@ -374,18 +415,6 @@ class NoteClient:
             client: The parent AnkiConnectClient instance
         """
         self._client = client
-
-    async def create_deck(self, deck_name: str) -> int:
-        """Create a new deck in Anki.
-
-        Args:
-            deck_name: Name of the deck to create
-
-        Returns:
-            The ID of the created deck
-
-        """
-        return await self._client._invoke("createDeck", params={"deck": deck_name})
 
     async def find(self, deck_name: str, unique_fields: dict[str, str]) -> int | None:
         """Query for a note ID based on unique field values.
@@ -540,6 +569,7 @@ class AnkiConnectClient:
         self._url = url
         self.models = ModelClient(self)
         self.notes = NoteClient(self)
+        self.decks = DeckClient(self)
         self.media = MediaClient(self)
 
     async def _invoke(self, action: str, params: dict[str, Any] | None = None) -> Any:
@@ -558,7 +588,6 @@ class AnkiConnectClient:
         payload = {"action": action, "version": 6}
         if params is not None:
             payload["params"] = params
-
         session = get_session()
         async with session.post(self._url, json=payload) as response:
             result = await response.json()
