@@ -19,8 +19,8 @@ async def main():
             messages=[{"role": "user", "content": prompt}],
             stream=False,
         )
-        answer = response.choices[0].message  # pyright: ignore[reportAttributeAccessIssue]
-        rprint(answer)
+        resp = response.choices[0].message  # pyright: ignore[reportAttributeAccessIssue]
+        rprint(f"Answer: {resp.content}")
         rprint(f"Usage: {response.usage}")  # pyright: ignore[reportAttributeAccessIssue]
 
         image_prompt = "Create a picture of a nano banana dish in a fancy restaurant with a Gemini theme"

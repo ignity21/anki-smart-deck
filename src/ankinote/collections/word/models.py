@@ -11,17 +11,17 @@ from enum import StrEnum
 from pydantic import BaseModel
 
 
-class Lang(StrEnum):
-    """ISO 639 language codes"""
+class Language(StrEnum):
+    """Supported languages for translations and definitions."""
 
-    ENGLISH = "en"
-    S_CHINESE = "zh-CN"
-    T_CHINESE = "zh-TW"
-    JAPANESE = "ja"
-    FRENCH = "fr"
-    SPANISH = "es"
-    GERMAN = "de"
-    KOREAN = "ko"
+    ENGLISH = "English"
+    CHINESE_S = "Chinese(Simplified)"
+    CHINESE_T = "Chinese(Traditional)"
+    JAPANESE = "Japanese"
+    FRENCH = "French"
+    SPANISH = "Spanish"
+    GERMAN = "German"
+    KOREAN = "Korean"
     OTHER = "other"
 
 
@@ -35,20 +35,17 @@ class Definition(BaseModel):
 
     target_lang: str
     native_lang: str
-    is_visualizable: (
-        bool  # whether the definition can be easily visualized with an image
-    )
+    is_visualizable: bool  # whether the definition is easily visualizable
 
 
 class Example(BaseModel):
     """Example sentence with translation"""
 
-    highlights: list[str] | None = (
-        None  # words/phrases to highlight: collocations, idioms, phrasal verbs, inflections
-    )
     sentence: str
     translation: str
-
+    highlights: list[
+        str
+    ]  # words/phrases to highlight: collocations, idioms, phrasal verbs, inflections
 
 class WordModel(BaseModel):
     """
@@ -67,6 +64,7 @@ class WordModel(BaseModel):
     synonyms: list[str]  # word or phrase synonyms
     examples: list[Example]
     etymology: str | None = None  # word origin to enhance learning interest
+    collocations: list[str]  # common collocations, phrasal verbs, idioms
     notes: list[
         str
     ]  # irregular inflections, UK pronunciation/spelling differences, related terms, etc.
@@ -94,6 +92,7 @@ class WordNoteType:
     synonyms: str
     examples: str
     etymology: str
+    collocations: str
     notes: str
     images: str
     user_notes: str

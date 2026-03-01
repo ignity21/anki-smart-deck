@@ -1,7 +1,7 @@
 from .collection import WordCollection
-from .models import Lang
+from .models import Language
 
 __all__ = [
     "WordCollection",
-    "Lang",
+    "Language",
 ]
