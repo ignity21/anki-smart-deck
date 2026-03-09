@@ -1,13 +1,60 @@
 """Word vocabulary card generator using AI."""
 
+import base64
 import json
+from dataclasses import dataclass, field
 from importlib.resources import files
-from typing import cast
+from typing import Self, cast
 
-from litellm import acompletion
+from litellm import acompletion, aimage_generation
 from loguru import logger
 
+from ankinote.services.tts import GoogleTTSService
+from ankinote.utils.img import scale
+
 from .models import Language, WordModel
+
+# ============================================================================
+# Language Mappings
+# ============================================================================
+
+TTS_LANG_CODES: dict[Language, str] = {
+    Language.ENGLISH: "en-US",
+    Language.JAPANESE: "ja-JP",
+    Language.CHINESE_S: "cmn-CN",
+    Language.CHINESE_T: "cmn-TW",
+    Language.FRENCH: "fr-FR",
+    Language.SPANISH: "es-ES",
+    Language.GERMAN: "de-DE",
+    Language.KOREAN: "ko-KR",
+}
+
+
+# ============================================================================
+# Media Data Structure
+# ============================================================================
+
+
+@dataclass
+class WordMediaFiles:
+    """Media files generated for a single WordModel.
+
+    Attributes:
+        pronunciation: MP3 bytes of the word's pronunciation audio.
+        examples: MP3 bytes for each example sentence, ordered to match
+                  WordModel.examples 1-to-1.
+        images: PNG bytes keyed by definition index (into WordModel.definitions).
+                Only visualizable definitions will have an entry.
+    """
+
+    pronunciation: bytes
+    examples: list[bytes] = field(default_factory=list)
+    images: dict[int, bytes] = field(default_factory=dict)
+
+
+# ============================================================================
+# Prompt Helpers
+# ============================================================================
 
 
 def load_prompt_template(target_language: Language) -> str:
@@ -22,11 +69,9 @@ def load_prompt_template(target_language: Language) -> str:
     Raises:
         FileNotFoundError: If no prompt template exists for the language
     """
-    # Map Language enum to prompt filename
     language_to_filename: dict[Language, str] = {
         Language.ENGLISH: "english_us.md",
         Language.JAPANESE: "japanese.md",
-        # Add more mappings as prompts are created
     }
 
     filename = language_to_filename.get(target_language)
@@ -40,12 +85,31 @@ def load_prompt_template(target_language: Language) -> str:
     return prompt_path.read_text(encoding="utf-8")
 
 
+def _load_image_prompt_template() -> str:
+    """Load the image generation prompt template from prompts/image.md."""
+    return (
+        files("ankinote.collections.word.prompts")
+        .joinpath("image.md")
+        .read_text(encoding="utf-8")
+    )
+
+
+def _build_image_prompt(word: str, definition: str) -> str:
+    template = _load_image_prompt_template()
+    return template.replace("{{ word }}", word).replace("{{ definition }}", definition)
+
+
+# ============================================================================
+# Module-level function (kept for backward compatibility)
+# ============================================================================
+
+
 async def generate_word_data(
     word: str,
     target_language: Language,
     native_language: Language,
-    model_id: str = "gemini-3-flash-preview",
-    temperature=0.3,
+    model_id: str = "gemini-3.1-flash-lite-preview",
+    temperature: float = 0.3,
 ) -> list[WordModel]:
     """Generate vocabulary card data for a word using AI.
 
@@ -63,10 +127,8 @@ async def generate_word_data(
         FileNotFoundError: If no prompt template exists for the target language
         RuntimeError: If AI generation or JSON parsing fails
     """
-    # Load the appropriate prompt template
     system_prompt = load_prompt_template(target_language)
 
-    # Build user message
     user_message = (
         f"Word: {word}\n"
         f"Target language: {target_language.value}\n"
@@ -79,7 +141,6 @@ async def generate_word_data(
     )
 
     try:
-        # Call LLM API
         response = await acompletion(
             model=f"gemini/{model_id}",
             messages=[
@@ -90,12 +151,10 @@ async def generate_word_data(
             temperature=temperature,
         )
 
-        # Extract response content
         content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
-        content = cast(str, content)  # Ensure content is treated as a string
+        content = cast(str, content)
         logger.debug(f"Raw AI response length: {len(content)} characters")
 
-        # Parse JSON response
         try:
             data = json.loads(content)
         except json.JSONDecodeError as e:
@@ -103,7 +162,6 @@ async def generate_word_data(
             logger.debug(f"Response content: {content[:500]}...")
             raise RuntimeError(f"AI returned invalid JSON: {e}") from e
 
-        # Convert to WordModel objects
         word_models = [WordModel.model_validate(item) for item in data]
 
         logger.success(
@@ -116,3 +174,155 @@ async def generate_word_data(
     except Exception as e:
         logger.error(f"Failed to generate word data for '{word}': {e}")
         raise
+
+
+# ============================================================================
+# WordGenerator Class
+# ============================================================================
+
+
+class WordGenerator:
+    """Unified generator for word text data and associated media.
+
+    Intended to be used as an async context manager so that the underlying
+    TTS service can pre-fetch its voice list once and reuse it across calls.
+
+    Example::
+
+        async with WordGenerator() as gen:
+            models = await gen.generate_word_data(word, target, native)
+            media  = await gen.generate_media(models[0])
+    """
+
+    def __init__(
+        self,
+        llm_model_id: str = "gemini-3.1-flash-lite-preview",
+        image_model_id: str = "gemini-2.5-flash-image",
+        image_size: int = 512,
+    ) -> None:
+        self._llm_model_id = llm_model_id
+        self._image_model_id = image_model_id
+        self._image_size = image_size
+        self._tts_service: GoogleTTSService | None = None
+
+    async def __aenter__(self) -> Self:
+        # TTS service is language-specific; it is initialised lazily in
+        # generate_media() because the language is not known at construction time.
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        if self._tts_service is not None:
+            await self._tts_service.__aexit__(exc_type, exc_val, exc_tb)
+            self._tts_service = None
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    async def generate_word_data(
+        self,
+        word: str,
+        target_lang: Language,
+        native_lang: Language,
+        temperature: float = 0.3,
+    ) -> list[WordModel]:
+        """Generate structured word data via LLM.
+
+        Delegates to the module-level ``generate_word_data`` function.
+        """
+        return await generate_word_data(
+            word=word,
+            target_language=target_lang,
+            native_language=native_lang,
+            model_id=self._llm_model_id,
+            temperature=temperature,
+        )
+
+    async def generate_media(
+        self,
+        word_model: WordModel,
+        target_lang: Language,
+    ) -> WordMediaFiles:
+        """Generate all media assets for a WordModel.
+
+        Args:
+            word_model: The word model to generate media for.
+            target_lang: Target language, used to select the TTS voice.
+
+        Returns:
+            WordMediaFiles with pronunciation audio, example audios, and
+            images keyed by definition index.
+        """
+        lang_code = TTS_LANG_CODES.get(target_lang)
+        if lang_code is None:
+            raise ValueError(f"No TTS language code for language: {target_lang.value}")
+
+        await self._ensure_tts_service(lang_code)
+
+        logger.info(
+            f"Generating media for '{word_model.word}' ({word_model.part_of_speech})"
+        )
+
+        pronunciation = await self._generate_audio(word_model.word)
+
+        examples: list[bytes] = []
+        for example in word_model.examples:
+            audio = await self._generate_audio(example.sentence)
+            examples.append(audio)
+        logger.debug(f"Generated {len(examples)} example audio(s)")
+
+        images: dict[int, bytes] = {}
+        for idx, definition in enumerate(word_model.definitions):
+            if definition.is_visualizable:
+                try:
+                    img = await self._generate_image(
+                        word_model.word, definition.target_lang
+                    )
+                    images[idx] = img
+                    logger.debug(f"Generated image for definition[{idx}]")
+                except Exception as e:
+                    logger.warning(
+                        f"Image generation failed for definition[{idx}] "
+                        f"('{definition.target_lang[:40]}'): {e}"
+                    )
+
+        logger.success(
+            f"Media ready for '{word_model.word}': "
+            f"1 pronunciation, {len(examples)} example(s), {len(images)} image(s)"
+        )
+
+        return WordMediaFiles(
+            pronunciation=pronunciation,
+            examples=examples,
+            images=images,
+        )
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    async def _ensure_tts_service(self, lang_code: str) -> None:
+        """Initialise (or re-initialise) the TTS service for *lang_code*."""
+        if self._tts_service is not None and self._tts_service._lang_code == lang_code:
+            return  # already ready for the right language
+
+        if self._tts_service is not None:
+            await self._tts_service.__aexit__(None, None, None)
+
+        svc = GoogleTTSService(language_code=lang_code)
+        await svc.__aenter__()
+        self._tts_service = svc
+
+    async def _generate_audio(self, text: str) -> bytes:
+        assert self._tts_service is not None
+        return await self._tts_service.synthesize_with_random_voice(text)
+
+    async def _generate_image(self, word: str, definition: str) -> bytes:
+        prompt = _build_image_prompt(word, definition)
+        response = await aimage_generation(
+            model=f"gemini/{self._image_model_id}",
+            prompt=prompt,
+        )
+        b64: str = response.data[0].b64_json  # pyright: ignore[reportAssignmentType, reportOptionalSubscript]
+        raw = base64.b64decode(b64)
+        return scale(raw, self._image_size)

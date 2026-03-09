@@ -215,3 +215,6 @@ __marimo__/
 *.jpeg
 *.png
 *.txt
+
+# project
+output/

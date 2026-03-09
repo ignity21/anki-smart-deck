@@ -64,8 +64,8 @@ class WordCollection:
         self,
         anki_client: AnkiConnectClient,
         *,
-        native_language: Lang,
-        target_language: Lang,
+        native_language: Language,
+        target_language: Language,
         notetype_name: str = "AINote Word",
         deck_name: str = "AINote::Words",
     ) -> None:

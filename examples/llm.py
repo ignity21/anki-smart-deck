@@ -10,7 +10,8 @@ from ankinote.utils import img
 
 
 async def main():
-    model_id = "gemini-3-flash-preview"
+    model_id = "gemini-3.1-flash-lite-preview"
+    # image_model_id = "gemini-3.1-flash-image-preview"
     image_model_id = "gemini-2.5-flash-image"
     async with Application():
         prompt = "What is the capital of France?"
