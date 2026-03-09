@@ -10,7 +10,7 @@ def print_banner():
     banner = """
     ╔═══════════════════════════════════════════════════════╗
     ║                                                       ║
-    ║        🎴  Anki AI-Powered Deck Generator  🎴         ║
+    ║        🎴  Anki AI-Powered Deck Generator  🎴           ║
     ║                                                       ║
     ╚═══════════════════════════════════════════════════════╝
     """
