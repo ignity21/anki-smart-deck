@@ -85,18 +85,8 @@ def load_prompt_template(target_language: Language) -> str:
     return prompt_path.read_text(encoding="utf-8")
 
 
-def _load_image_prompt_template() -> str:
-    """Load the image generation prompt template from prompts/image.md."""
-    return (
-        files("ankinote.collections.word.prompts")
-        .joinpath("image.md")
-        .read_text(encoding="utf-8")
-    )
-
-
-def _build_image_prompt(word: str, definition: str) -> str:
-    template = _load_image_prompt_template()
-    return template.replace("{{ word }}", word).replace("{{ definition }}", definition)
+def _build_image_user_prompt(word: str, definition: str) -> str:
+    return f"Word: {word}\nDefinition: {definition}"
 
 
 # ============================================================================
@@ -318,10 +308,15 @@ class WordGenerator:
         return await self._tts_service.synthesize_with_random_voice(text)
 
     async def _generate_image(self, word: str, definition: str) -> bytes:
-        prompt = _build_image_prompt(word, definition)
+        system_prompt = (
+            files("ankinote.collections.word.prompts")
+            .joinpath("image.md")
+            .read_text(encoding="utf-8")
+        )
+        user_prompt = _build_image_user_prompt(word, definition)
         response = await aimage_generation(
             model=f"gemini/{self._image_model_id}",
-            prompt=prompt,
+            prompt=f"{system_prompt}\n\n{user_prompt}",
         )
         b64: str = response.data[0].b64_json  # pyright: ignore[reportAssignmentType, reportOptionalSubscript]
         raw = base64.b64decode(b64)
