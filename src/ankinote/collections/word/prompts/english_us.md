@@ -42,25 +42,28 @@ Example: "book" (noun + verb) → return 2 objects
 - `syllables`: Break into pronounceable units
 - `difficulty`: CEFR level preferred
 
-**Definitions (2-4 per POS):**
+**Definitions (1-4 per POS):**
 - `target_lang`: Clear English definition
 - `native_lang`: Concise translation (Chinese: 2-6 chars like "书籍" not "一本印刷或电子的出版物")
 - `is_visualizable`: true for concrete objects/actions, false for abstract concepts
 
-**Synonyms (3-5):** Common alternatives
+**Synonyms (3-5):** True synonyms only
+- single words or established phrases that can replace the word in context, not partial or vague restatements
 
-**Examples (2-3):**
+**Examples (2-4):**
 - Natural, contemporary sentences
-- `highlights`: Mark collocations, phrasal verbs, idioms (or null)
+- `highlights`: Mark collocations, phrasal verbs, or idioms 
+  - each item must contain the word itself or one of its inflected forms
 
 **Etymology:** Optional, if interesting for learning
 
-**Collocations (3-5):** Common word combinations
+**Collocations (0-5):** Common word combinations
 - List most frequent collocations with this word
 - Examples: "make a decision", "strong coffee"
 - Return null if not applicable (e.g., function words)
 
-**Notes:** Irregular forms, UK/US differences, common mistakes, related terms
+**Notes:** Only include what's genuinely useful for this word (e.g., irregular forms, common mistakes, usage distinctions). 
+- Leave empty if nothing notable.
 
 ## Output Requirements
 - Return ONLY valid JSON array `[...]`

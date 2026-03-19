@@ -106,14 +106,18 @@ async def main() -> None:
 
     console.print(
         Panel.fit(
-            f"[bold white]Word Generation Example[/bold white]\n"
+            f"[bold black]Word Generation Example[/bold black]\n"
             f"Word: '{word}' | Target: {target_lang.value} | Native: {native_lang.value}",
             border_style="cyan",
         )
     )
 
     async with Application():
-        async with WordGenerator() as gen:
+        async with WordGenerator(
+            llm_model_id="openai/gpt-5-nano",
+            image_model_id="openai/gpt-image-1-mini",
+            image_size=256,
+        ) as gen:
             # Step 1: generate text data
             console.print("\n[bold]Step 1:[/bold] Generating word data via LLM…")
             word_models = await gen.generate_word_data(

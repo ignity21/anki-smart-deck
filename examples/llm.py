@@ -10,13 +10,17 @@ from ankinote.utils import img
 
 
 async def main():
-    model_id = "gemini-3.1-flash-lite-preview"
-    # image_model_id = "gemini-3.1-flash-image-preview"
-    image_model_id = "gemini-2.5-flash-image"
+    # model_id = "gemini/gemini-3.1-flash-lite-preview"
+    # image_model_id = "gemini/gemini-2.5-flash-image"
+    model_id = "openai/gpt-5-nano"
+    image_model_id = "openai/gpt-image-1-mini"
+    image_quality = "low"
+    image_size = "1024x1024"
+
     async with Application():
         prompt = "What is the capital of France?"
         response = await acompletion(
-            model=f"gemini/{model_id}",
+            model=model_id,
             messages=[{"role": "user", "content": prompt}],
             stream=False,
         )
@@ -26,10 +30,11 @@ async def main():
 
         image_prompt = "Create a picture of a nano banana dish in a fancy restaurant with a Gemini theme"
         image_response = await aimage_generation(
-            model=f"gemini/{image_model_id}",
+            model=image_model_id,
             prompt=image_prompt,
+            quality=image_quality,
             n=1,
-            size="512x512",  # or 1024x1024
+            size=image_size,
         )
         rprint(f"Usage: {image_response.usage}")
 

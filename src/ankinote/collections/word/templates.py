@@ -26,7 +26,7 @@ def load_template(filename: str) -> str:
         The front template as a string
     """
     return (
-        files("ankinote.collections.word")
+        files("ankinote.collections.word.card_templates")
         .joinpath(filename)
         .read_text(encoding="utf-8")
     )

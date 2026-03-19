@@ -98,7 +98,7 @@ async def generate_word_data(
     word: str,
     target_language: Language,
     native_language: Language,
-    model_id: str = "gemini-3.1-flash-lite-preview",
+    model_id: str = "gemini/gemini-3.1-flash-lite-preview",
     temperature: float = 0.3,
 ) -> list[WordModel]:
     """Generate vocabulary card data for a word using AI.
@@ -132,18 +132,21 @@ async def generate_word_data(
 
     try:
         response = await acompletion(
-            model=f"gemini/{model_id}",
+            model=model_id,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
             stream=False,
             temperature=temperature,
+            drop_params=True,
         )
 
         content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
         content = cast(str, content)
-        logger.debug(f"Raw AI response length: {len(content)} characters")
+
+        logger.debug(content)
+        logger.info(f"Raw AI response length: {len(content)} characters")
 
         try:
             data = json.loads(content)
@@ -186,9 +189,9 @@ class WordGenerator:
 
     def __init__(
         self,
-        llm_model_id: str = "gemini-3.1-flash-lite-preview",
-        image_model_id: str = "gemini-2.5-flash-image",
-        image_size: int = 512,
+        llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
+        image_model_id: str = "gemini/gemini-2.5-flash-image",
+        image_size: int = 256,
     ) -> None:
         self._llm_model_id = llm_model_id
         self._image_model_id = image_model_id
@@ -315,7 +318,7 @@ class WordGenerator:
         )
         user_prompt = _build_image_user_prompt(word, definition)
         response = await aimage_generation(
-            model=f"gemini/{self._image_model_id}",
+            model=self._image_model_id,
             prompt=f"{system_prompt}\n\n{user_prompt}",
         )
         b64: str = response.data[0].b64_json  # pyright: ignore[reportAssignmentType, reportOptionalSubscript]

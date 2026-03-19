@@ -47,6 +47,7 @@ class Example(BaseModel):
         str
     ]  # words/phrases to highlight: collocations, idioms, phrasal verbs, inflections
 
+
 class WordModel(BaseModel):
     """
     Structured vocabulary data model for AI generation.
@@ -94,5 +95,4 @@ class WordNoteType:
     etymology: str
     collocations: str
     notes: str
-    images: str
     user_notes: str
