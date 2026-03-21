@@ -88,6 +88,10 @@ class WordCollection:
             fields = [f.name for f in dataclasses.fields(WordNoteType)]
             front_template = load_template("front.html")
             back_template = load_template("back.html")
+            rfront_template = load_template("reverse_front.html")
+            rback_template = load_template("reverse_back.html")
+            spelling_front = load_template("spelling_front.html")
+            spelling_back = load_template("spelling_back.html")
             style = load_card_style()
 
             await self._anki_client.models.create(
@@ -98,6 +102,16 @@ class WordCollection:
                         "Name": "Recognition",
                         "Front": front_template,
                         "Back": back_template,
+                    },
+                    {
+                        "Name": "Recall",
+                        "Front": rfront_template,
+                        "Back": rback_template,
+                    },
+                    {
+                        "Name": "Spelling",
+                        "Front": spelling_front,
+                        "Back": spelling_back,
                     },
                 ],
                 css=style,
