@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ankinote = "ankinote.entry.cli:main"
+ankinote = "ankinote.cli.main:main"
 
 [tool.hatch.version]
 path = "src/ankinote/__init__.py"
