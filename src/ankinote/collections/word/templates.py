@@ -10,7 +10,7 @@ def load_card_style() -> str:
         The CSS content as a string
     """
     return (
-        files("ankinote.collections.word")
+        files("ankinote.collections.word.card_templates")
         .joinpath("style.css")
         .read_text(encoding="utf-8")
     )

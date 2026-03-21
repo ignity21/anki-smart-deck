@@ -1,5 +1,6 @@
 """Word vocabulary card generator using AI."""
 
+import asyncio
 import base64
 import json
 from dataclasses import dataclass, field
@@ -258,26 +259,33 @@ class WordGenerator:
 
         pronunciation = await self._generate_audio(word_model.word)
 
-        examples: list[bytes] = []
-        for example in word_model.examples:
-            audio = await self._generate_audio(example.sentence)
-            examples.append(audio)
+        async with asyncio.TaskGroup() as tg:
+            example_tasks = [
+                tg.create_task(self._generate_audio(example.sentence))
+                for example in word_model.examples
+            ]
+            image_tasks = {
+                idx: tg.create_task(
+                    self._generate_image(word_model.word, definition.target_lang)
+                )
+                for idx, definition in enumerate(word_model.definitions)
+                if definition.is_visualizable
+            }
+
+        examples = [task.result() for task in example_tasks]
         logger.debug(f"Generated {len(examples)} example audio(s)")
 
         images: dict[int, bytes] = {}
-        for idx, definition in enumerate(word_model.definitions):
-            if definition.is_visualizable:
-                try:
-                    img = await self._generate_image(
-                        word_model.word, definition.target_lang
-                    )
-                    images[idx] = img
-                    logger.debug(f"Generated image for definition[{idx}]")
-                except Exception as e:
-                    logger.warning(
-                        f"Image generation failed for definition[{idx}] "
-                        f"('{definition.target_lang[:40]}'): {e}"
-                    )
+        for idx, task in image_tasks.items():
+            try:
+                images[idx] = task.result()
+                logger.debug(f"Generated image for definition[{idx}]")
+            except Exception as e:
+                definition = word_model.definitions[idx]
+                logger.warning(
+                    f"Image generation failed for definition[{idx}] "
+                    f"('{definition.target_lang[:40]}'): {e}"
+                )
 
         logger.success(
             f"Media ready for '{word_model.word}': "
