@@ -250,6 +250,7 @@ class WordCollection:
                 model_name=self.notetype_name,
                 fields=note_data,
                 tags=tags,
+                allow_duplicate=True,
             )
             logger.info(f"Created note {note_id}")
 
