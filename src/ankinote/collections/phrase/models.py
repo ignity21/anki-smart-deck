@@ -32,6 +32,7 @@ class PhraseModel(BaseModel):
     definitions: list[Definition]
     examples: list[Example]
     notes: list[str]
+    associations: list[str] = []
 
 
 @dataclass
@@ -44,4 +45,5 @@ class PhraseNoteType:
     definitions: str
     examples: str
     notes: str
+    associations: str
     user_notes: str

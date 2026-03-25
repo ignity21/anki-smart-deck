@@ -186,6 +186,7 @@ class PhraseCollection:
                 media_refs.example_audios,
             ),
             "notes": self._format_notes_html(phrase_model.notes),
+            "associations": self._format_associations_html(phrase_model.associations),
             "user_notes": "",
         }
 
@@ -232,3 +233,9 @@ class PhraseCollection:
         if not notes:
             return ""
         return "<br>".join(f"• {note}" for note in notes)
+
+    def _format_associations_html(self, associations: list[str]) -> str:
+        """Format associations (related phrases) as HTML."""
+        if not associations:
+            return ""
+        return "<br>".join(f"• {assoc}" for assoc in associations)

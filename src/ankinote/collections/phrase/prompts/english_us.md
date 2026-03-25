@@ -1,8 +1,6 @@
 # English (US) Phrase / Idiom Card Generation
 
-## Output Format
-
-Return a single JSON object with this exact structure:
+Generate one JSON object describing the phrase.
 
 ```json
 {
@@ -21,44 +19,43 @@ Return a single JSON object with this exact structure:
       "highlight": "The exact surface form of the phrase as it appears in the sentence"
     }
   ],
-  "notes": ["Useful usage notes, register, common mistakes"]
+  "notes": ["Useful usage notes, register, common mistakes"],
+  "associations": ["Similar or contrastive phrases, e.g. 'pay attention to'"]
 }
 ```
 
-- Never return `null` for array fields (`definitions`, `examples`, `notes`).
+- Never return `null` for array fields (`definitions`, `examples`, `notes`, `associations`).
 - `notes` can be an empty array if you have nothing important to say.
-- Output **only** valid JSON (no markdown, no comments, no extra keys).
+- `associations` can be empty if there are no strong related phrases.
+- Output **only** valid JSON (no markdown, no comments, no extra keys or text).
 
 ## Key Rules
 
-**Phrase Types:**
-- The `"phrase"` field can be:
-  - multi-word expressions (`"take something for granted"`)
-  - idioms (`"break the ice"`)
-  - short sentences or patterns (`"Nice to meet you."`, `"Would you mind if I...?"`)
-
-**Difficulty:**
-- Use CEFR levels (`A1`–`C2`) to approximate how advanced the phrase is.
+- `"phrase"` can be a multi‑word expression, idiom, or short sentence/pattern.
+- `"difficulty"` uses CEFR levels `A1`–`C2`.
 
 **Definitions (1–3):**
-- `target_lang`: Clear English explanation of the phrase's meaning in typical use.
-- `native_lang`: Concise translation in the user's native language.
+- `target_lang`: clear English explanation of the typical meaning.
+- `native_lang`: concise translation in the user's native language.
 
 **Examples (2–4):**
 - Natural, contemporary English sentences.
-- Each `sentence` MUST contain the phrase (or a very close surface form).
-- `highlight`:
-  - MUST be exactly the text span of the phrase inside `sentence`.
-  - Use the same casing and inflection as it appears in `sentence`.
-  - If the phrase appears multiple times, highlight the most important occurrence.
+- Each `sentence` must contain the phrase (or a very close surface form).
+- `highlight` must be exactly the phrase text inside `sentence` (same casing/inflection).  
+  If it appears multiple times, pick the most important occurrence.
 
-**Notes (0–5):**
-- Register: formal / informal / slang / written / spoken.
-- Typical contexts: business, everyday conversation, academic, etc.
-- Common mistakes, grammatical constraints, or collocational patterns.
+**Notes (0–3):**
+- Only include points that are truly important for correct or natural use.
+- Focus on common mistakes, register warnings (formal / informal / slang), strong collocations, or grammatical constraints.
+- If there is nothing noteworthy, use an empty array.
+
+**Associations (0–5):**
+- Short related phrases learners can mentally connect to this one.
+- Near‑synonyms (`"focus on" → "pay attention to"`), contrastive pairs (`"lend" vs. "borrow"`), or common alternative patterns.
+- One phrase per item, no extra explanation.
 
 ## Output Requirements
 
-- Return exactly **one** JSON object (not an array).
-- Follow the schema of `PhraseModel` strictly.
-- Do not include pronunciation, IPA, images, or any extra metadata.
+- Return exactly one JSON object (not an array).
+- Follow the JSON schema above strictly.
+- Do not include pronunciation, IPA, images, or any other fields.
