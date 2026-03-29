@@ -1,14 +1,13 @@
 import asyncio
 from pathlib import Path
-from time import perf_counter
 
 import click
+from asynciolimiter import StrictLimiter
 
 from ankinote.app import Application
+from ankinote.cli.phrase import MAX_CONCURRENCY
 from ankinote.collections.word import Language, WordCollection
 from ankinote.services.anki import AnkiConnectClient
-
-MAX_CONCURRENCY = 10
 
 # -- Shared options -----------------------------------------------------------
 
@@ -25,8 +24,12 @@ COLLECTION_OPTIONS = [
         show_default=True,
         type=click.Choice([lang.value for lang in Language]),
     ),
-    click.option("--llm", default="openai/gpt-5-nano", show_default=True),
-    click.option("--image-model", default="openai/gpt-image-1-mini", show_default=True),
+    click.option(
+        "--llm", default="gemini/gemini-3.1-flash-lite-preview", show_default=True
+    ),
+    click.option(
+        "--image-model", default="gemini/gemini-2.5-flash-image", show_default=True
+    ),
     click.option("--image-size", default=128, show_default=True, type=int),
 ]
 
@@ -109,19 +112,25 @@ def add(word, native, target, llm, image_model, image_size):
 @click.option(
     "--file", "-f", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
+@click.option(
+    "--rpm",
+    default=60,
+    show_default=True,
+    help="Max requests per minute (match your AI provider's limit).",
+)
 @collection_options
-def batch(words, file, native, target, llm, image_model, image_size):
+def batch(words, file, native, target, llm, image_model, image_size, rpm):
     """Generate and push multiple word cards.
 
-    \b
+    \\b
     Words can be passed as arguments, read from a file (whitespace-separated),
     or both at the same time.
 
-    \b
+    \\b
     Examples:
       anki word batch apple banana cat
       anki word batch --file words.txt
-      anki word batch apple --file more.txt
+      anki word batch --rpm 30 apple --file more.txt
     """
     all_words = list(words)
     if file:
@@ -135,48 +144,32 @@ def batch(words, file, native, target, llm, image_model, image_size):
     async def _run():
         nonlocal success
 
+        sem = asyncio.Semaphore(MAX_CONCURRENCY)
+        limiter = StrictLimiter(rpm / 60)  # 转换为 requests/second
+
         async def _process(w: str):
             nonlocal success
-            try:
-                await collection.generate_and_add_note(w)
-                success += 1
-                click.echo(f"  ✓ {w}")
-            except Exception as e:
-                failed.append((w, str(e)))
-                click.echo(f"  ✗ {w}  ({e})", err=True)
+            async with sem:
+                await limiter.wait()  # 主动等待令牌，绝不超速
+                try:
+                    await collection.generate_and_add_note(w)
+                    success += 1
+                    click.echo(f"  ✓ {w}")
+                except Exception as e:
+                    failed.append((w, str(e)))
+                    click.echo(f"  ✗ {w}  ({e})", err=True)
 
         async with Application():
             client = AnkiConnectClient()
             collection = make_collection(
                 client, native, target, llm, image_model, image_size
             )
-
-            WINDOW = 60.0
-            batches = [
-                all_words[i : i + MAX_CONCURRENCY]
-                for i in range(0, len(all_words), MAX_CONCURRENCY)
-            ]
-
-            for batch_idx, batch_words in enumerate(batches):
-                batch_start = perf_counter()
-
-                await asyncio.gather(*[_process(w) for w in batch_words])
-
-                if batch_idx < len(batches) - 1:
-                    elapsed = perf_counter() - batch_start
-                    remaining = WINDOW - elapsed
-                    if remaining > 0:
-                        click.echo(
-                            f"  ⏳ Batch done in {elapsed:.1f}s, waiting {remaining:.1f}s ..."
-                        )
-                        await asyncio.sleep(remaining)
-                    else:
-                        click.echo(
-                            f"  ⚡ Batch took {elapsed:.1f}s, starting next immediately."
-                        )
+            await asyncio.gather(*[_process(w) for w in all_words])
 
     total = len(all_words)
-    click.echo(f"Processing {total} words (concurrency={MAX_CONCURRENCY}) ...")
+    click.echo(
+        f"Processing {total} words (concurrency={MAX_CONCURRENCY}, rpm={rpm}) ..."
+    )
     asyncio.run(_run())
     click.echo(
         f"\n✅ {success}/{total} succeeded"

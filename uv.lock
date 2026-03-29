@@ -100,6 +100,7 @@ name = "ankinote-ai"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
+    { name = "asynciolimiter" },
     { name = "click" },
     { name = "google-cloud-texttospeech" },
     { name = "litellm" },
@@ -124,6 +125,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.13.2" },
+    { name = "asynciolimiter", specifier = ">=1.2.0" },
     { name = "click", specifier = ">=8.2.0" },
     { name = "google-cloud-texttospeech", specifier = ">=2.31.0" },
     { name = "litellm", specifier = ">=1.81.9" },
@@ -173,6 +175,15 @@ dependencies = [
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/96/f0/5eb65b2bb0d09ac6776f2eb54adee6abe8228ea05b20a5ad0e4945de8aac/anyio-4.12.1.tar.gz", hash = "sha256:41cfcc3a4c85d3f05c932da7c26d0201ac36f72abd4435ba90d0464a3ffed703" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/38/0e/27be9fdef66e72d64c0cdc3cc2823101b80585f8119b5c112c2e8f5f7dab/anyio-4.12.1-py3-none-any.whl", hash = "sha256:d405828884fc140aa80a3c667b8beed277f1dfedec42ba031bd6ac3db606ab6c" },
+]
+
+[[package]]
+name = "asynciolimiter"
+version = "1.2.0"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/5b/95/e419550994947b564302c6d6641462d1c154e535df7e6a4bedc2801ec6d5/asynciolimiter-1.2.0.tar.gz", hash = "sha256:ac1a237c3dbd3c33041c9f9fc1a687c8e6b5268af69da84399967173a344b265" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/ee/91/2fd273f5c9d041e987cb03f487722355527c412870ece6f803fe2799f2a7/asynciolimiter-1.2.0-py3-none-any.whl", hash = "sha256:0d255de14459f961c8baee7f91e114a6ffb9ce5615e9b19c0049e8ae7e2ac84c" },
 ]
 
 [[package]]

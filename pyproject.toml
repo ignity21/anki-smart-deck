@@ -19,6 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp>=3.13.2",
+    "asynciolimiter>=1.2.0",
     "click>=8.2.0",
     "google-cloud-texttospeech>=2.31.0",
     "litellm>=1.81.9",
