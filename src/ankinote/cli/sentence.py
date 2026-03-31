@@ -71,9 +71,8 @@ def init(native, target, llm):
                 native_language=Language(native),
                 target_language=Language(target),
                 llm_model_id=llm,
-            ) as collection:
-                await collection.ensure_note_type_exists()
-                await collection.ensure_deck_exists()
+            ):
+                pass
 
     asyncio.run(_run())
     click.echo("✓ Ready (sentence collection)")
@@ -147,7 +146,7 @@ def batch(sentences, file, native, target, llm, rpm):
     if not all_sentences:
         raise click.UsageError("Provide at least one sentence via argument or --file.")
 
-    success, failed = 0, []
+    success, failed = [], []
 
     async def _run():
         nonlocal success
@@ -161,11 +160,9 @@ def batch(sentences, file, native, target, llm, rpm):
                 await limiter.wait()
                 try:
                     await collection.generate_and_add_note(s)
-                    success += 1
-                    click.echo(f"  ✓ {s}")
+                    success.append(s)
                 except Exception as e:
                     failed.append((s, str(e)))
-                    click.echo(f"  ✗ {s}  ({e})", err=True)
 
         async with Application():
             client = AnkiConnectClient()
@@ -177,9 +174,13 @@ def batch(sentences, file, native, target, llm, rpm):
         f"Processing {total} sentences (concurrency={MAX_CONCURRENCY}, rpm={rpm}) ..."
     )
     asyncio.run(_run())
-    click.echo(
-        f"\n✅ {success}/{total} succeeded"
-        + (f", ❌ {len(failed)} failed" if failed else "")
-    )
+    if len(success) == total:
+        click.echo("✅ All sentences processed successfully!")
+    else:
+        click.echo(f"\n✅ {len(success)}/{total} succeeded")
+        for s in success:
+            click.echo(f"   • {s}")
+    if failed:
+        click.echo(f"\n❌ {len(failed)} failed")
     for s, reason in failed:
         click.echo(f"   • {s}: {reason}")

@@ -9,15 +9,13 @@ from ankinote.collections.phrase import PhraseCollection, Language
 async def main():
     async with Application():
         client = AnkiConnectClient()
-        collection = PhraseCollection(
+        async with PhraseCollection(
             client,
             native_language=Language.CHINESE_S,
             target_language=Language.ENGLISH,
             llm_model_id="openai/gpt-5-mini",
-        )
-        await collection.ensure_note_type_exists()
-        await collection.ensure_deck_exists()
-        await collection.generate_and_add_note("focus on")
+        ) as collection:
+            await collection.generate_and_add_note("focus on")
 
 
 if __name__ == "__main__":

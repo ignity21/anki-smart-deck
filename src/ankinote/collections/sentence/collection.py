@@ -55,12 +55,14 @@ class SentenceCollection:
 
     async def __aenter__(self) -> Self:
         await self._tts_service.__aenter__()
+        await self._ensure_note_type_exists()
+        await self._ensure_deck_exists()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self._tts_service.__aexit__(exc_type, exc_val, exc_tb)
 
-    async def ensure_note_type_exists(self) -> None:
+    async def _ensure_note_type_exists(self) -> None:
         """Ensure the note type exists in Anki, create it if it doesn't."""
         exists = await self._anki_client.models.exists(self.notetype_name)
         if exists:
@@ -86,7 +88,7 @@ class SentenceCollection:
         )
         logger.success(f"Created sentence note type: {self.notetype_name}")
 
-    async def ensure_deck_exists(self) -> int:
+    async def _ensure_deck_exists(self) -> int:
         """Ensure the deck exists in Anki, create it if it doesn't."""
         deck_id = await self._anki_client.decks.create(self.deck_name)
         logger.success(f"Ensured deck exists: {self.deck_name}")

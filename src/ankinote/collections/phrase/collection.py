@@ -1,13 +1,16 @@
 """Phrase collection management for Anki."""
 
 import dataclasses
+import hashlib
 from dataclasses import dataclass
+from typing import Self
 
-import shortuuid
 from loguru import logger
 
+from ankinote.collections.word.generator import TTS_LANG_CODES
 from ankinote.collections.word.models import Language
 from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.tts import GoogleTTSService
 
 from .generator import PhraseGenerator, PhraseMediaFiles
 from .models import Definition, Example, PhraseModel, PhraseNoteType
@@ -49,9 +52,21 @@ class PhraseCollection:
         self._native_language = native_language
         self._target_language = target_language
         self._anki_client = anki_client
-        self._generator = PhraseGenerator(llm_model_id=llm_model_id)
+        self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
+        self._generator = PhraseGenerator(self._tts_service, llm_model_id=llm_model_id)
 
-    async def ensure_note_type_exists(self) -> None:
+    async def __aenter__(self) -> Self:
+        """Async context manager entry: ensure note type and deck exist."""
+        await self._tts_service.__aenter__()
+        await self._ensure_note_type_exists()
+        await self._ensure_deck_exists()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Async context manager exit: clean up TTS service."""
+        await self._tts_service.__aexit__(exc_type, exc_val, exc_tb)
+
+    async def _ensure_note_type_exists(self) -> None:
         """Ensure the note type exists in Anki, create it if it doesn't."""
         exists = await self._anki_client.models.exists(self.notetype_name)
         if exists:
@@ -77,7 +92,7 @@ class PhraseCollection:
         )
         logger.success(f"Created phrase note type: {self.notetype_name}")
 
-    async def ensure_deck_exists(self) -> int:
+    async def _ensure_deck_exists(self) -> int:
         """Ensure the deck exists in Anki, create it if it doesn't."""
         deck_id = await self._anki_client.decks.create(self.deck_name)
         logger.success(f"Ensured deck exists: {self.deck_name}")
@@ -99,7 +114,6 @@ class PhraseCollection:
 
         media = await self._generator.generate_media(
             phrase_model=phrase_model,
-            target_lang=self._target_language,
         )
 
         card_data = PhraseCardData(model=phrase_model, media=media)
@@ -151,16 +165,15 @@ class PhraseCollection:
         """Store media files in Anki and return their references."""
         phrase_model = card_data.model
         media = card_data.media
+        phrase_hash = hashlib.md5(phrase_model.phrase.encode()).hexdigest()[:12]
 
-        base = phrase_model.phrase.replace(" ", "_")
-
-        phrase_audio_name = f"{base}_{shortuuid.uuid()}.mp3"
+        phrase_audio_name = f"{phrase_hash}.mp3"
         await self._anki_client.media.store_file(phrase_audio_name, media.phrase_audio)
         logger.debug(f"Stored phrase audio: {phrase_audio_name}")
 
         example_audio_names: list[str] = []
         for i, audio in enumerate(media.example_audios):
-            name = f"{base}_ex{i}_{shortuuid.uuid()}.mp3"
+            name = f"{phrase_hash}_ex{i}.mp3"
             await self._anki_client.media.store_file(name, audio)
             example_audio_names.append(name)
         logger.debug(f"Stored {len(example_audio_names)} example audio(s)")

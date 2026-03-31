@@ -66,9 +66,13 @@ def init(native, target, llm):
     async def _run():
         async with Application():
             client = AnkiConnectClient()
-            collection = make_collection(client, native, target, llm)
-            await collection.ensure_note_type_exists()
-            await collection.ensure_deck_exists()
+            async with PhraseCollection(
+                client,
+                native_language=Language(native),
+                target_language=Language(target),
+                llm_model_id=llm,
+            ):
+                pass
 
     asyncio.run(_run())
     click.echo("✓ Ready (phrase collection)")
@@ -86,8 +90,13 @@ def add(phrase, native, target, llm):
     async def _run():
         async with Application():
             client = AnkiConnectClient()
-            collection = make_collection(client, native, target, llm)
-            await collection.generate_and_add_note(phrase)
+            async with PhraseCollection(
+                client,
+                native_language=Language(native),
+                target_language=Language(target),
+                llm_model_id=llm,
+            ) as collection:
+                await collection.generate_and_add_note(phrase)
 
     asyncio.run(_run())
     click.echo(f"✓ Added phrase: {phrase}")
@@ -134,7 +143,7 @@ def batch(phrases, file, native, target, llm, rpm):
     if not all_phrases:
         raise click.UsageError("Provide at least one phrase via argument or --file.")
 
-    success, failed = 0, []
+    success, failed = [], []
 
     async def _run():
         nonlocal success
@@ -148,23 +157,30 @@ def batch(phrases, file, native, target, llm, rpm):
                 await limiter.wait()
                 try:
                     await collection.generate_and_add_note(p)
-                    success += 1
-                    click.echo(f"  ✓ {p}")
+                    success.append(p)
                 except Exception as e:
                     failed.append((p, str(e)))
-                    click.echo(f"  ✗ {p}  ({e})", err=True)
 
         async with Application():
             client = AnkiConnectClient()
-            collection = make_collection(client, native, target, llm)
-            await asyncio.gather(*[_process(p) for p in all_phrases])
+            async with PhraseCollection(
+                client,
+                native_language=Language(native),
+                target_language=Language(target),
+                llm_model_id=llm,
+            ) as collection:
+                await asyncio.gather(*[_process(p) for p in all_phrases])
 
     total = len(all_phrases)
     click.echo(f"Processing {total} phrases (concurrency={MAX_CONCURRENCY}) ...")
     asyncio.run(_run())
-    click.echo(
-        f"\n✅ {success}/{total} succeeded"
-        + (f", ❌ {len(failed)} failed" if failed else "")
-    )
-    for p, reason in failed:
-        click.echo(f"   • {p}: {reason}")
+    if len(success) == total:
+        click.echo("✅ All phrases processed successfully!")
+    else:
+        click.echo(f"\n✅ {len(success)}/{total} succeeded")
+        for s in success:
+            click.echo(f"   • {s}")
+    if failed:
+        click.echo(f"\n❌ {len(failed)} failed")
+    for s, reason in failed:
+        click.echo(f"   • {s}: {reason}")

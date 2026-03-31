@@ -38,7 +38,8 @@ def main():
     logger.add(
         sys.stderr,
         colorize=True,
-        format="<green>{time:HH:mm:ss}</green> | <level>{message}</level>",
+        level="INFO",
+        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
     )
     # litellm.base_llm_aiohttp_handler = BaseLLMAIOHTTPHandler(client_session=session)
     cli()

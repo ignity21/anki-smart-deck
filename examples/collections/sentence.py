@@ -15,8 +15,6 @@ async def main():
             target_language=Language.ENGLISH,
             llm_model_id="openai/gpt-5-nano",
         ) as collection:
-            await collection.ensure_note_type_exists()
-            await collection.ensure_deck_exists()
             await collection.generate_and_add_note(
                 "There is no doubt that my bed is the best place on Earth on Monday morning."
             )

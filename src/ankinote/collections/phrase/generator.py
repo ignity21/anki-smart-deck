@@ -3,12 +3,11 @@
 import json
 from dataclasses import dataclass, field
 from importlib.resources import files
-from typing import Self, cast
+from typing import cast
 
 from litellm import acompletion
 from loguru import logger
 
-from ankinote.collections.word.generator import TTS_LANG_CODES
 from ankinote.collections.word.models import Language
 from ankinote.services.tts import GoogleTTSService
 
@@ -128,18 +127,11 @@ class PhraseGenerator:
 
     def __init__(
         self,
+        tts_service: GoogleTTSService,
         llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
     ) -> None:
         self._llm_model_id = llm_model_id
-        self._tts_service: GoogleTTSService | None = None
-
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        if self._tts_service is not None:
-            await self._tts_service.__aexit__(exc_type, exc_val, exc_tb)
-            self._tts_service = None
+        self._tts_service = tts_service
 
     async def generate_phrase_data(
         self,
@@ -160,7 +152,6 @@ class PhraseGenerator:
     async def generate_media(
         self,
         phrase_model: PhraseModel,
-        target_lang: Language,
     ) -> PhraseMediaFiles:
         """Generate all audio assets for a PhraseModel.
 
@@ -171,18 +162,14 @@ class PhraseGenerator:
         Returns:
             PhraseMediaFiles with phrase audio and example audios.
         """
-
-        lang_code = TTS_LANG_CODES.get(target_lang)
-        if lang_code is None:
-            raise ValueError(f"No TTS language code for language: {target_lang.value}")
-
-        await self._ensure_tts_service(lang_code)
-
         logger.info(f"Generating media for phrase '{phrase_model.phrase}'")
 
-        phrase_audio = await self._generate_audio(phrase_model.phrase)
+        phrase_audio = await self._tts_service.synthesize_with_random_voice(
+            text=phrase_model.phrase
+        )
+
         example_audios = [
-            await self._generate_audio(example.sentence)
+            await self._tts_service.synthesize_with_random_voice(example.sentence)
             for example in phrase_model.examples
         ]
 
@@ -195,19 +182,3 @@ class PhraseGenerator:
             phrase_audio=phrase_audio,
             example_audios=example_audios,
         )
-
-    async def _ensure_tts_service(self, lang_code: str) -> None:
-        """Initialise (or re-initialise) the TTS service for *lang_code*."""
-        if self._tts_service is not None and self._tts_service._lang_code == lang_code:
-            return
-
-        if self._tts_service is not None:
-            await self._tts_service.__aexit__(None, None, None)
-
-        svc = GoogleTTSService(language_code=lang_code)
-        await svc.__aenter__()
-        self._tts_service = svc
-
-    async def _generate_audio(self, text: str) -> bytes:
-        assert self._tts_service is not None
-        return await self._tts_service.synthesize_with_random_voice(text)
