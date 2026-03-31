@@ -1,6 +1,13 @@
 import asyncio
 
-from aiohttp import ClientHandlerType, ClientRequest, ClientResponse, ClientSession
+from aiohttp import (
+    ClientHandlerType,
+    ClientRequest,
+    ClientResponse,
+    ClientSession,
+    ClientTimeout,
+    TCPConnector,
+)
 from aiohttp.client_exceptions import ClientError, ServerDisconnectedError
 from loguru import logger
 
@@ -32,7 +39,16 @@ def init_session() -> ClientSession:
 
     if _session is None or _session.closed:
         logger.debug("Initializing client session")
-        _session = ClientSession(raise_for_status=True, middlewares=[retry_middleware])
+        _session = ClientSession(
+            raise_for_status=True,
+            middlewares=[retry_middleware],
+            timeout=ClientTimeout(total=60),
+            connector=TCPConnector(
+                limit=10,
+                limit_per_host=5,
+                enable_cleanup_closed=True,
+            ),
+        )
     return _session
 
 
@@ -47,7 +63,6 @@ async def close_session():
     session = _is_session_alive()
     await session.close()
     logger.debug("client session closed")
-
 
 
 def get_session() -> ClientSession:

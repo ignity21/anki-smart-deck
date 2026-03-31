@@ -1,24 +1,11 @@
 import sys
 
-# import aiohttp
 import click
-
-# import litellm
-# from litellm.llms.custom_httpx.aiohttp_handler import BaseLLMAIOHTTPHandler
 from loguru import logger
 
 from .phrase import phrase
 from .sentence import sentence
 from .word import word
-
-# session = aiohttp.ClientSession(
-#     timeout=aiohttp.ClientTimeout(total=60),
-#     connector=aiohttp.TCPConnector(
-#         limit=10,
-#         limit_per_host=5,
-#         enable_cleanup_closed=True,
-#     ),
-# )
 
 
 @click.group()
@@ -41,5 +28,4 @@ def main():
         level="INFO",
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
     )
-    # litellm.base_llm_aiohttp_handler = BaseLLMAIOHTTPHandler(client_session=session)
     cli()

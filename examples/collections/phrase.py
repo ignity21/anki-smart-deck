@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 import asyncio
 
-from ankinote.services.anki import AnkiConnectClient
 from ankinote.app import Application
-from ankinote.collections.phrase import PhraseCollection, Language
+from ankinote.collections.phrase import PhraseCollection
+from ankinote.consts import Language
+from ankinote.services.anki import AnkiConnectClient
 
 
 async def main():

@@ -19,8 +19,13 @@ from rich.console import Console
 from rich.panel import Panel
 
 from ankinote.app import Application
-from ankinote.collections.word.generator import WordGenerator, WordMediaFiles
-from ankinote.collections.word.models import Language, WordModel
+from ankinote.collections.word.generator import (
+    WordGenerator,
+    WordMediaFiles,
+)
+from ankinote.collections.word.models import WordModel
+from ankinote.consts import Language
+from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 console = Console()
 OUTPUT_DIR = Path("output")
@@ -113,11 +118,15 @@ async def main() -> None:
     )
 
     async with Application():
-        async with WordGenerator(
-            llm_model_id="openai/gpt-5-nano",
-            image_model_id="openai/gpt-image-1-mini",
-            image_size=256,
-        ) as gen:
+        async with GoogleTTSService(
+            language_code=TTS_LANG_CODES[target_lang]
+        ) as tts_service:
+            gen = WordGenerator(
+                tts_service=tts_service,
+                llm_model_id="openai/gpt-5-nano",
+                image_model_id="openai/gpt-image-1-mini",
+                image_size=256,
+            )
             # Step 1: generate text data
             console.print("\n[bold]Step 1:[/bold] Generating word data via LLM…")
             word_models = await gen.generate_word_data(
@@ -136,7 +145,6 @@ async def main() -> None:
                 )
                 media = await gen.generate_media(
                     word_model=word_model,
-                    target_lang=target_lang,
                 )
 
                 # Step 3: save to disk

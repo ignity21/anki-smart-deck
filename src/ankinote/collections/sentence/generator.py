@@ -7,7 +7,7 @@ from typing import cast
 from litellm import acompletion
 from loguru import logger
 
-from ankinote.collections.word.models import Language
+from ankinote.consts import Language
 
 from .models import SentenceModel
 

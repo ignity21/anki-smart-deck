@@ -1,11 +1,13 @@
 import asyncio
 
-from ankinote.utils.httpcli import close_session, init_session
+from ankinote.utils.httpcli import close_session, init_session, get_session
+import litellm
 
 
 class Application:
     def __init__(self):
         init_session()
+        litellm.base_llm_aiohttp_handler = litellm.BaseLLMAIOHTTPHandler(get_session())
 
     async def __aenter__(self):
         return self

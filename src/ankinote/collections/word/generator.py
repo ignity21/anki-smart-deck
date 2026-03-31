@@ -5,31 +5,16 @@ import base64
 import json
 from dataclasses import dataclass, field
 from importlib.resources import files
-from typing import Self, cast
+from typing import cast
 
 from litellm import acompletion, aimage_generation
 from loguru import logger
 
+from ankinote.consts import Language
 from ankinote.services.tts import GoogleTTSService
 from ankinote.utils.img import scale
 
-from .models import Language, WordModel
-
-# ============================================================================
-# Language Mappings
-# ============================================================================
-
-TTS_LANG_CODES: dict[Language, str] = {
-    Language.ENGLISH: "en-US",
-    Language.JAPANESE: "ja-JP",
-    Language.CHINESE_S: "cmn-CN",
-    Language.CHINESE_T: "cmn-TW",
-    Language.FRENCH: "fr-FR",
-    Language.SPANISH: "es-ES",
-    Language.GERMAN: "de-DE",
-    Language.KOREAN: "ko-KR",
-}
-
+from .models import WordModel
 
 # ============================================================================
 # Media Data Structure
@@ -190,6 +175,7 @@ class WordGenerator:
 
     def __init__(
         self,
+        tts_service: GoogleTTSService,
         llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
         image_model_id: str = "gemini/gemini-2.5-flash-image",
         image_size: int = 256,
@@ -197,17 +183,7 @@ class WordGenerator:
         self._llm_model_id = llm_model_id
         self._image_model_id = image_model_id
         self._image_size = image_size
-        self._tts_service: GoogleTTSService | None = None
-
-    async def __aenter__(self) -> Self:
-        # TTS service is language-specific; it is initialised lazily in
-        # generate_media() because the language is not known at construction time.
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        if self._tts_service is not None:
-            await self._tts_service.__aexit__(exc_type, exc_val, exc_tb)
-            self._tts_service = None
+        self._tts_service = tts_service
 
     # ------------------------------------------------------------------
     # Public API
@@ -235,7 +211,6 @@ class WordGenerator:
     async def generate_media(
         self,
         word_model: WordModel,
-        target_lang: Language,
     ) -> WordMediaFiles:
         """Generate all media assets for a WordModel.
 
@@ -247,12 +222,6 @@ class WordGenerator:
             WordMediaFiles with pronunciation audio, example audios, and
             images keyed by definition index.
         """
-        lang_code = TTS_LANG_CODES.get(target_lang)
-        if lang_code is None:
-            raise ValueError(f"No TTS language code for language: {target_lang.value}")
-
-        await self._ensure_tts_service(lang_code)
-
         logger.info(
             f"Generating media for '{word_model.word}' ({word_model.part_of_speech})"
         )
@@ -302,20 +271,7 @@ class WordGenerator:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _ensure_tts_service(self, lang_code: str) -> None:
-        """Initialise (or re-initialise) the TTS service for *lang_code*."""
-        if self._tts_service is not None and self._tts_service._lang_code == lang_code:
-            return  # already ready for the right language
-
-        if self._tts_service is not None:
-            await self._tts_service.__aexit__(None, None, None)
-
-        svc = GoogleTTSService(language_code=lang_code)
-        await svc.__aenter__()
-        self._tts_service = svc
-
     async def _generate_audio(self, text: str) -> bytes:
-        assert self._tts_service is not None
         return await self._tts_service.synthesize_with_random_voice(text)
 
     async def _generate_image(self, word: str, definition: str) -> bytes:

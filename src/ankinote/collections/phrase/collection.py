@@ -7,10 +7,9 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.collections.word.generator import TTS_LANG_CODES
-from ankinote.collections.word.models import Language
+from ankinote.consts import Language
 from ankinote.services.anki import AnkiConnectClient
-from ankinote.services.tts import GoogleTTSService
+from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import PhraseGenerator, PhraseMediaFiles
 from .models import Definition, Example, PhraseModel, PhraseNoteType

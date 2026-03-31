@@ -5,7 +5,8 @@ import click
 from asynciolimiter import StrictLimiter
 
 from ankinote.app import Application
-from ankinote.collections.phrase import Language, PhraseCollection
+from ankinote.collections import PhraseCollection
+from ankinote.consts import Language
 from ankinote.services.anki import AnkiConnectClient
 
 MAX_CONCURRENCY = 10

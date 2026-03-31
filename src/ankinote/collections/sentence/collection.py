@@ -7,10 +7,9 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.collections.word.generator import TTS_LANG_CODES
-from ankinote.collections.word.models import Language
+from ankinote.consts import Language
 from ankinote.services.anki import AnkiConnectClient
-from ankinote.services.tts import GoogleTTSService
+from ankinote.services.tts import GoogleTTSService, TTS_LANG_CODES
 
 from .generator import SentenceGenerator
 from .models import SentenceModel, SentenceNoteType
@@ -185,7 +184,7 @@ class SentenceCollection:
             "native_sentence": sentence_model.native_sentence,
             "pron_audio": f"[sound:{media_refs.pron_audio}]",
             "notes": self._format_notes_html(sentence_model.notes),
-            "grammars": self._format_notes_html(sentence_model.grammars),
+            "grammar": self._format_notes_html(sentence_model.grammar),
             "phrases": self._format_phrases_html(sentence_model.phrases),
             "user_notes": "",
         }

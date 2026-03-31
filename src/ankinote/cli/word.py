@@ -6,7 +6,8 @@ from asynciolimiter import StrictLimiter
 
 from ankinote.app import Application
 from ankinote.cli.phrase import MAX_CONCURRENCY
-from ankinote.collections.word import Language, WordCollection
+from ankinote.collections import WordCollection
+from ankinote.consts import Language
 from ankinote.services.anki import AnkiConnectClient
 
 # -- Shared options -----------------------------------------------------------
@@ -76,8 +77,8 @@ def init(native, target, llm, image_model, image_size):
             collection = make_collection(
                 client, native, target, llm, image_model, image_size
             )
-            await collection.ensure_note_type_exists()
-            await collection.ensure_deck_exists()
+            await collection._ensure_note_type_exists()
+            await collection._ensure_deck_exists()
 
     asyncio.run(_run())
     click.echo("✓ Ready")
@@ -139,7 +140,7 @@ def batch(words, file, native, target, llm, image_model, image_size, rpm):
     if not all_words:
         raise click.UsageError("Provide at least one word via argument or --file.")
 
-    success, failed = 0, []
+    success, failed = [], []
 
     async def _run():
         nonlocal success
@@ -153,11 +154,9 @@ def batch(words, file, native, target, llm, image_model, image_size, rpm):
                 await limiter.wait()  # 主动等待令牌，绝不超速
                 try:
                     await collection.generate_and_add_note(w)
-                    success += 1
-                    click.echo(f"  ✓ {w}")
+                    success.append(w)
                 except Exception as e:
                     failed.append((w, str(e)))
-                    click.echo(f"  ✗ {w}  ({e})", err=True)
 
         async with Application():
             client = AnkiConnectClient()
@@ -171,9 +170,13 @@ def batch(words, file, native, target, llm, image_model, image_size, rpm):
         f"Processing {total} words (concurrency={MAX_CONCURRENCY}, rpm={rpm}) ..."
     )
     asyncio.run(_run())
-    click.echo(
-        f"\n✅ {success}/{total} succeeded"
-        + (f", ❌ {len(failed)} failed" if failed else "")
-    )
-    for w, reason in failed:
-        click.echo(f"   • {w}: {reason}")
+    if len(success) == total:
+        click.echo("✅ All words processed successfully!")
+    else:
+        click.echo(f"\n✅ {len(success)}/{total} succeeded")
+        for s in success:
+            click.echo(f"   • {s}")
+    if failed:
+        click.echo(f"\n❌ {len(failed)} failed")
+    for s, reason in failed:
+        click.echo(f"   • {s}: {reason}")

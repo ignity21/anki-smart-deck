@@ -1,13 +1,16 @@
 """Word collection management for Anki."""
 
 import dataclasses
+import hashlib
 from dataclasses import dataclass
+from typing import Self
 
-import shortuuid
 from loguru import logger
 
-from ankinote.collections.word.models import Definition, Example, WordModel, Language
+from ankinote.collections.word.models import Definition, Example, WordModel
+from ankinote.consts import Language
 from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import WordGenerator, WordMediaFiles
 from .models import WordNoteType
@@ -71,13 +74,26 @@ class WordCollection:
         self._native_language = native_language
         self._target_language = target_language
         self._anki_client = anki_client
+        self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
         self._generator = WordGenerator(
+            tts_service=self._tts_service,
             llm_model_id=llm_model_id,
             image_model_id=image_model_id,
             image_size=image_size,
         )
 
-    async def ensure_note_type_exists(self) -> None:
+    async def __aenter__(self) -> Self:
+        """Async context manager entry: ensure note type and deck exist."""
+        await self._tts_service.__aenter__()
+        await self._ensure_note_type_exists()
+        await self._ensure_deck_exists()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Async context manager exit: clean up TTS service."""
+        await self._tts_service.__aexit__(exc_type, exc_val, exc_tb)
+
+    async def _ensure_note_type_exists(self) -> None:
         """Ensure the note type exists in Anki, create it if it doesn't.
 
         Raises:
@@ -119,7 +135,7 @@ class WordCollection:
             )
             logger.success(f"Created note type: {self.notetype_name}")
 
-    async def ensure_deck_exists(self) -> int:
+    async def _ensure_deck_exists(self) -> int:
         """Ensure the deck exists in Anki, create it if it doesn't.
 
         Returns:
@@ -166,9 +182,7 @@ class WordCollection:
         note_ids = []
         for word_model in word_models:
             # Step 2a: Generate media files
-            media = await self._generator.generate_media(
-                word_model=word_model, target_lang=self._target_language
-            )
+            media = await self._generator.generate_media(word_model=word_model)
 
             # Step 2b: Create card data
             card_data = WordCardData(model=word_model, media=media)
@@ -270,16 +284,17 @@ class WordCollection:
 
         # Generate unique filenames
         word_base = f"{word_model.word}_{word_model.part_of_speech}"
+        word_hash = hashlib.md5(word_base.encode()).hexdigest()[:12]
 
         # Store word audio
-        word_audio_name = f"{word_base}_{shortuuid.uuid()}.mp3"
+        word_audio_name = f"{word_hash}.mp3"
         await self._anki_client.media.store_file(word_audio_name, media.pronunciation)
         logger.debug(f"Stored word audio: {word_audio_name}")
 
         # Store example audios
         example_audio_names = []
         for i, audio in enumerate(media.examples):
-            name = f"{word_base}_ex{i}_{shortuuid.uuid()}.mp3"
+            name = f"{word_hash}_ex{i}.mp3"
             await self._anki_client.media.store_file(name, audio)
             example_audio_names.append(name)
         logger.debug(f"Stored {len(example_audio_names)} example audio(s)")
@@ -287,7 +302,7 @@ class WordCollection:
         # Store images
         image_names = {}
         for def_idx, img in media.images.items():
-            name = f"{word_base}_img{def_idx}_{shortuuid.uuid()}.png"
+            name = f"{word_hash}_img{def_idx}.png"
             await self._anki_client.media.store_file(name, img)
             image_names[def_idx] = name
         logger.debug(f"Stored {len(image_names)} image(s)")

@@ -15,7 +15,7 @@ class SentenceModel(BaseModel):
     target_sentence: str
     native_sentence: str
     notes: list[str] = []
-    grammars: list[str] = []
+    grammar: list[str] = []
     phrases: dict[str, str] = {}
 
 
@@ -27,6 +27,6 @@ class SentenceNoteType:
     native_sentence: str
     pron_audio: str
     notes: str
-    grammars: str
+    grammar: str
     phrases: str
     user_notes: str

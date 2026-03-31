@@ -1,9 +1,8 @@
 """Phrase / idiom / sentence card data models for Anki."""
 
 from dataclasses import dataclass
-from pydantic import BaseModel
 
-from ankinote.collections.word.models import Language
+from pydantic import BaseModel
 
 
 class Definition(BaseModel):

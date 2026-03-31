@@ -11,6 +11,18 @@ from google.cloud.texttospeech import (
 )
 
 from ankinote.config import envs
+from ankinote.consts import Language
+
+TTS_LANG_CODES: dict[Language, str] = {
+    Language.ENGLISH: "en-US",
+    Language.JAPANESE: "ja-JP",
+    Language.CHINESE_S: "cmn-CN",
+    Language.CHINESE_T: "cmn-TW",
+    Language.FRENCH: "fr-FR",
+    Language.SPANISH: "es-ES",
+    Language.GERMAN: "de-DE",
+    Language.KOREAN: "ko-KR",
+}
 
 
 class GoogleTTSService:
