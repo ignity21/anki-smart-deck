@@ -107,6 +107,14 @@ body.nightMode {
   margin-bottom: 0.2em;
 }
 
+.definition {
+  margin-bottom: 0.5em;
+}
+
+.example {
+  margin-bottom: 1em;
+}
+
 .user-notes-container {
   background-color: var(--user-notes-bg);
   border: 0.1em dashed var(--user-notes-title-color);

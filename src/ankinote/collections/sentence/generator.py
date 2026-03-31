@@ -7,9 +7,7 @@ from typing import cast
 from litellm import acompletion
 from loguru import logger
 
-from ankinote.collections.word.generator import TTS_LANG_CODES
 from ankinote.collections.word.models import Language
-from ankinote.services.tts import GoogleTTSService
 
 from .models import SentenceModel
 
@@ -104,7 +102,6 @@ class SentenceGenerator:
         llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
     ) -> None:
         self._llm_model_id = llm_model_id
-        self._tts_service: GoogleTTSService | None = None
 
     async def generate_sentence_data(
         self,
@@ -121,30 +118,3 @@ class SentenceGenerator:
             model_id=self._llm_model_id,
             temperature=temperature,
         )
-
-    async def _ensure_tts_service(self, lang_code: str) -> None:
-        """Initialise (or re-initialise) the TTS service for *lang_code*."""
-        if self._tts_service is not None and self._tts_service._lang_code == lang_code:
-            return
-
-        if self._tts_service is not None:
-            await self._tts_service.__aexit__(None, None, None)
-
-        svc = GoogleTTSService(language_code=lang_code)
-        await svc.__aenter__()
-        self._tts_service = svc
-
-    async def generate_audio(
-        self,
-        text: str,
-        target_lang: Language,
-    ) -> bytes:
-        """Generate audio for the given text in the target language."""
-        lang_code = TTS_LANG_CODES.get(target_lang)
-        if lang_code is None:
-            raise ValueError(f"No TTS language code for language: {target_lang.value}")
-
-        await self._ensure_tts_service(lang_code)
-
-        assert self._tts_service is not None
-        return await self._tts_service.synthesize_with_random_voice(text)

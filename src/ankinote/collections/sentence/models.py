@@ -4,8 +4,6 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from ankinote.collections.word.models import Language
-
 
 class SentenceModel(BaseModel):
     """Structured sentence model for AI generation.
@@ -17,6 +15,8 @@ class SentenceModel(BaseModel):
     target_sentence: str
     native_sentence: str
     notes: list[str] = []
+    grammars: list[str] = []
+    phrases: dict[str, str] = {}
 
 
 @dataclass
@@ -27,4 +27,6 @@ class SentenceNoteType:
     native_sentence: str
     pron_audio: str
     notes: str
+    grammars: str
+    phrases: str
     user_notes: str

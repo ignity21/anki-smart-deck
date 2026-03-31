@@ -113,6 +113,14 @@ body.nightMode {
   margin-bottom: 0.2em;
 }
 
+.definition {
+  margin-bottom: 0.5em;
+}
+
+.example {
+  margin-bottom: 1em;
+}
+
 .examples-container {
   padding-left: 0.5em;
   border-left: 0.3em solid var(--border-color);

@@ -106,7 +106,7 @@ class PhraseCollection:
 
         note_id = await self._add_or_update_note(
             card_data=card_data,
-            tags=tags or [self._target_language.value, "ai-generated", "phrase"],
+            tags=tags or [self._target_language.value, "AI-generated", "Phrase"],
         )
 
         logger.success(f"Completed generation for phrase '{phrase}', note {note_id}")

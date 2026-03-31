@@ -66,9 +66,14 @@ def init(native, target, llm):
     async def _run():
         async with Application():
             client = AnkiConnectClient()
-            collection = make_collection(client, native, target, llm)
-            await collection.ensure_note_type_exists()
-            await collection.ensure_deck_exists()
+            async with SentenceCollection(
+                client,
+                native_language=Language(native),
+                target_language=Language(target),
+                llm_model_id=llm,
+            ) as collection:
+                await collection.ensure_note_type_exists()
+                await collection.ensure_deck_exists()
 
     asyncio.run(_run())
     click.echo("✓ Ready (sentence collection)")
@@ -89,8 +94,13 @@ def add(sentence, native, target, llm):
     async def _run():
         async with Application():
             client = AnkiConnectClient()
-            collection = make_collection(client, native, target, llm)
-            await collection.generate_and_add_note(sentence)
+            async with SentenceCollection(
+                client,
+                native_language=Language(native),
+                target_language=Language(target),
+                llm_model_id=llm,
+            ) as collection:
+                await collection.generate_and_add_note(sentence)
 
     asyncio.run(_run())
     click.echo(f"✓ Added sentence: {sentence}")
@@ -159,8 +169,8 @@ def batch(sentences, file, native, target, llm, rpm):
 
         async with Application():
             client = AnkiConnectClient()
-            collection = make_collection(client, native, target, llm)
-            await asyncio.gather(*[_process(s) for s in all_sentences])
+            async with make_collection(client, native, target, llm) as collection:
+                await asyncio.gather(*[_process(s) for s in all_sentences])
 
     total = len(all_sentences)
     click.echo(

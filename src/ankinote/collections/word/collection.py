@@ -176,7 +176,7 @@ class WordCollection:
             # Step 2c: Add or update note in Anki
             note_id = await self._add_or_update_note(
                 card_data=card_data,
-                tags=tags or [self._target_language.value, "ai-generated"],
+                tags=tags or [self._target_language.value, "AI-generated", "Word"],
             )
             note_ids.append(note_id)
 

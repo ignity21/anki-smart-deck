@@ -1,13 +1,16 @@
 """Sentence collection management for Anki."""
 
 import dataclasses
+import hashlib
 from dataclasses import dataclass
+from typing import Self
 
-import shortuuid
 from loguru import logger
 
+from ankinote.collections.word.generator import TTS_LANG_CODES
 from ankinote.collections.word.models import Language
 from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.tts import GoogleTTSService
 
 from .generator import SentenceGenerator
 from .models import SentenceModel, SentenceNoteType
@@ -48,6 +51,14 @@ class SentenceCollection:
         self._target_language = target_language
         self._anki_client = anki_client
         self._generator = SentenceGenerator(llm_model_id=llm_model_id)
+        self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
+
+    async def __aenter__(self) -> Self:
+        await self._tts_service.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        await self._tts_service.__aexit__(exc_type, exc_val, exc_tb)
 
     async def ensure_note_type_exists(self) -> None:
         """Ensure the note type exists in Anki, create it if it doesn't."""
@@ -99,17 +110,15 @@ class SentenceCollection:
             native_lang=self._native_language,
         )
 
-        audio = await self._generator.generate_audio(
+        audio = await self._tts_service.synthesize_with_random_voice(
             text=sentence_model.target_sentence,
-            target_lang=self._target_language,
         )
 
         card_data = SentenceCardData(model=sentence_model, audio=audio)
 
         note_id = await self._add_or_update_note(
             card_data=card_data,
-            tags=tags
-            or [self._target_language.value, "ai-generated", "sentence"],
+            tags=tags or [self._target_language.value, "AI-generated", "Sentence"],
         )
 
         logger.success(
@@ -125,7 +134,7 @@ class SentenceCollection:
         """Add or update a sentence note in Anki."""
         sentence_model = card_data.model
         logger.info(
-            f"Adding/updating sentence note '{sentence_model.native_sentence}' "
+            f"Adding/updating sentence note '{sentence_model.target_sentence}' "
             f"to {self.deck_name}"
         )
 
@@ -134,7 +143,7 @@ class SentenceCollection:
 
         note_id = await self._anki_client.notes.find(
             deck_name=self.deck_name,
-            unique_fields={"native_sentence": sentence_model.native_sentence},
+            unique_fields={"target_sentence": sentence_model.target_sentence},
         )
 
         if note_id is not None:
@@ -156,9 +165,8 @@ class SentenceCollection:
     async def _store_media_files(self, card_data: SentenceCardData) -> MediaReferences:
         """Store media files in Anki and return their references."""
         sentence_model = card_data.model
-        base = sentence_model.target_sentence.replace(" ", "_")
-
-        audio_name = f"{base}_{shortuuid.uuid()}.mp3"
+        filename = hashlib.md5(sentence_model.target_sentence.encode()).hexdigest()[:12]
+        audio_name = f"{filename}.mp3"
         await self._anki_client.media.store_file(audio_name, card_data.audio)
         logger.debug(f"Stored sentence audio: {audio_name}")
 
@@ -171,10 +179,12 @@ class SentenceCollection:
     ) -> dict[str, str]:
         """Convert SentenceModel and media references to Anki note fields."""
         return {
-            "native_sentence": sentence_model.native_sentence,
             "target_sentence": sentence_model.target_sentence,
+            "native_sentence": sentence_model.native_sentence,
             "pron_audio": f"[sound:{media_refs.pron_audio}]",
             "notes": self._format_notes_html(sentence_model.notes),
+            "grammars": self._format_notes_html(sentence_model.grammars),
+            "phrases": self._format_phrases_html(sentence_model.phrases),
             "user_notes": "",
         }
 
@@ -183,3 +193,15 @@ class SentenceCollection:
         if not notes:
             return ""
         return "<br>".join(f"• {note}" for note in notes)
+
+    def _format_phrases_html(self, phrases: dict[str, str]) -> str:
+        """Format phrases and their example sentences as HTML."""
+        if not phrases:
+            return ""
+        items = []
+        for phrase, example in phrases.items():
+            if example:
+                items.append(f"• <b>{phrase}</b>: {example}")
+            else:
+                items.append(f"• {phrase}")
+        return "<br>".join(items)
