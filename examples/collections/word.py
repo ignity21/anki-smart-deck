@@ -14,8 +14,8 @@ async def main():
             client,
             native_language=Language.CHINESE_S,
             target_language=Language.ENGLISH,
-            llm_model_id="openai/gpt-5-nano",
-            image_model_id="openai/gpt-image-1-mini",
+            llm_model_id="gemini/gemini-3.1-flash-lite-preview",
+            image_model_id="gemini/gemini-2.5-flash-image",
             image_size=128,
         ) as collection:
             await collection.generate_and_add_note("basketball")

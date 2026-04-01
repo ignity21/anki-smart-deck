@@ -10,10 +10,8 @@ from ankinote.utils import img
 
 
 async def main():
-    # model_id = "gemini/gemini-3.1-flash-lite-preview"
-    # image_model_id = "gemini/gemini-2.5-flash-image"
-    model_id = "openai/gpt-5-nano"
-    image_model_id = "openai/gpt-image-1-mini"
+    model_id = "gemini/gemini-3.1-flash-lite-preview"
+    image_model_id = "gemini/gemini-2.5-flash-image"
     image_quality = "low"
     image_size = "1024x1024"
 

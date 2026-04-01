@@ -14,7 +14,7 @@ async def main():
             client,
             native_language=Language.CHINESE_S,
             target_language=Language.ENGLISH,
-            llm_model_id="openai/gpt-5-mini",
+            llm_model_id="gemini/gemini-3.1-flash-lite-preview",
         ) as collection:
             await collection.generate_and_add_note("focus on")
 

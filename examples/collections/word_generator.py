@@ -123,8 +123,8 @@ async def main() -> None:
         ) as tts_service:
             gen = WordGenerator(
                 tts_service=tts_service,
-                llm_model_id="openai/gpt-5-nano",
-                image_model_id="openai/gpt-image-1-mini",
+                llm_model_id="gemini/gemini-3.1-flash-lite-preview",
+                image_model_id="gemini/gemini-2.5-flash-image",
                 image_size=256,
             )
             # Step 1: generate text data
