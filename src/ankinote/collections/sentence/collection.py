@@ -184,7 +184,6 @@ class SentenceCollection:
             "native_sentence": sentence_model.native_sentence,
             "pron_audio": f"[sound:{media_refs.pron_audio}]",
             "notes": self._format_notes_html(sentence_model.notes),
-            "grammar": self._format_notes_html(sentence_model.grammar),
             "phrases": self._format_phrases_html(sentence_model.phrases),
             "user_notes": "",
         }
