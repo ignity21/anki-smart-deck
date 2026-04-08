@@ -1,209 +1,52 @@
-# 日本語語彙カード生成プロンプト
+# Japanese Vocabulary Card Generation
 
-## 出力フォーマット
-1つの品詞につき1つのオブジェクトを返す。  
-同じ単語が名詞＋動詞など複数の品詞を持つ場合は、品詞ごとに別オブジェクトを返す。
-
-出力は **JSON 配列** のみとし、説明文やコメント、Markdown 記法は一切含めないこと。  
-JSON 文字列中では **HTML の `<ruby>` / `<rt>` タグ** を使用して、漢字にふりがなを直接埋め込むこと。
+Return a **JSON array** — one object per part of speech. Output **only** valid JSON, no markdown, no comments.
 
 ```json
 [
   {
-    "word": "string",
-    "part_of_speech": "n.|vt.|vi.|adj.|adv.|prep.|conj.|interj.",
-    "pronunciation": "かな・カナの読み（例: \"ほん\", \"コンピューター\"）または null。ここでは <ruby> は使わず、単純な読みのみを書く。",
-    "syllables": ["sy", "lla", "bles"],
-    "difficulty": "A1|A2|B1|B2|C1|C2",
+    "word": "string (no furigana annotation)",
+    "part_of_speech": "名詞|動詞|形容詞|形容動詞|副詞|助詞|接続詞|感動詞",
+    "pronunciation": "hiragana, e.g. 'たべる', or null",
+    "syllables": ["ta", "be", "ru"],
+    "difficulty": "N5|N4|N3|N2|N1",
     "definitions": [
       {
-        "target_lang": "日本語での定義。漢字すべてに <ruby>漢字<rt>かな</rt></ruby> 形式でふりがなを付ける。",
-        "native_lang": "中国語訳（2～6文字）",
-        "is_visualizable": true
+        "target_lang": "Japanese definition (all kanji annotated, e.g. '食[た]べ物[もの]を口[くち]に入[い]れること')",
+        "native_lang": "Chinese translation (2–6 characters, e.g. '进食' not '将食物放入口中的行为')",
+        "is_visualizable": "true for concrete objects/actions; false for abstract concepts"
       }
     ],
-    "synonyms": ["類義語1", "類義語2"],
+    "synonyms": ["word1 (kanji annotated)", "word2 (kanji annotated)"],
     "examples": [
       {
-        "sentence": "自然な日本語の例文。漢字すべてに <ruby>漢字<rt>かな</rt></ruby> 形式でふりがなを付ける。例: <ruby>彼<rt>かれ</rt></ruby>は<ruby>本<rt>ほん</rt></ruby>を<ruby>読<rt>よ</rt></ruby>む。",
-        "translation": "中国語訳",
-        "highlights": ["ターゲット語またはその活用形を含むコロケーション"]
+        "sentence": "Natural Japanese sentence (all kanji annotated, e.g. '毎日[まいにち]朝[あさ]ご飯[はん]を食[た]べます').",
+        "translation": "Chinese translation.",
+        "highlights": ["collocation or pattern containing the word (kanji annotated)"]
       }
     ],
-    "etymology": "語源（任意、日本語または簡潔な英語）",
-    "collocations": ["代表的なコロケーション1", "代表的なコロケーション2"],
-    "notes": ["学習者に有用な注意点"]
+    "etymology": "Word origin (kanji annotated if applicable), or null",
+    "collocations": ["collocation1 (kanji annotated)", "collocation2 (kanji annotated)"],
+    "notes": ["Important usage notes (all Japanese text with kanji annotated)"]
   }
 ]
 ```
 
-- 配列フィールド（`definitions`, `synonyms`, `examples`, `collocations`, `notes`）に `null` を使ってはいけない。要素がなければ空配列 `[]` を使うこと。
-- `pronunciation` と `etymology` だけは、情報が本当に無い場合に限り `null` を許可する。
+## Rules
 
----
+| Field | Constraint |
+|---|---|
+| `definitions` | 1–4 per POS; never null |
+| `synonyms` | 3–5 true synonyms; words/phrases that can substitute in context; all kanji annotated |
+| `examples` | 2–4 items; each `highlights` item must contain the word or an inflected form; all kanji annotated |
+| `etymology` | Include only if genuinely useful for learning; otherwise `null`; kanji annotated |
+| `collocations` | 0–5 most frequent combinations; `[]` for function words; all kanji annotated |
+| `notes` | 0–3 items; `[]` if nothing notable; all Japanese text with kanji annotated |
 
-## 基本ルール
+## Kanji Annotation Rules
 
-**全体方針**
-- 出力は **有効な JSON 配列** のみ。余計なテキストや説明、コメント、Markdown を付けないこと。
-- すべてのキー名は指定されたものを正確に使用し、追加のキーを勝手に増やさないこと。
-- 同じ単語について、品詞ごとに別オブジェクトを作成する。
-
-**フィールドの意味**
-
-- `word`:
-  - 対象となる日本語の単語。辞書形・一般的な表記を用いる。
-
-- `part_of_speech`:
-  - 品詞情報を英語の略号で記述する。
-  - 例:
-    - 名詞: `"n."`
-    - 他動詞: `"vt."`
-    - 自動詞: `"vi."`
-    - 形容詞: `"adj."`
-    - 副詞: `"adv."`
-    - 助詞・後置詞的用法: `"prep."`
-    - 接続詞: `"conj."`
-    - 間投詞: `"interj."`
-  - 複数の品詞を兼ねる場合は `"n.|vt."` のように `|` で連結する。
-
-- `pronunciation`:
-  - 単語全体の読みを **ひらがなまたはカタカナ** で記述する。
-  - ふりがな形式（漢字[かな]）ではなく、単純な読みのみを書く。
-  - 例: `"本" → "ほん"`, `"コンピューター" → "こんぴゅうたあ"` または `"コンピューター"`。
-
-- `syllables`:
-  - 読みをモーラ程度の発音単位に分割した配列。
-  - 例: `"たべる" → ["た", "べ", "る"]`。
-
-- `difficulty`:
-  - 学習難易度を CEFR 風のレベルで指定する。
-  - `"A1" | "A2" | "B1" | "B2" | "C1" | "C2"` のいずれかを必ず選ぶこと。
-
----
-
-## ふりがなルール（最重要）
-
-日本語の **定義文 (`definitions[].target_lang`)** および **例文 (`examples[].sentence`)** では、すべての漢字にふりがなを付けること。
-
-- 形式: HTML の `<ruby>` / `<rt>` タグを使う  
-  - 例: `<ruby>漢字<rt>かんじ</rt></ruby>`, `<ruby>学生<rt>がくせい</rt></ruby>`, `<ruby>勉強<rt>べんきょう</rt></ruby>する`, `<ruby>国際<rt>こくさい</rt></ruby><ruby>関係<rt>かんけい</rt></ruby>`。
-- 完全にかなだけで書かれた語（例: `これ`, `それ`, `とても`, `ゆっくり`）には **ふりがなを付けない**。
-- 熟語の場合:
-  - `<ruby>図書館<rt>としょかん</rt></ruby>`, `<ruby>経済<rt>けいざい</rt></ruby><ruby>学<rt>がく</rt></ruby>` のように、自然な単位でまとめてよい。
-- これらの `<ruby>` / `<rt>` タグを含む文字列は、**必ず有効な JSON 文字列として正しくエスケープして** 出力すること（ダブルクォートや改行に注意）。
-
-ふりがなを必ず付けるフィールド:
-- `definitions[].target_lang` 内の日本語テキスト
-- `examples[].sentence` 内の日本語テキスト
-
-ふりがなは任意（付けても付けなくてもよい）または不要なフィールド:
-- `synonyms`, `collocations`, `notes`
-  - ここでは、可読性のために必要だと思えば `<ruby>…<rt>…</rt></ruby>` を使ってもよいが、必須ではない。
-- `pronunciation` には決して `<ruby>` / `<rt>` タグを使わないこと（かなのみ）。
-
----
-
-## 定義（definitions）
-
-各品詞オブジェクトにつき **1～4 個** の定義を作成する。
-
-- `target_lang`（日本語定義）:
-  - 日本語で簡潔かつ明確に意味を説明する。
-  - 学習者向けに、可能な限り平易でよく使われる語彙と文法を用いる。
-  - 含まれるすべての漢字に `漢字[かな]` 形式のふりがなを付ける。
-  - 例:
-    - `ある物事[ものごと]に対[たい]して強[つよ]い興味[きょうみ]や関心[かんしん]を持[も]つこと` など。
-
-- `native_lang`（母語訳: 中国語）:
-  - 中国語（簡体字）で、**2～6 文字程度** の簡潔な訳語を与える。
-  - 例: `"书籍"`, `"感觉"`, `"学习"`, `"约定"` など。
-  - 「一本印刷或电子的出版物」のような長い説明文は避ける。
-
-- `is_visualizable`:
-  - 心の中で具体的なイメージを描きやすいかどうか。
-  - 具体的な物や行動: `true`（例: `猫`, `机`, `走[はし]る`）。
-  - 抽象的な概念: `false`（例: `自由`, `哲学`, `責任`）。
-
----
-
-## 類義語（synonyms）
-
-- 各品詞オブジェクトにつき、**できるだけ 3～5 個** の類義語を挙げる。
-- 条件:
-  - 日本語の単語または定型的な語句。
-  - 少なくともある程度の文脈で **置き換え可能な意味** を持つ真の類義語とする。
-  - 単なる関連語や連想語にとどまる語は避ける。
-- `synonyms` が見つからない場合は、空配列 `[]` を使う。
-
----
-
-## 例文（examples）
-
-各品詞オブジェクトにつき **2～4 個** の例文を作成する。
-
-- `sentence`（日本語文）:
-  - 自然で現代的な日本語文を作る。
-  - ターゲットとなる単語、またはそのよく使われる活用形を必ず含める。
-  - 文中のすべての漢字に `漢字[かな]` 形式でふりがなを付ける。
-  - 例:
-    - `毎朝[まいあさ]新聞[しんぶん]を読[よ]む。`
-    - `新[あたら]しい単語[たんご]を覚[おぼ]えるのは大変[たいへん]だ。`
-
-- `translation`（中国語訳）:
-  - 文全体の自然な中国語訳を書く。
-
-- `highlights`:
-  - 各要素は、ターゲット単語またはその活用形を含む **コロケーションや慣用的なまとまり** とする。
-  - 例: ターゲット語が `読[よ]む` の場合
-    - `["本[ほん]を読[よ]む", "新聞[しんぶん]を読[よ]む"]`
-  - ハイライトすべきものが特に無ければ空配列 `[]` を使う。
-
----
-
-## 語源（etymology）
-
-- 任意フィールド。あれば学習者に有益な範囲で記述する。
-- 内容例:
-  - 漢語由来か和語由来か。
-  - 他の日本語表現から派生したこと。
-  - 外来語の場合、元の言語（例: 英語）と、元の綴り・意味。
-- 言語は **日本語** か **簡潔な英語** のどちらでもよい。
-- 特に有益な情報がなければ `null` を設定する。
-
----
-
-## コロケーション（collocations）
-
-- その単語とよく一緒に使われる自然な日本語の組み合わせを **0～5 個** 挙げる。
-- 例:
-  - `約束[やくそく]を守[まも]る`
-  - `本[ほん]を読[よ]む`
-  - `責任[せきにん]を取[と]る`
-- 有用なコロケーションが特に思いつかない場合は空配列 `[]` を使う（`null` は使わない）。
-
----
-
-## ノート（notes）
-
-- 学習者にとって本当に有益な情報のみを含める。
-- 記述例:
-  - 活用や不規則変化に関する注意。
-  - 学習者がよく犯す誤用。
-  - 似た語の使い分け（丁寧さ・文体の違いなど）。
-  - 漢字表記と仮名表記の使い分け、常用漢字かどうか等。
-- 特に書くべきことがなければ、空配列 `[]` を使う。
-
----
-
-## 出力要件まとめ
-
-- 出力は **JSON 配列 `[...]` のみ**。それ以外のテキストや説明、コメントは禁止。
-- 各オブジェクトは、同じ `word` の **1 品詞分** の情報を表す。
-- すべての配列フィールドは、必要に応じて空配列 `[]` を使い、`null` を使わない。
-- 言語ごとのルール:
-  - `definitions[].target_lang`: 日本語。すべての漢字に `漢字[かな]` 形式のふりがなを付ける。
-  - `definitions[].native_lang`: 中国語（2～6 文字）。ふりがな不要。
-  - `examples[].sentence`: 日本語。すべての漢字に `漢字[かな]` 形式のふりがなを付ける。
-  - `examples[].translation`: 中国語。ふりがな不要。
-  - `synonyms`, `collocations`, `notes`: 日本語。必要に応じて `漢字[かな]` を使ってよいが必須ではない。
+- **All kanji must be annotated** with hiragana readings in square brackets immediately after the kanji
+- Format: `漢字[かんじ]`
+- For compound words with multiple kanji, annotate each morpheme separately: `食[た]べ物[もの]`
+- Okurigana (trailing kana) should appear outside the brackets: `食[た]べる`
+- Apply this to ALL fields containing Japanese text: word, definitions, examples, collocations, notes, etc.

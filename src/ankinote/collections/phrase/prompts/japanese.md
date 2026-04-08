@@ -1,64 +1,42 @@
-# 日本語 フレーズ / 慣用句 カード生成
+# Japanese Phrase / Idiom Card Generation
 
-## 出力形式
-
-1つの JSON オブジェクトを返すこと。
+Generate **one** JSON object for the given phrase. Output **only** valid JSON — no markdown, no comments, no extra keys.
 
 ```json
 {
-  "phrase": "string",
+  "phrase": "string (no furigana annotation e.g. '一石二鳥')",
   "difficulty": "N5|N4|N3|N2|N1",
   "definitions": [
     {
-      "target_lang": "日本語での意味説明",
-      "native_lang": "学習者の母語での訳",
+      "target_lang": "Japanese explanation (all kanji annotated)",
+      "native_lang": "Chinese translation"
     }
   ],
   "examples": [
     {
-      "sentence": "自然な日本語の文。",
-      "translation": "母語での翻訳。",
-      "highlight": "文中に現れるフレーズ部分"
+      "sentence": "Natural Japanese sentence containing the phrase (all kanji annotated).",
+      "translation": "Chinese translation.",
+      "highlight": "Exact surface form of the phrase as it appears in sentence (kanji annotated)"
     }
   ],
-  "notes": ["レジスターや使用場面、よくある誤用など"]
+  "notes": ["Register, common mistakes, grammatical constraints (all Japanese text with kanji annotated) — omit if nothing important"],
+  "associations": ["Related or contrastive phrases (all kanji annotated), one per item"]
 }
 ```
 
-- 配列フィールド（`definitions`, `examples`, `notes`）に `null` を使わないこと。
-- 重要な注意点がなければ `notes` は空配列でもよい。
-- 有効な JSON オブジェクトのみを返し、マークダウンやコメントは禁止。
+## Rules
 
-## 基本ルール
+| Field | Constraint |
+|---|---|
+| `definitions` | 1–3 items; never null or empty; all Japanese text with kanji annotated |
+| `examples` | 2–4 items; `highlight` must match the exact casing/inflection in `sentence`; all kanji annotated |
+| `notes` | 0–3 items; use `[]` if nothing noteworthy; all Japanese text with kanji annotated |
+| `associations` | 0–5 items; near-synonyms, contrastive pairs, or common alternatives; all kanji annotated |
 
-**フレーズの種類:**
-- `"phrase"` には以下のようなものを含めてよい:
-  - 慣用句・ことわざ（「焼け石に水」など）
-  - 複数語からなる定型表現（「お世話になっております」など）
-  - よく使われる文型・例文（「〜してもよろしいですか」など）
+## Kanji Annotation Rules
 
-**難易度:**
-- JLPT レベル（N5〜N1）を目安に選ぶ。
-
-**定義（1〜3 個）:**
-- `target_lang`: 自然で明確な日本語での意味説明。
-- `native_lang`: 学習者の母語での簡潔な訳。
-
-**用例（2〜4 個）:**
-- 自然で現代的な日本語文。
-- 各 `sentence` には必ずフレーズ（または表層上ほぼ同じ形）が含まれること。
-- `highlight`:
-  - 文中に現れるフレーズ部分そのものを文字列で入れる。
-  - 大文字小文字や活用形など、`sentence` 内と同じ表記を使う。
-  - 同じフレーズが複数回出る場合、学習上重要な箇所を 1 つ選ぶ。
-
-**注釈（0〜5 個）:**
-- レジスター（敬語 / カジュアル / ビジネスなど）。
-- 典型的な使用場面。
-- 文法的な制約やよくある誤用。
-
-## 出力要件
-
-- JSON オブジェクト一つだけを返す（配列ではない）。
-- `PhraseModel` のスキーマに厳密に従うこと。
-- 発音・IPA・画像など、ここで指定していない追加情報は含めない。
+- **All kanji must be annotated** with hiragana readings in square brackets immediately after the kanji
+- Format: `漢字[かんじ]`
+- For compound words with multiple kanji, annotate each morpheme separately: `一石[いっせき]二鳥[にちょう]`
+- For phrases with okurigana: `立[た]ち上[あ]がる`
+- Apply this to ALL fields containing Japanese text: phrase, definitions, examples, highlights, notes, associations
