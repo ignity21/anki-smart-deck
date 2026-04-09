@@ -8,9 +8,10 @@ from typing import Self
 from loguru import logger
 
 from ankinote.collections.word.models import Definition, Example, WordModel
-from ankinote.consts import Language
+from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
+from ankinote.utils.ruby import convert_to_ruby_annotation
 
 from .generator import WordGenerator, WordMediaFiles
 from .models import WordNoteType
@@ -81,6 +82,10 @@ class WordCollection:
             image_model_id=image_model_id,
             image_size=image_size,
         )
+        if target_language in RUBY_ANNOTATION_LANGUAGES:
+            self._convert_target_lang_text = convert_to_ruby_annotation
+        else:
+            self._convert_target_lang_text = lambda x: x  # No conversion needed
 
     async def __aenter__(self) -> Self:
         """Async context manager entry: ensure note type and deck exist."""
@@ -341,7 +346,8 @@ class WordCollection:
             "examples": self._format_examples_html(
                 word_model.examples, media_refs.example_audios
             ),
-            "etymology": word_model.etymology or "",
+            "etymology": self._convert_target_lang_text(word_model.etymology or ""),
+            "collocations": self._format_collocations_html(word_model.collocations),
             "notes": self._format_notes_html(word_model.notes),
             "user_notes": "",  # Empty by default, user can fill in
         }
@@ -362,10 +368,12 @@ class WordCollection:
             if img_name:
                 img_html = f"<div class='definition-image'><img src='{img_name}'></div>"
 
+            target_lang = self._convert_target_lang_text(definition.target_lang)
+
             html_parts.append(
                 f"<div class='definition'>"
                 f"<strong>{idx + 1}.</strong> "
-                f"{definition.target_lang} "
+                f"{target_lang} "
                 f"<span class='translation'>({definition.native_lang})</span>"
                 f"{img_html}"
                 f"</div>"
@@ -376,7 +384,11 @@ class WordCollection:
         """Format synonyms as HTML."""
         if not synonyms:
             return ""
-        return ", ".join(f"<span class='synonym'>{s}</span>" for s in synonyms)
+        formatted = [
+            f"<span class='synonym'>{self._convert_target_lang_text(s)}</span>"
+            for s in synonyms
+        ]
+        return ", ".join(formatted)
 
     def _format_examples_html(
         self, examples: list[Example], audio_refs: list[str]
@@ -384,11 +396,14 @@ class WordCollection:
         """Format examples with audio as HTML."""
         html_parts = []
         for example, audio_ref in zip(examples, audio_refs):
-            # Highlight important phrases if specified
             sentence = example.sentence
+            # Highlight important phrases if specified
             if example.highlights:
                 for phrase in example.highlights:
+                    # Convert the phrase to ruby format for matching
+
                     sentence = sentence.replace(phrase, f"<strong>{phrase}</strong>")
+            sentence = self._convert_target_lang_text(sentence)
 
             html_parts.append(
                 f"<div class='example'>"
@@ -400,11 +415,22 @@ class WordCollection:
             )
         return "\n".join(html_parts)
 
+    def _format_collocations_html(self, collocations: list[str]) -> str:
+        """Format collocations as HTML."""
+        if not collocations:
+            return ""
+        formatted = [
+            f"<span class='collocation'>{self._convert_target_lang_text(c)}</span>"
+            for c in collocations
+        ]
+        return ", ".join(formatted)
+
     def _format_notes_html(self, notes: list[str]) -> str:
         """Format notes as HTML."""
         if not notes:
             return ""
-        return "<br>".join(f"• {note}" for note in notes)
+        formatted = [f"• {self._convert_target_lang_text(note)}" for note in notes]
+        return "<br>".join(formatted)
 
     def _format_images_html(self, image_refs: list[str]) -> str:
         """Format image references as HTML."""

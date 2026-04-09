@@ -13,3 +13,11 @@ class Language(StrEnum):
     GERMAN = "German"
     KOREAN = "Korean"
     OTHER = "other"
+
+
+RUBY_ANNOTATION_LANGUAGES = {
+    Language.JAPANESE,
+    Language.CHINESE_S,
+    Language.CHINESE_T,
+    Language.KOREAN,
+}
