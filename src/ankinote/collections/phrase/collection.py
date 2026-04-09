@@ -7,9 +7,10 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.consts import Language
+from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
+from ankinote.utils.ruby import convert_to_ruby_annotation
 
 from .generator import PhraseGenerator, PhraseMediaFiles
 from .models import Definition, Example, PhraseModel, PhraseNoteType
@@ -53,6 +54,10 @@ class PhraseCollection:
         self._anki_client = anki_client
         self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
         self._generator = PhraseGenerator(self._tts_service, llm_model_id=llm_model_id)
+        if target_language in RUBY_ANNOTATION_LANGUAGES:
+            self._convert_target_lang_text = convert_to_ruby_annotation
+        else:
+            self._convert_target_lang_text = lambda x: x  # No conversion needed
 
     async def __aenter__(self) -> Self:
         """Async context manager entry: ensure note type and deck exist."""
@@ -206,10 +211,11 @@ class PhraseCollection:
         """Format definitions as HTML."""
         html_parts: list[str] = []
         for idx, definition in enumerate(definitions):
+            target_lang = self._convert_target_lang_text(definition.target_lang)
             html_parts.append(
                 f"<div class='definition'>"
                 f"<strong>{idx + 1}.</strong> "
-                f"{definition.target_lang} "
+                f"{target_lang} "
                 f"<span class='translation'>({definition.native_lang})</span>"
                 f"</div>"
             )
@@ -223,11 +229,12 @@ class PhraseCollection:
         """Format examples with audio as HTML."""
         html_parts: list[str] = []
         for example, audio_ref in zip(examples, audio_refs):
-            sentence = example.sentence
+            sentence = self._convert_target_lang_text(example.sentence)
             if example.highlight:
+                ruby_highlight = self._convert_target_lang_text(example.highlight)
                 sentence = sentence.replace(
-                    example.highlight,
-                    f"<strong>{example.highlight}</strong>",
+                    ruby_highlight,
+                    f"<strong>{ruby_highlight}</strong>",
                 )
 
             html_parts.append(
@@ -244,10 +251,14 @@ class PhraseCollection:
         """Format notes as HTML."""
         if not notes:
             return ""
-        return "<br>".join(f"• {note}" for note in notes)
+        formatted = [f"• {self._convert_target_lang_text(note)}" for note in notes]
+        return "<br>".join(formatted)
 
     def _format_associations_html(self, associations: list[str]) -> str:
         """Format associations (related phrases) as HTML."""
         if not associations:
             return ""
-        return "<br>".join(f"• {assoc}" for assoc in associations)
+        formatted = [
+            f"• {self._convert_target_lang_text(assoc)}" for assoc in associations
+        ]
+        return "<br>".join(formatted)

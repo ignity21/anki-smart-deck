@@ -17,6 +17,7 @@ def _load_prompt_template(target_language: Language) -> str:
 
     language_to_filename: dict[Language, str] = {
         Language.ENGLISH: "english_us.md",
+        Language.JAPANESE: "japanese.md",
     }
 
     filename = language_to_filename.get(target_language)

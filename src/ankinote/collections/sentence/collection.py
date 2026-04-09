@@ -7,9 +7,10 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.consts import Language
+from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.services.tts import GoogleTTSService, TTS_LANG_CODES
+from ankinote.utils.ruby import convert_to_ruby_annotation
 
 from .generator import SentenceGenerator
 from .models import SentenceModel, SentenceNoteType
@@ -51,6 +52,10 @@ class SentenceCollection:
         self._anki_client = anki_client
         self._generator = SentenceGenerator(llm_model_id=llm_model_id)
         self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
+        if target_language in RUBY_ANNOTATION_LANGUAGES:
+            self._convert_target_lang_text = convert_to_ruby_annotation
+        else:
+            self._convert_target_lang_text = lambda x: x  # No conversion needed
 
     async def __aenter__(self) -> Self:
         await self._tts_service.__aenter__()
@@ -180,7 +185,9 @@ class SentenceCollection:
     ) -> dict[str, str]:
         """Convert SentenceModel and media references to Anki note fields."""
         return {
-            "target_sentence": sentence_model.target_sentence,
+            "target_sentence": self._convert_target_lang_text(
+                sentence_model.target_sentence
+            ),
             "native_sentence": sentence_model.native_sentence,
             "pron_audio": f"[sound:{media_refs.pron_audio}]",
             "notes": self._format_notes_html(sentence_model.notes),
@@ -192,7 +199,8 @@ class SentenceCollection:
         """Format notes as HTML."""
         if not notes:
             return ""
-        return "<br>".join(f"• {note}" for note in notes)
+        formatted = [f"• {self._convert_target_lang_text(note)}" for note in notes]
+        return "<br>".join(formatted)
 
     def _format_phrases_html(self, phrases: dict[str, str]) -> str:
         """Format phrases and their example sentences as HTML."""
@@ -200,8 +208,10 @@ class SentenceCollection:
             return ""
         items = []
         for phrase, example in phrases.items():
+            phrase_ruby = self._convert_target_lang_text(phrase)
             if example:
-                items.append(f"• <b>{phrase}</b>: {example}")
+                example_ruby = self._convert_target_lang_text(example)
+                items.append(f"• <b>{phrase_ruby}</b>: {example_ruby}")
             else:
-                items.append(f"• {phrase}")
+                items.append(f"• {phrase_ruby}")
         return "<br>".join(items)
