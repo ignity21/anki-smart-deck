@@ -7,8 +7,8 @@ from typing import cast
 from litellm import acompletion
 from loguru import logger
 
-from ankinote.collections.common import create_prompt_loader
-from ankinote.consts import Language
+from ankinote.collections.common import create_prompt_loader, strip_phonetic_annotations
+from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.tts import GoogleTTSService
 
 from .models import PhraseModel
@@ -141,6 +141,7 @@ class PhraseGenerator:
     async def generate_media(
         self,
         phrase_model: PhraseModel,
+        target_lang: Language,
     ) -> PhraseMediaFiles:
         """Generate all audio assets for a PhraseModel.
 
@@ -156,11 +157,13 @@ class PhraseGenerator:
         phrase_audio = await self._tts_service.synthesize_with_random_voice(
             text=phrase_model.phrase
         )
-
-        example_audios = [
-            await self._tts_service.synthesize_with_random_voice(example.sentence)
-            for example in phrase_model.examples
-        ]
+        example_audios = []
+        for example in phrase_model.examples:
+            if target_lang in RUBY_ANNOTATION_LANGUAGES:
+                sentence = strip_phonetic_annotations(example.sentence)
+            else:
+                sentence = example.sentence
+            example_audios.append(sentence)
 
         logger.success(
             f"Media ready for '{phrase_model.phrase}': "

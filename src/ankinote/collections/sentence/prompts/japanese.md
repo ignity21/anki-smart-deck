@@ -4,7 +4,7 @@ Generate one JSON object describing a bilingual sentence pair. The *input* you r
 ```json
 {
   "target_sentence": "Japanese sentence exactly or very close to the input (per-character furigana, e.g. '今[きょ]日[う]は天[てん]気[き]がいいですね').",
-  "native_sentence": "Chinese translation conveying the same meaning.",
+  "native_sentence": "user's native language translation conveying the same meaning.",
   "notes": ["Optional important usage notes about the target sentence (all Japanese text with per-character furigana)."],
   "phrases": {
     "useful Japanese phrase or collocation (per-character furigana)": "simple example sentence in Japanese (per-character furigana)"
@@ -14,8 +14,8 @@ Generate one JSON object describing a bilingual sentence pair. The *input* you r
 
 ## Field Rules
 - `target_sentence` — keep exactly as provided; minor spelling/kana fixes are allowed, but do not "correct" colloquial or dialectal forms (e.g. contracted forms like `〜ちゃう`, `〜てる`) — preserve them and note them in `notes` instead; per-character furigana
-- `native_sentence` — faithful, natural translation in Chinese
-- `notes` — short, worthy-of-attention observations in Chinese only (can be empty `[]`). Cover nuance, register, common pitfalls, context, and any JLPT N3+ grammar points present in the sentence. If a non-standard structure is grammatically incorrect but very common in spoken Japanese, acknowledge both — note that it is non-standard, explain the correct form, and explicitly state that it is common in spoken Japanese. All quoted Japanese text must have per-character furigana.
+- `native_sentence` — faithful, natural translation in user's native language.
+- `notes` — short, worthy-of-attention observations in user's native languag only (can be empty `[]`). Cover nuance, register, common pitfalls, context, and any JLPT N3+ grammar points present in the sentence. If a non-standard structure is grammatically incorrect but very common in spoken Japanese, acknowledge both — note that it is non-standard, explain the correct form, and explicitly state that it is common in spoken Japanese. All quoted Japanese text must have per-character furigana.
 - `phrases` — useful expressions or collocations extracted from the sentence; key = Japanese phrase (per-character furigana), value = one simple Japanese example sentence (per-character furigana); can be empty `{}`
 
 ## General Guidelines

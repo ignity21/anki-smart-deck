@@ -145,6 +145,7 @@ async def main() -> None:
                 )
                 media = await gen.generate_media(
                     word_model=word_model,
+                    target_lang=target_lang,
                 )
 
                 # Step 3: save to disk

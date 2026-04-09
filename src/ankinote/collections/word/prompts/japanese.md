@@ -1,55 +1,44 @@
 # Japanese Vocabulary Card Generation
+Return **only** valid JSON, no markdown, no comments.
 
-Return a **JSON array** — one object per part of speech. Output **only** valid JSON, no markdown, no comments.
+## CRITICAL: Furigana Format (Strict 1-to-1 Mapping)
+You MUST map the reading to **EACH KANJI INDIVIDUALLY**. Never group multiple kanji together. Break down compound words character by character.
+
+**Format Rule:** `<Kanji:reading>`
+- ✅ Correct: `<商:しょう><売:ばい><繁:はん><盛:じょう>` (Each kanji has its own block)
+- ✅ Correct: `<縁:えん><起:ぎ><物:もの>`
+- ❌ WRONG: `<商売繁盛:しょうばいはんじょう>` (Do NOT group kanji)
+- ❌ WRONG: `<縁起物:えんぎもの>` (Do NOT group kanji)
+
+For words with okurigana, leave the hiragana outside the blocks:
+- ✅ Correct: `<食:た>べる`
+- ✅ Correct: `<美:うつく>しい`
 
 ```json
 [
   {
-    "word": "string (no furigana annotation)",
+    "word": "string (no furigana)",
     "part_of_speech": "名詞|動詞|形容詞|形容動詞|副詞|助詞|接続詞|感動詞",
-    "pronunciation": "hiragana, e.g. 'たべる', or null",
+    "pronunciation": "hiragana or null",
     "syllables": ["ta", "be", "ru"],
     "difficulty": "N5|N4|N3|N2|N1",
     "definitions": [
       {
-        "target_lang": "Japanese definition (per-character furigana, e.g. '食[た]べ物[もの]を口[くち]に入[い]れること')",
-        "native_lang": "Chinese translation (2–6 characters, e.g. '进食' not '将食物放入口中的行为')",
-        "is_visualizable": "true for concrete objects/actions; false for abstract concepts"
+        "target_lang": "Japanese definition using <Kanji:reading> format strictly.",
+        "native_lang": "Brief translation in user's native language",
+        "is_visualizable": true|false
       }
     ],
-    "synonyms": ["word1 (per-character furigana)", "word2 (per-character furigana)"],
+    "synonyms": ["<word:reading>1", "<word:reading>2"],
     "examples": [
       {
-        "sentence": "Natural Japanese sentence (per-character furigana, e.g. '毎[まい]日[にち]朝[あさ]ご飯[はん]を食[た]べます').",
-        "translation": "Chinese translation.",
-        "highlights": ["collocation or pattern containing the word (per-character furigana)"]
+        "sentence": "Japanese sentence with <Kanji:reading> applied to EVERY kanji.",
+        "translation": "Translation.",
+        "highlights": ["pattern with <Kanji:reading>"]
       }
     ],
-    "etymology": "Word origin (per-character furigana if applicable), or null",
-    "collocations": ["collocation1 (per-character furigana)", "collocation2 (per-character furigana)"],
-    "notes": ["Important usage notes (all Japanese text with per-character furigana)"]
+    "etymology": "Memory aid in native language, or null",
+    "collocations": ["collocation1 with <Kanji:reading>"],
+    "notes": ["usage notes in native language"]
   }
 ]
-```
-
-## Rules
-
-| Field | Constraint |
-|---|---|
-| `definitions` | 1–4 per POS; never null |
-| `synonyms` | 3–5 true synonyms; words/phrases that can substitute in context; per-character furigana |
-| `examples` | 2–4 items; each `highlights` item must contain the word or an inflected form; per-character furigana |
-| `etymology` | Include only if genuinely useful for learning; otherwise `null`; per-character furigana |
-| `collocations` | 0–5 most frequent combinations; `[]` for function words; per-character furigana |
-| `notes` | 0–3 items; `[]` if nothing notable; all Japanese text with per-character furigana |
-
-## Per-Character Furigana Annotation Rules
-
-- **Each kanji must be annotated individually** with its reading in square brackets immediately after it
-- Format: `漢[かん]字[じ]` (NOT `漢字[かんじ]`)
-- For compound words, annotate each kanji separately: `食[しょく]事[じ]`, `学[がっ]校[こう]`, `天[てん]気[き]`
-- Okurigana (trailing kana) should appear outside the brackets: `食[た]べる`, `美[うつく]しい`
-- Single kanji words: `本[ほん]`, `人[ひと]`
-- Mixed kanji-kana words: `食[た]べ物[もの]` (each kanji individually annotated)
-- Apply this to ALL fields containing Japanese text: definitions, examples, collocations, notes, synonyms, etymology
-- The `word` field should NOT have furigana annotation

@@ -9,13 +9,13 @@ Generate **one** JSON object for the given phrase. Output **only** valid JSON â€
   "definitions": [
     {
       "target_lang": "Japanese explanation (per-character furigana)",
-      "native_lang": "Chinese translation"
+      "native_lang": "Translation in user's native language"
     }
   ],
   "examples": [
     {
       "sentence": "Natural Japanese sentence containing the phrase (per-character furigana).",
-      "translation": "Chinese translation.",
+      "translation": "Native language translation.",
       "highlight": "Exact surface form of the phrase as it appears in sentence (per-character furigana)"
     }
   ],

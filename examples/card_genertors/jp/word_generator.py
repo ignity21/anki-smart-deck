@@ -105,8 +105,8 @@ def save_media(word: str, pos: str, media: WordMediaFiles) -> None:
 
 
 async def main() -> None:
-    # word = "招き猫"
-    word = "準備"
+    word = "招き猫"
+    # word = "準備"
     native_lang = Language.CHINESE_S
     target_lang = Language.JAPANESE
 
@@ -146,6 +146,7 @@ async def main() -> None:
                 )
                 media = await gen.generate_media(
                     word_model=word_model,
+                    target_lang=target_lang,
                 )
 
                 # Step 3: save to disk

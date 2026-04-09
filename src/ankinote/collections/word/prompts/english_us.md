@@ -13,7 +13,7 @@ Return a **JSON array** — one object per part of speech. Output **only** valid
     "definitions": [
       {
         "target_lang": "English definition",
-        "native_lang": "Translation (Chinese: 2–6 chars, e.g. '书籍' not '一本印刷或电子的出版物')",
+        "native_lang": "Simple translation in native language (Chinese for e.g. '书籍' not '一本印刷或电子的出版物')",
         "is_visualizable": "true for concrete objects/actions; false for abstract concepts"
       }
     ],

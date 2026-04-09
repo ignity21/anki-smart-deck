@@ -7,7 +7,7 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.collections.common import convert_to_ruby_annotation
+from ankinote.collections.common import convert_to_html_ruby
 from ankinote.collections.word.models import Definition, Example, WordModel
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.anki import AnkiConnectClient
@@ -83,7 +83,7 @@ class WordCollection:
             image_size=image_size,
         )
         if target_language in RUBY_ANNOTATION_LANGUAGES:
-            self._convert_target_lang_text = convert_to_ruby_annotation
+            self._convert_target_lang_text = convert_to_html_ruby
         else:
             self._convert_target_lang_text = lambda x: x  # No conversion needed
 
@@ -187,7 +187,9 @@ class WordCollection:
         note_ids = []
         for word_model in word_models:
             # Step 2a: Generate media files
-            media = await self._generator.generate_media(word_model=word_model)
+            media = await self._generator.generate_media(
+                word_model=word_model, target_lang=self._target_language
+            )
 
             # Step 2b: Create card data
             card_data = WordCardData(model=word_model, media=media)

@@ -10,10 +10,11 @@ from typing import cast
 from litellm import acompletion, aimage_generation
 from loguru import logger
 
-from ankinote.collections.common import create_prompt_loader
-from ankinote.consts import Language
+from ankinote.collections.common import create_prompt_loader, strip_phonetic_annotations
+from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.tts import GoogleTTSService
 from ankinote.utils.img import scale
+from pydantic_core.core_schema import tagged_union_schema
 
 from .models import WordModel
 
@@ -153,7 +154,7 @@ class WordGenerator:
 
         async with WordGenerator() as gen:
             models = await gen.generate_word_data(word, target, native)
-            media  = await gen.generate_media(models[0])
+            media  = await gen.generate_media(models[0], target)
     """
 
     def __init__(
@@ -194,6 +195,7 @@ class WordGenerator:
     async def generate_media(
         self,
         word_model: WordModel,
+        target_lang: Language,
     ) -> WordMediaFiles:
         """Generate all media assets for a WordModel.
 
@@ -209,11 +211,11 @@ class WordGenerator:
             f"Generating media for '{word_model.word}' ({word_model.part_of_speech})"
         )
 
-        pronunciation = await self._generate_audio(word_model.word)
+        pronunciation = await self._generate_audio(word_model.word, target_lang)
 
         async with asyncio.TaskGroup() as tg:
             example_tasks = [
-                tg.create_task(self._generate_audio(example.sentence))
+                tg.create_task(self._generate_audio(example.sentence, target_lang))
                 for example in word_model.examples
             ]
             image_tasks = {
@@ -254,7 +256,9 @@ class WordGenerator:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _generate_audio(self, text: str) -> bytes:
+    async def _generate_audio(self, text: str, target_lang: Language) -> bytes:
+        if target_lang in RUBY_ANNOTATION_LANGUAGES:
+            text = strip_phonetic_annotations(text)
         return await self._tts_service.synthesize_with_random_voice(text)
 
     async def _generate_image(self, word: str, definition: str) -> bytes:

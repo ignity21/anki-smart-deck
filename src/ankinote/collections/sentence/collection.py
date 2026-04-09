@@ -7,7 +7,7 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.collections.common import convert_to_ruby_annotation
+from ankinote.collections.common import convert_to_html_ruby
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
@@ -53,7 +53,7 @@ class SentenceCollection:
         self._generator = SentenceGenerator(llm_model_id=llm_model_id)
         self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
         if target_language in RUBY_ANNOTATION_LANGUAGES:
-            self._convert_target_lang_text = convert_to_ruby_annotation
+            self._convert_target_lang_text = convert_to_html_ruby
         else:
             self._convert_target_lang_text = lambda x: x  # No conversion needed
 

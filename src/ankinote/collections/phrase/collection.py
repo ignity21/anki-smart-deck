@@ -7,7 +7,7 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.collections.common import convert_to_ruby_annotation
+from ankinote.collections.common import convert_to_html_ruby
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
@@ -55,7 +55,7 @@ class PhraseCollection:
         self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
         self._generator = PhraseGenerator(self._tts_service, llm_model_id=llm_model_id)
         if target_language in RUBY_ANNOTATION_LANGUAGES:
-            self._convert_target_lang_text = convert_to_ruby_annotation
+            self._convert_target_lang_text = convert_to_html_ruby
         else:
             self._convert_target_lang_text = lambda x: x  # No conversion needed
 
@@ -118,6 +118,7 @@ class PhraseCollection:
 
         media = await self._generator.generate_media(
             phrase_model=phrase_model,
+            target_lang=self._target_language,
         )
 
         card_data = PhraseCardData(model=phrase_model, media=media)

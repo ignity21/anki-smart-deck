@@ -4,7 +4,7 @@ from collections.abc import Callable
 from importlib.resources import files
 from typing import TypeVar
 
-import regex
+import re
 from pydantic import BaseModel
 
 from ankinote.consts import Language
@@ -123,26 +123,26 @@ def create_prompt_loader(
     return _load_prompt
 
 
-_RUBY_ANNOTATION_PATTERN = regex.compile(r"(\X)\[([^\]]+)\]")
+_ANGLED_PHONETIC_PATTERN = re.compile(r"<([^:>]+):([^>]+)>")  # <汉:hàn>
 
 
-def convert_to_ruby_annotation(text: str) -> str:
-    """Convert bracket-style phonetic annotations to HTML ruby tags.
+def strip_phonetic_annotations(text: str) -> str:
+    """Strip angled-style phonetic annotations to get plain text (e.g., for TTS).
 
-    Supports per-character annotations used in multiple writing systems:
-      - Japanese furigana:  食[た]べる  →  <ruby>食<rt>た</rt></ruby>べる
-      - Chinese pinyin:     汉[hàn]字[zì]  →  <ruby>汉<rt>hàn</rt></ruby><ruby>字<rt>zì</rt></ruby>
-      - Bopomofo:           你[ㄋㄧˇ]  →  <ruby>你<rt>ㄋㄧˇ</rt></ruby>
-
-    Each annotated character should correspond to a single ruby unit.
-    For multi-character words, annotate each character separately:
-      Preferred:   汉[hàn]字[zì]
-      Avoid:       汉字[hàn zì]
+    Examples:
+      - Japanese:  <食:た>べる  →  食べる
+      - Chinese:   <汉:hàn><字:zì>  →  汉字
+      - Bopomofo:  <你:ㄋㄧˇ>  →  你
 
     Args:
-        text: Text containing bracket-style phonetic annotations.
+        text: Text containing angled-style phonetic annotations.
 
     Returns:
-        Text with annotations converted to HTML ruby format.
+        Plain text with all phonetic annotations and brackets removed.
     """
-    return _RUBY_ANNOTATION_PATTERN.sub(r"<ruby>\1<rt>\2</rt></ruby>", text)
+    return _ANGLED_PHONETIC_PATTERN.sub(r"\1", text)
+
+
+def convert_to_html_ruby(text: str) -> str:
+    """Convert angled-style phonetic annotations to HTML ruby tags."""
+    return _ANGLED_PHONETIC_PATTERN.sub(r"<ruby>\1<rt>\2</rt></ruby>", text)
