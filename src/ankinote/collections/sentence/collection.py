@@ -7,10 +7,10 @@ from typing import Self
 
 from loguru import logger
 
+from ankinote.collections.common import convert_to_ruby_annotation
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.anki import AnkiConnectClient
-from ankinote.services.tts import GoogleTTSService, TTS_LANG_CODES
-from ankinote.utils.ruby import convert_to_ruby_annotation
+from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import SentenceGenerator
 from .models import SentenceModel, SentenceNoteType

@@ -1,37 +1,26 @@
 """Sentence card generator using AI."""
 
 import json
-from importlib.resources import files
 from typing import cast
 
 from litellm import acompletion
 from loguru import logger
 
+from ankinote.collections.common import create_prompt_loader
 from ankinote.consts import Language
 
 from .models import SentenceModel
 
 
-def _load_prompt_template(target_language: Language) -> str:
-    """Load prompt template for the target language."""
+_LANGUAGE_TO_FILENAME: dict[Language, str] = {
+    Language.ENGLISH: "english_us.md",
+    Language.JAPANESE: "japanese.md",
+}
 
-    language_to_filename: dict[Language, str] = {
-        Language.ENGLISH: "english_us.md",
-        Language.JAPANESE: "japanese.md",
-    }
-
-    filename = language_to_filename.get(target_language)
-    if filename is None:
-        raise FileNotFoundError(
-            f"No sentence prompt template found for language: {target_language.value}. "
-            f"Available languages: {list(language_to_filename.keys())}"
-        )
-
-    return (
-        files("ankinote.collections.sentence.prompts")
-        .joinpath(filename)
-        .read_text(encoding="utf-8")
-    )
+_load_prompt_template = create_prompt_loader(
+    "ankinote.collections.sentence",
+    _LANGUAGE_TO_FILENAME,
+)
 
 
 async def generate_sentence_data(

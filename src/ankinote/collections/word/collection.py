@@ -7,11 +7,11 @@ from typing import Self
 
 from loguru import logger
 
+from ankinote.collections.common import convert_to_ruby_annotation
 from ankinote.collections.word.models import Definition, Example, WordModel
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
-from ankinote.utils.ruby import convert_to_ruby_annotation
 
 from .generator import WordGenerator, WordMediaFiles
 from .models import WordNoteType

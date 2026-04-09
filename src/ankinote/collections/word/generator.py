@@ -10,6 +10,7 @@ from typing import cast
 from litellm import acompletion, aimage_generation
 from loguru import logger
 
+from ankinote.collections.common import create_prompt_loader
 from ankinote.consts import Language
 from ankinote.services.tts import GoogleTTSService
 from ankinote.utils.img import scale
@@ -42,33 +43,15 @@ class WordMediaFiles:
 # Prompt Helpers
 # ============================================================================
 
+_LANGUAGE_TO_FILENAME: dict[Language, str] = {
+    Language.ENGLISH: "english_us.md",
+    Language.JAPANESE: "japanese.md",
+}
 
-def load_prompt_template(target_language: Language) -> str:
-    """Load prompt template for the target language.
-
-    Args:
-        target_language: The language being learned
-
-    Returns:
-        The prompt template content as a string
-
-    Raises:
-        FileNotFoundError: If no prompt template exists for the language
-    """
-    language_to_filename: dict[Language, str] = {
-        Language.ENGLISH: "english_us.md",
-        Language.JAPANESE: "japanese.md",
-    }
-
-    filename = language_to_filename.get(target_language)
-    if filename is None:
-        raise FileNotFoundError(
-            f"No prompt template found for language: {target_language.value}. "
-            f"Available languages: {list(language_to_filename.keys())}"
-        )
-
-    prompt_path = files("ankinote.collections.word.prompts").joinpath(filename)
-    return prompt_path.read_text(encoding="utf-8")
+_load_prompt_template = create_prompt_loader(
+    "ankinote.collections.word",
+    _LANGUAGE_TO_FILENAME,
+)
 
 
 def _build_image_user_prompt(word: str, definition: str) -> str:
@@ -103,7 +86,7 @@ async def generate_word_data(
         FileNotFoundError: If no prompt template exists for the target language
         RuntimeError: If AI generation or JSON parsing fails
     """
-    system_prompt = load_prompt_template(target_language)
+    system_prompt = _load_prompt_template(target_language)
 
     user_message = (
         f"Word: {word}\n"
