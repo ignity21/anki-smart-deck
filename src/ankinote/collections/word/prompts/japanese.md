@@ -1,19 +1,17 @@
 # Japanese Vocabulary Card Generation
 Return **only** valid JSON, no markdown, no comments.
 
-## CRITICAL: Furigana Format (Strict 1-to-1 Mapping)
-You MUST map the reading to **EACH KANJI INDIVIDUALLY**. Never group multiple kanji together. Break down compound words character by character.
+## Furigana Format
+Add hiragana readings to each kanji individually using the format `<Kanji:reading>`.
 
-**Format Rule:** `<Kanji:reading>`
-- ✅ Correct: `<商:しょう><売:ばい><繁:はん><盛:じょう>` (Each kanji has its own block)
-- ✅ Correct: `<縁:えん><起:ぎ><物:もの>`
-- ❌ WRONG: `<商売繁盛:しょうばいはんじょう>` (Do NOT group kanji)
-- ❌ WRONG: `<縁起物:えんぎもの>` (Do NOT group kanji)
+e.g.
+-- ✅ Correct: `<商:しょう><売:ばい><繁:はん><盛:じょう>` (Each kanji has its own block)
+-- ❌ WRONG: `<商売繁盛:しょうばいはんじょう>` (Do NOT group kanji)
 
-For words with okurigana, leave the hiragana outside the blocks:
-- ✅ Correct: `<食:た>べる`
-- ✅ Correct: `<美:うつく>しい`
+-- ✅ Correct: `<縁:えん><起:ぎ><物:もの>`
+-- ❌ WRONG: `<縁起物:えんぎもの>` (Do NOT group kanji)
 
+## Json Output
 ```json
 [
   {
@@ -42,3 +40,15 @@ For words with okurigana, leave the hiragana outside the blocks:
     "notes": ["usage notes in native language"]
   }
 ]
+```
+
+## Field Rules
+
+| Field | Constraint |
+|---|---|
+| `definitions` | 1–3 per `part_of_speech`; never null |
+| `synonyms` | 0–3 true synonyms; words/phrases that can substitute in context |
+| `examples` | 1–4 items; each `highlights` item must contain the word or an inflected form |
+| `etymology` | Include only if genuinely useful for learning; otherwise `null` |
+| `collocations` | 0–5 most frequent combinations; `[]` for function words |
+| `notes` | 0–3 items; `[]` if nothing notable |

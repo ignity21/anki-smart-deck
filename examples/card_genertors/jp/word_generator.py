@@ -139,19 +139,19 @@ async def main() -> None:
             for word_model in word_models:
                 display_word_model(word_model)
 
-                # Step 2: generate media
-                console.print(
-                    f"\n[bold]Step 2:[/bold] Generating media for "
-                    f"'{word_model.word}' ({word_model.part_of_speech})…"
-                )
-                media = await gen.generate_media(
-                    word_model=word_model,
-                    target_lang=target_lang,
-                )
+                # # Step 2: generate media
+                # console.print(
+                #     f"\n[bold]Step 2:[/bold] Generating media for "
+                #     f"'{word_model.word}' ({word_model.part_of_speech})…"
+                # )
+                # media = await gen.generate_media(
+                #     word_model=word_model,
+                #     target_lang=target_lang,
+                # )
 
-                # Step 3: save to disk
-                console.print("\n[bold]Step 3:[/bold] Saving media files…")
-                save_media(word_model.word, word_model.part_of_speech, media)
+                # # Step 3: save to disk
+                # console.print("\n[bold]Step 3:[/bold] Saving media files…")
+                # save_media(word_model.word, word_model.part_of_speech, media)
 
     console.print(
         Panel.fit(

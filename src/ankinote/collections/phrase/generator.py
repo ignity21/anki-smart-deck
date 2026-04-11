@@ -163,7 +163,10 @@ class PhraseGenerator:
                 sentence = strip_phonetic_annotations(example.sentence)
             else:
                 sentence = example.sentence
-            example_audios.append(sentence)
+            example_audio = await self._tts_service.synthesize_with_random_voice(
+                text=sentence
+            )
+            example_audios.append(example_audio)
 
         logger.success(
             f"Media ready for '{phrase_model.phrase}': "

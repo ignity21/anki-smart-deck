@@ -36,9 +36,9 @@ Return a **JSON array** — one object per part of speech. Output **only** valid
 
 | Field | Constraint |
 |---|---|
-| `definitions` | 1–4 per POS; never null |
-| `synonyms` | 3–5 true synonyms; words/phrases that can substitute in context |
-| `examples` | 2–4 items; each `highlights` item must contain the word or an inflected form |
+| `definitions` | 1–3 per `part_of_speech`; never null |
+| `synonyms` | 0-3 true synonyms; words/phrases that can substitute in context |
+| `examples` | 1–4 items; each `highlights` item must contain the word or an inflected form |
 | `etymology` | Include only if genuinely useful for learning; otherwise `null` |
 | `collocations` | 0–5 most frequent combinations; `[]` for function words |
 | `notes` | 0–3 items; `[]` if nothing notable |
