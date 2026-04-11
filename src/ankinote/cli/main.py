@@ -3,6 +3,7 @@ import sys
 import click
 from loguru import logger
 
+from .math import math
 from .phrase import phrase
 from .sentence import sentence
 from .word import word
@@ -18,6 +19,7 @@ def cli():
 cli.add_command(word)
 cli.add_command(phrase)
 cli.add_command(sentence)
+cli.add_command(math)
 
 
 def main():
