@@ -12,8 +12,8 @@ from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
-from .generator import SentenceGenerator
-from .models import SentenceModel, SentenceNoteType
+from .generator import SentenceGenerator, SentenceMediaFiles
+from .models import PhraseModel, SentenceModel, SentenceNoteType
 from .templates import load_card_style, load_template
 
 
@@ -22,7 +22,7 @@ class SentenceCardData:
     """Complete card data including model and media files."""
 
     model: SentenceModel
-    audio: bytes
+    media: SentenceMediaFiles
 
 
 @dataclass
@@ -50,8 +50,11 @@ class SentenceCollection:
         self._native_language = native_language
         self._target_language = target_language
         self._anki_client = anki_client
-        self._generator = SentenceGenerator(llm_model_id=llm_model_id)
         self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
+        self._generator = SentenceGenerator(
+            tts_service=self._tts_service, llm_model_id=llm_model_id
+        )
+
         if target_language in RUBY_ANNOTATION_LANGUAGES:
             self._convert_target_lang_text = convert_to_html_ruby
         else:
@@ -116,11 +119,12 @@ class SentenceCollection:
             native_lang=self._native_language,
         )
 
-        audio = await self._tts_service.synthesize_with_random_voice(
-            text=sentence_model.target_sentence,
+        media = await self._generator.generate_media(
+            sentence_model=sentence_model,
+            target_lang=self._target_language,
         )
 
-        card_data = SentenceCardData(model=sentence_model, audio=audio)
+        card_data = SentenceCardData(model=sentence_model, media=media)
 
         note_id = await self._add_or_update_note(
             card_data=card_data,
@@ -173,7 +177,9 @@ class SentenceCollection:
         sentence_model = card_data.model
         filename = hashlib.md5(sentence_model.target_sentence.encode()).hexdigest()[:12]
         audio_name = f"{filename}.mp3"
-        await self._anki_client.media.store_file(audio_name, card_data.audio)
+        await self._anki_client.media.store_file(
+            audio_name, card_data.media.sentence_audio
+        )
         logger.debug(f"Stored sentence audio: {audio_name}")
 
         return MediaReferences(pron_audio=audio_name)
@@ -202,16 +208,14 @@ class SentenceCollection:
         formatted = [f"• {self._convert_target_lang_text(note)}" for note in notes]
         return "<br>".join(formatted)
 
-    def _format_phrases_html(self, phrases: dict[str, str]) -> str:
+    def _format_phrases_html(self, phrases: list[PhraseModel]) -> str:
         """Format phrases and their example sentences as HTML."""
         if not phrases:
             return ""
         items = []
-        for phrase, example in phrases.items():
-            phrase_ruby = self._convert_target_lang_text(phrase)
-            if example:
-                example_ruby = self._convert_target_lang_text(example)
-                items.append(f"• <b>{phrase_ruby}</b>: {example_ruby}")
-            else:
-                items.append(f"• {phrase_ruby}")
+        for phrase_model in phrases:
+            phrase_ruby = self._convert_target_lang_text(phrase_model.phrase)
+            translation = phrase_model.translation
+            example_ruby = self._convert_target_lang_text(phrase_model.example)
+            items.append(f"• <b>{phrase_ruby}</b> ({translation})： {example_ruby}")
         return "<br>".join(items)

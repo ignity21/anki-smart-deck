@@ -1,15 +1,28 @@
 """Sentence card generator using AI."""
 
 import json
+from dataclasses import dataclass
 from typing import cast
 
 from litellm import acompletion
 from loguru import logger
 
-from ankinote.collections.common import create_prompt_loader
-from ankinote.consts import Language
+from ankinote.collections.common import create_prompt_loader, strip_phonetic_annotations
+from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
+from ankinote.services.tts import GoogleTTSService
 
 from .models import SentenceModel
+
+
+@dataclass
+class SentenceMediaFiles:
+    """Media files generated for a single SentenceModel.
+
+    Attributes:
+        sentence_audio: MP3 bytes of the phrase itself.
+    """
+
+    sentence_audio: bytes
 
 
 _LANGUAGE_TO_FILENAME: dict[Language, str] = {
@@ -89,9 +102,11 @@ class SentenceGenerator:
 
     def __init__(
         self,
+        tts_service: GoogleTTSService,
         llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
     ) -> None:
         self._llm_model_id = llm_model_id
+        self._tts_service = tts_service
 
     async def generate_sentence_data(
         self,
@@ -107,4 +122,31 @@ class SentenceGenerator:
             native_language=native_lang,
             model_id=self._llm_model_id,
             temperature=temperature,
+        )
+
+    async def generate_media(
+        self,
+        sentence_model: SentenceModel,
+        target_lang: Language,
+    ) -> SentenceMediaFiles:
+        """Generate all audio assets for a SentenceModel.
+
+        Args:
+            sentence_model: The sentence model to generate media for.
+            target_lang: Target language, used to select the TTS voice.
+
+        Returns:
+            PhraseMediaFiles with phrase audio and example audios.
+        """
+        target_sentence = sentence_model.target_sentence
+        logger.info(f"Generating media for sentence '{target_sentence}'")
+        if target_lang in RUBY_ANNOTATION_LANGUAGES:
+            target_sentence = strip_phonetic_annotations(target_sentence)
+        audio = await self._tts_service.synthesize_with_random_voice(
+            text=target_sentence
+        )
+        logger.success(f"Sentence audio generated for '{target_sentence}'")
+
+        return SentenceMediaFiles(
+            sentence_audio=audio,
         )

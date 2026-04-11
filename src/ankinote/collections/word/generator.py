@@ -14,7 +14,6 @@ from ankinote.collections.common import create_prompt_loader, strip_phonetic_ann
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.tts import GoogleTTSService
 from ankinote.utils.img import scale
-from pydantic_core.core_schema import tagged_union_schema
 
 from .models import WordModel
 

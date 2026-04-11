@@ -5,6 +5,18 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 
+class PhraseModel(BaseModel):
+    """Structured phrase model for AI generation.
+
+    The phrase collection is for translation-style cards:
+    front shows the native language phrase, back shows the target language.
+    """
+
+    phrase: str
+    translation: str
+    example: str
+
+
 class SentenceModel(BaseModel):
     """Structured sentence model for AI generation.
 
@@ -15,7 +27,7 @@ class SentenceModel(BaseModel):
     target_sentence: str
     native_sentence: str
     notes: list[str] = []
-    phrases: dict[str, str] = {}
+    phrases: list[PhraseModel] = []
 
 
 @dataclass
