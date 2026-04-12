@@ -79,6 +79,8 @@ class PhraseCollection:
         fields = [f.name for f in dataclasses.fields(PhraseNoteType)]
         front_template = load_template("front.html")
         back_template = load_template("back.html")
+        rfront_template = load_template("reverse_front.html")
+        rback_template = load_template("reverse_back.html")
         style = load_card_style()
 
         await self._anki_client.models.create(
@@ -89,7 +91,12 @@ class PhraseCollection:
                     "Name": "Recognition",
                     "Front": front_template,
                     "Back": back_template,
-                }
+                },
+                {
+                    "Name": "Recall",
+                    "Front": rfront_template,
+                    "Back": rback_template,
+                },
             ],
             css=style,
             is_cloze=False,

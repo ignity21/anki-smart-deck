@@ -200,7 +200,7 @@ img {
 }
 
 /* --- Answer Divider --- */
-hr#answer {
+hr {
   border: none;
   border-top: 0.15em solid var(--border-color);
   margin: 1.5em 0;

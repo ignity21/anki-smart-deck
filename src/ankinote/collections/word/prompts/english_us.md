@@ -37,7 +37,7 @@ Return **only** valid JSON, no markdown, no comments.
 
 | Field | Constraint |
 |---|---|
-| `definitions` | 1–3 per `part_of_speech`; target_lang must be `level ≤ difficulty` |
+| `definitions` | 1–3 per `part_of_speech`; target language must be `level ≤ difficulty` |
 | `synonyms` | 0-3 true synonyms(word or phrase); `level ≤ difficulty` |
 | `examples` | 1–4 items; sentence must be `level ≤ difficulty`; highlights must contain word or inflected form |
 | `etymology` | Include if useful for memorizing; else `null` |

@@ -146,7 +146,7 @@ img {
   border-radius: 0.4em;
 }
 
-hr#answer {
+hr {
   color: var(--border-color);
   height: 0.15em;
 }

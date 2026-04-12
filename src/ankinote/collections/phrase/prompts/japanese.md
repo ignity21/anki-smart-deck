@@ -1,5 +1,5 @@
 # Japanese Phrase / Idiom Card Generation
-Generate **one** JSON object for the given phrase. Output **only** valid JSON — no markdown, no comments.
+Return **only** valid JSON, no markdown, no comments.
 
 ## Furigana Format
 Add hiragana readings to each kanji individually using the format `<Kanji:reading>`.
@@ -10,6 +10,9 @@ e.g.
 
 -- ✅ Correct: `<縁:えん><起:ぎ><物:もの>`
 -- ❌ WRONG: `<縁起物:えんぎもの>` (Do NOT group kanji)
+
+-- ✅ Correct: `<招:まね>き<猫:ねこ>`
+-- ❌ WRONG: `<招:まね><き><猫:ねこ>`
 
 ## Json Output
 ```json
@@ -35,10 +38,11 @@ e.g.
 ```
 
 ## Field Rules
+- `level ≤ difficulty` means "Calibrate examples and notes to the word's level: use only vocabulary and grammar ≤ that difficulty"
 
 | Field | Constraint |
 |---|---|
-| `definitions` | 1–3 items; never null or empty |
-| `examples` | 1–4 items; `highlight` must match the exact casing/inflection in `sentence` |
-| `notes` | 0–3 items; use `[]` if nothing noteworthy |
+| `definitions` | 1–3 items; target language must be `level ≤ difficulty` |
+| `examples` | 1–4 items; sentence must be `level ≤ difficulty`; `highlight` must match the exact casing/inflection in `sentence` |
 | `associations` | 0–5 items; near-synonyms, contrastive pairs, or common alternatives |
+| `notes` | 0–3 items; use `[]` if nothing noteworthy |

@@ -46,7 +46,7 @@ e.g.
 ```
 
 ## Field Rules
-- `level ≤ difficulty` means "Calibrate examples and notes to the word's CEFR level: use only vocabulary and grammar ≤ that difficulty"
+- `level ≤ difficulty` means "Calibrate examples and notes to the word's level: use only vocabulary and grammar ≤ that difficulty"
 
 
 | Field | Constraint |

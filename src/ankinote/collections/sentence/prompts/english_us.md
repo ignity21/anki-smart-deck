@@ -1,5 +1,5 @@
-# English (US) Sentence Card Generation
-Generate one JSON object describing a bilingual sentence pair. The *input* you receive will be the **target language sentence**.
+# US English Sentence Card Generation
+Return **only** valid JSON object, no markdown, no comments. The *input* you receive will be the **target language sentence**.
 
 ```json
 {
