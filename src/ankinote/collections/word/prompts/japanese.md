@@ -2,7 +2,7 @@
 Return **only** valid JSON, no markdown, no comments.
 
 ## Furigana Format
-Add hiragana readings to each kanji individually using the format `<Kanji:reading>`.
+Add hiragana readings to each **kanji** individually using the format `<Kanji:reading>`.
 
 e.g.
 -- ✅ Correct: `<商:しょう><売:ばい><繁:はん><盛:じょう>` (Each kanji has its own block)
@@ -10,6 +10,9 @@ e.g.
 
 -- ✅ Correct: `<縁:えん><起:ぎ><物:もの>`
 -- ❌ WRONG: `<縁起物:えんぎもの>` (Do NOT group kanji)
+
+-- ✅ Correct: `<招:まね>き<猫:ねこ>`
+-- ❌ WRONG: `<招:まね><き><猫:ねこ>`
 
 ## Json Output
 ```json
@@ -36,19 +39,21 @@ e.g.
       }
     ],
     "etymology": "Memory aid in native language, or null",
-    "collocations": ["collocation1 with <Kanji:reading>"],
+    "collocations": ["collocations with <Kanji:reading>"],
     "notes": ["usage notes in native language"]
   }
 ]
 ```
 
 ## Field Rules
+- `level ≤ difficulty` means "Calibrate examples and notes to the word's CEFR level: use only vocabulary and grammar ≤ that difficulty"
+
 
 | Field | Constraint |
 |---|---|
-| `definitions` | 1–3 per `part_of_speech`; never null |
-| `synonyms` | 0–3 true synonyms; words/phrases that can substitute in context |
-| `examples` | 1–4 items; each `highlights` item must contain the word or an inflected form |
-| `etymology` | Include only if genuinely useful for learning; otherwise `null` |
+| `definitions` | 1–3 per `part_of_speech`; target_lang must be `level ≤ difficulty` |
+| `synonyms` | 0-3 true synonyms(word or phrase); `level ≤ difficulty` |
+| `examples` |1–4 items; sentence must be `level ≤ difficulty`; highlights must contain word or inflected form |
+| `etymology` | Include if useful for memorizing; else `null` |
 | `collocations` | 0–5 most frequent combinations; `[]` for function words |
 | `notes` | 0–3 items; `[]` if nothing notable |

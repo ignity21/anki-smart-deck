@@ -215,8 +215,6 @@ class WordCollection:
         Returns:
             List of WordModel objects (one per part of speech)
         """
-        logger.info(f"Generating word data for: {word}")
-
         word_models = await self._generator.generate_word_data(
             word=word,
             target_lang=self._target_language,

@@ -81,7 +81,7 @@ def init(native, target, llm, image_model, image_size):
             await collection._ensure_deck_exists()
 
     asyncio.run(_run())
-    click.echo("✓ Ready")
+    click.echo("✓ Ready (word collection)")
 
 
 # -- add: single word ---------------------------------------------------------
@@ -146,12 +146,12 @@ def batch(words, file, native, target, llm, image_model, image_size, rpm):
         nonlocal success
 
         sem = asyncio.Semaphore(MAX_CONCURRENCY)
-        limiter = StrictLimiter(rpm / 60)  # 转换为 requests/second
+        limiter = StrictLimiter(rpm / 60)
 
         async def _process(w: str):
             nonlocal success
             async with sem:
-                await limiter.wait()  # 主动等待令牌，绝不超速
+                await limiter.wait()
                 try:
                     await collection.generate_and_add_note(w)
                     success.append(w)
