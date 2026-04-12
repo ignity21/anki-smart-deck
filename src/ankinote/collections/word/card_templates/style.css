@@ -160,6 +160,20 @@ body.nightMode {
 
 .user-notes-title { color: var(--user-notes-title-color); }
 
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45em;
+  align-items: center;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+hr {
+  color: var(--border-color);
+  height: 0.15em;
+}
+
 /* --- Media & Assets --- */
 .replay-button svg, .audio-btn svg {
   width: 1.5rem;
@@ -171,11 +185,6 @@ img {
   max-width: 25vw;
   height: auto;
   border-radius: 0.4em;
-}
-
-hr {
-  color: var(--border-color);
-  height: 0.15em;
 }
 
 /* --- Input Typing (type:word) --- */

@@ -127,16 +127,25 @@ body.nightMode {
   color: var(--user-notes-title-color);
 }
 
-/* --- Media & Assets --- */
-img {
-  max-width: 25vw;
-  height: auto;
-  border-radius: 0.4em;
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45em;
+  align-items: center;
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 hr {
   color: var(--border-color);
   height: 0.15em;
+}
+
+/* --- Media & Assets --- */
+img {
+  max-width: 25vw;
+  height: auto;
+  border-radius: 0.4em;
 }
 
 .replay-button svg,
