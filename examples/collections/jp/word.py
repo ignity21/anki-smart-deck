@@ -18,7 +18,7 @@ async def main():
             image_model_id="gemini/gemini-2.5-flash-image",
             image_size=128,
         ) as collection:
-            await collection.generate_and_add_note("招き猫")
+            await collection.generate_and_add_note("時間")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# Japanese Vocabulary Card Generation
+# Japanese Vocabulary Anki Card Generation
 Return **only** valid JSON, no markdown, no comments.
 
 ## Furigana Format

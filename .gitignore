@@ -214,7 +214,10 @@ __marimo__/
 *.jpg
 *.jpeg
 *.png
-*.txt
+# *.txt
 
 # project
 output/
+words.txt
+phrases.txt
+sentences.txt

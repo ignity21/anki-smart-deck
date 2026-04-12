@@ -84,7 +84,7 @@ async def generate_sentence_data(
         try:
             data = json.loads(content)
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response: {e}")
+            logger.exception("Failed to parse JSON response")
             logger.debug(f"Response content: {content[:500]}...")
             raise RuntimeError(f"AI returned invalid JSON: {e}") from e
 

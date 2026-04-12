@@ -1,4 +1,4 @@
-# US English Vocabulary Card Generation
+# US English Vocabulary Anki Card Generation
 
 Return **only** valid JSON, no markdown, no comments.
 

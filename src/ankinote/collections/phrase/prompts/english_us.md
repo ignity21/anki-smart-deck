@@ -1,4 +1,4 @@
-# US English Phrase / Idiom Card Generation
+# US English Phrase / Idiom Anki Card Generation
 
 Return **only** valid JSON, no markdown, no comments.
 

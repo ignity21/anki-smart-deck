@@ -16,9 +16,7 @@ async def main():
             target_language=Language.ENGLISH,
             llm_model_id="gemini/gemini-3.1-flash-lite-preview",
         ) as collection:
-            await collection.generate_and_add_note(
-                "There is no doubt that my bed is the best place on Earth on Monday morning."
-            )
+            await collection.generate_and_add_note("Don't cut in line.")
 
 
 if __name__ == "__main__":

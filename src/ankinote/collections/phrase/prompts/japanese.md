@@ -1,4 +1,4 @@
-# Japanese Phrase / Idiom Card Generation
+# Japanese Phrase / Idiom Anki Card Generation
 Return **only** valid JSON, no markdown, no comments.
 
 ## Furigana Format

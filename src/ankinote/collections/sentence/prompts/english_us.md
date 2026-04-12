@@ -1,4 +1,4 @@
-# US English Sentence Card Generation
+# US English Sentence Anki Card Generation
 Return **only** valid JSON object, no markdown, no comments. The *input* you receive will be the **target language sentence**.
 
 ```json
@@ -6,9 +6,11 @@ Return **only** valid JSON object, no markdown, no comments. The *input* you rec
   "target_sentence": "Sentence in the target language (exactly or very close to the input).",
   "native_sentence": "Sentence in the user's native language conveying the same meaning.",
   "notes": ["Optional important usage notes about the target sentence."],
-  "phrases": {
-    "useful target-language phrase or collocation": "simple example sentence in the target language"
-  }
+  "phrases": [{
+    "phrase": "useful target language phrase or collocation",
+    "translation": "the phrase in user's native language",
+    "example": "a simple example sentence in the target language"
+  }]
 }
 ```
 

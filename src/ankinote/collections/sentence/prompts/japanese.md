@@ -1,4 +1,4 @@
-# Japanese Sentence Card Generation
+# Japanese Sentence Anki Card Generation
 Generate **one** JSON object for the given target sentence
 Return **only** valid JSON, no markdown, no comments.
 
@@ -19,9 +19,9 @@ e.g.
   "native_sentence": "user's native language translation conveying the same meaning.",
   "notes": ["short observations in user's native language. Cover nuance, register, common pitfalls, context, and any JLPT N3+ grammar points. All in native lanuage."],
   "phrases": [{
-      "phrase": "useful Japanese phrase or collocation with <Kanji:reading>",
-      "translation": "the phrase in user's native language",
-      "example": "a simple example sentence in Japanese using the phrase, with <Kanji:reading>"
+    "phrase": "useful Japanese phrase or collocation with <Kanji:reading>",
+    "translation": "the phrase in user's native language",
+    "example": "a simple example sentence in Japanese using the phrase, with <Kanji:reading>"
   }]
 }
 ```
