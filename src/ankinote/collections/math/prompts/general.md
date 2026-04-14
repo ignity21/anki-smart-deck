@@ -7,7 +7,7 @@ The user will provide a question or concept, and you must generate a comprehensi
 
 Return **only** valid JSON, no markdown, no comments.
 
-## LaTeX Formula Guidelines
+## MathJax Formula Guidelines
 
 - Use `\(...\)` for inline formulas (e.g., `\(E = mc^2\)`)
 - Use `\[...\]` for display formulas (e.g., `\[\int_0^1 x^2 dx\]`)

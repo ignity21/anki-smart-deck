@@ -48,7 +48,7 @@ def load_template(package: str, filename: str) -> str:
 
 def load_prompt_template(
     package: str,
-    target_language: Language,
+    target_language: str,
     language_to_filename: dict[Language, str],
 ) -> str:
     """Load prompt template for the target language.
