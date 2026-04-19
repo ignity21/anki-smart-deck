@@ -45,8 +45,6 @@ default = true
 
 [dependency-groups]
 dev = [
-    "basedpyright>=1.29",
-    "ruff>=0.12.7",
     "pytest>=8.4.1",
     "rich>=14.1.0",
     "pytest-cov>=6.1.1",

@@ -124,7 +124,7 @@ async def main() -> None:
             gen = WordGenerator(
                 tts_service=tts_service,
                 llm_model_id="gemini/gemini-3.1-flash-lite-preview",
-                image_model_id="gemini/gemini-2.5-flash-image",
+                image_model_id="gemini/imagen-4.0-generate-001",
                 image_size=256,
             )
             # Step 1: generate text data
