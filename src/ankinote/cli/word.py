@@ -115,7 +115,7 @@ def add(word, native, target, llm, image_model, image_size):
 )
 @click.option(
     "--rpm",
-    default=60,
+    default=8,
     show_default=True,
     help="Max requests per minute (match your AI provider's limit).",
 )
@@ -123,11 +123,9 @@ def add(word, native, target, llm, image_model, image_size):
 def batch(words, file, native, target, llm, image_model, image_size, rpm):
     """Generate and push multiple word cards.
 
-    \\b
     Words can be passed as arguments, read from a file (whitespace-separated),
     or both at the same time.
 
-    \\b
     Examples:
       anki word batch apple banana cat
       anki word batch --file words.txt

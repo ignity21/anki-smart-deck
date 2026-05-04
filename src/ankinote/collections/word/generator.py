@@ -212,18 +212,26 @@ class WordGenerator:
 
         pronunciation = await self._generate_audio(word_model.word, target_lang)
 
-        async with asyncio.TaskGroup() as tg:
-            example_tasks = [
-                tg.create_task(self._generate_audio(example.sentence, target_lang))
-                for example in word_model.examples
-            ]
-            image_tasks = {
-                idx: tg.create_task(
-                    self._generate_image(word_model.word, definition.target_lang)
+        try:
+            async with asyncio.TaskGroup() as tg:
+                example_tasks = [
+                    tg.create_task(self._generate_audio(example.sentence, target_lang))
+                    for example in word_model.examples
+                ]
+                image_tasks = {
+                    idx: tg.create_task(
+                        self._generate_image(word_model.word, definition.target_lang)
+                    )
+                    for idx, definition in enumerate(word_model.definitions)
+                    if definition.is_visualizable
+                }
+        except* Exception as e:
+            for sub_exc in e.exceptions:
+                logger.error(
+                    f"Error during media generation for '{word_model.word}': {sub_exc}",
+                    exc_info=sub_exc,
                 )
-                for idx, definition in enumerate(word_model.definitions)
-                if definition.is_visualizable
-            }
+            raise RuntimeError(f"Media generation failed: {e}") from e
 
         examples = [task.result() for task in example_tasks]
         logger.debug(f"Generated {len(examples)} example audio(s)")
