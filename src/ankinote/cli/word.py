@@ -29,7 +29,7 @@ COLLECTION_OPTIONS = [
         "--llm", default="gemini/gemini-3.1-flash-lite-preview", show_default=True
     ),
     click.option(
-        "--image-model", default="gemini/imagen-4.0-generate-001", show_default=True
+        "--image-model", default="gemini/gemini-2.5-flash-image", show_default=True
     ),
     click.option("--image-size", default=128, show_default=True, type=int),
 ]
