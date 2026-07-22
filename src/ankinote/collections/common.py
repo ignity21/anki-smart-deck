@@ -48,7 +48,7 @@ def load_template(package: str, filename: str) -> str:
 
 def load_prompt_template(
     package: str,
-    target_language: str,
+    target_language: Language,
     language_to_filename: dict[Language, str],
 ) -> str:
     """Load prompt template for the target language.
@@ -78,6 +78,9 @@ def load_prompt_template(
 # Type variable for Pydantic model types
 T = TypeVar("T", bound=BaseModel)
 
+# Type variable for prompt loader key types
+KT = TypeVar("KT")
+
 
 def create_template_loader(
     package: str,
@@ -105,20 +108,27 @@ def create_template_loader(
 
 def create_prompt_loader(
     package: str,
-    language_to_filename: dict[Language, str],
-) -> Callable[[Language], str]:
+    key_to_filename: dict[KT, str],
+) -> Callable[[KT], str]:
     """Create a prompt loader function for a specific package.
 
     Args:
         package: The full package path (e.g., "ankinote.collections.word").
-        language_to_filename: Mapping from Language to prompt filename.
+        key_to_filename: Mapping from key (Language, CardType, etc.) to prompt filename.
 
     Returns:
-        A function that loads prompt templates for a given language.
+        A function that loads prompt templates for a given key.
     """
 
-    def _load_prompt(target_language: Language) -> str:
-        return load_prompt_template(package, target_language, language_to_filename)
+    def _load_prompt(key: KT) -> str:
+        filename = key_to_filename.get(key)
+        if filename is None:
+            raise FileNotFoundError(
+                f"No prompt template found for key: {key}. "
+                f"Available keys: {list(key_to_filename.keys())}"
+            )
+
+        return files(f"{package}.prompts").joinpath(filename).read_text(encoding="utf-8")
 
     return _load_prompt
 

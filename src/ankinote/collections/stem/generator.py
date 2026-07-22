@@ -1,6 +1,7 @@
 """STEM card generator using AI."""
 
 import json
+from importlib.resources import files
 from typing import cast
 
 from litellm import acompletion
@@ -20,6 +21,15 @@ _load_prompt_template = create_prompt_loader(
 )
 
 
+def _load_system_prompt() -> str:
+    """Load the system prompt for STEM card generation."""
+    return (
+        files("ankinote.collections.stem.prompts")
+        .joinpath("_system.md")
+        .read_text(encoding="utf-8")
+    )
+
+
 async def generate_stem_data(
     topic: str,
     card_type: CardType,
@@ -31,7 +41,7 @@ async def generate_stem_data(
     The *topic* is a short description of the concept, formula, or procedure
     to generate a card for (e.g. "eigenvalues", "Fourier transform", "Newton's second law").
     """
-    system_prompt = _load_prompt_template("_system.md")
+    system_prompt = _load_system_prompt()
     user_message = _load_prompt_template(card_type) + f"\n\nTopic: {topic}"
 
     logger.info(f"Generating {card_type} card for '{topic}'")

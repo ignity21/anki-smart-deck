@@ -4,7 +4,7 @@
 # @file
 # @version 0.1
 
-.PHONY: test clean-test clean lint lint-fix install install-dev type-check format pre-commit help
+.PHONY: test clean-test clean lint check install install-dev format pre-commit help
 
 clean-test:
 	rm -rf .pytest_cache
@@ -20,12 +20,9 @@ clean: clean-test
 	rm -rf __pycache__
 
 lint:
-	uv run ruff check
-
-lint-fix:
 	uv run ruff check --fix
 
-type-check:
+check:
 	uv run basedpyright
 
 format:

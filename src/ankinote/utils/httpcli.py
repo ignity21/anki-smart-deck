@@ -1,78 +1,121 @@
 import asyncio
 
-from aiohttp import (
-    ClientHandlerType,
-    ClientRequest,
-    ClientResponse,
-    ClientSession,
-    ClientTimeout,
-    TCPConnector,
-)
-from aiohttp.client_exceptions import ClientError, ServerDisconnectedError
+import httpx
 from loguru import logger
 
-_session: ClientSession | None = None
+_client: httpx.AsyncClient | None = None
+
+_RETRY_MAX_ATTEMPTS = 4
+_RETRYABLE_EXCEPTIONS = (
+    httpx.RequestError,
+    asyncio.TimeoutError,
+)
 
 
-async def retry_middleware(
-    req: ClientRequest, handler: ClientHandlerType
-) -> ClientResponse:
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            return await handler(req)
-        except (ClientError, ServerDisconnectedError, asyncio.TimeoutError) as exc:
-            if attempt == max_retries - 1:
-                logger.error(f"Request failed after {max_retries} attempts: {exc}")
-                raise
-            await asyncio.sleep(1 * (2**attempt))  # Exponential backoff
-    assert False, "Unreachable code reached in retry_middleware"
+def init_session() -> httpx.AsyncClient:
+    """Initialize the global httpx client with connection pooling.
 
-
-def init_session() -> ClientSession:
-    """Initializes a new session(create connection pool)"""
-    global _session
+    Uses a single shared :class:`httpx.AsyncClient` across the application
+    to reuse TCP connections and reduce overhead. Must be called within a
+    running asyncio event loop.
+    """
+    global _client
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        raise RuntimeError("get_session() must be called within a running event loop")
+        raise RuntimeError("init_session() must be called within a running event loop")
 
-    if _session is None or _session.closed:
-        logger.debug("Initializing client session")
-        _session = ClientSession(
-            raise_for_status=True,
-            middlewares=[retry_middleware],
-            timeout=ClientTimeout(total=60),
-            connector=TCPConnector(
-                limit=10,
-                limit_per_host=5,
-                enable_cleanup_closed=True,
+    if _client is None or _client.is_closed:
+        logger.debug("Initializing httpx client")
+        _client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0),
+            limits=httpx.Limits(
+                max_connections=10,
+                max_keepalive_connections=5,
+                keepalive_expiry=30.0,
             ),
         )
-    return _session
+    return _client
 
 
-def _is_session_alive() -> ClientSession:
-    """Ensures that a session is initialized and returns it"""
-    if _session is None or _session.closed:
-        raise RuntimeError("Session not initialized. Call init_session() first.")
-    return _session
+def _get_client_or_raise() -> httpx.AsyncClient:
+    """Return the active client or raise if not initialized."""
+    if _client is None or _client.is_closed:
+        raise RuntimeError("Client not initialized. Call init_session() first.")
+    return _client
 
 
-async def close_session():
-    session = _is_session_alive()
-    await session.close()
-    logger.debug("client session closed")
+def get_session() -> httpx.AsyncClient:
+    """Return the current httpx client.
+
+    Raises:
+        RuntimeError: If :func:`init_session` has not been called.
+    """
+    return _get_client_or_raise()
 
 
-def get_session() -> ClientSession:
-    """Returns the current session"""
-    session = _is_session_alive()
-    return session
+async def close_session() -> None:
+    """Close the global httpx client, if one is active.
+
+    Safe to call even if the client was never initialized or already closed.
+    """
+    client = _client
+    if client is not None and not client.is_closed:
+        await client.aclose()
+        logger.debug("httpx client closed")
+
+
+async def request(method: str, url: str, **kwargs) -> httpx.Response:
+    """Send an HTTP request with automatic retry on transient errors.
+
+    Retries up to :const:`_RETRY_MAX_ATTEMPTS` times with exponential
+    backoff (1 s, 2 s, 4 s) on transport-level and timeout errors.
+
+    Args:
+        method: HTTP method (``"GET"``, ``"POST"``, etc.).
+        url: Target URL.
+        **kwargs: Additional arguments forwarded to :meth:`httpx.AsyncClient.request`.
+
+    Returns:
+        The :class:`httpx.Response`.
+
+    Raises:
+        RuntimeError: If the client has not been initialized.
+        httpx.RequestError: If all retry attempts fail on transport-level errors.
+    """
+    client = _get_client_or_raise()
+    for attempt in range(_RETRY_MAX_ATTEMPTS):
+        try:
+            return await client.request(method, url, **kwargs)
+        except _RETRYABLE_EXCEPTIONS as exc:
+            if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                logger.error(f"Request failed after {_RETRY_MAX_ATTEMPTS} attempts: {exc}")
+                raise
+            await asyncio.sleep(1 * (2**attempt))
+    raise RuntimeError("Unreachable code reached in request")
+
+
+async def get(url: str, **kwargs) -> httpx.Response:
+    """Send a GET request with automatic retry on transient errors.
+
+    See :func:`request` for retry behavior.
+    """
+    return await request("GET", url, **kwargs)
+
+
+async def post(url: str, **kwargs) -> httpx.Response:
+    """Send a POST request with automatic retry on transient errors.
+
+    See :func:`request` for retry behavior.
+    """
+    return await request("POST", url, **kwargs)
 
 
 __all__ = [
     "init_session",
     "get_session",
     "close_session",
+    "request",
+    "get",
+    "post",
 ]

@@ -13,7 +13,7 @@ from loguru import logger
 from ankinote.collections.common import create_prompt_loader, strip_phonetic_annotations
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.tts import GoogleTTSService
-from ankinote.utils.img import scale
+from ankinote.utils.img import resize_to_square
 
 from .models import WordModel
 
@@ -281,4 +281,4 @@ class WordGenerator:
         )
         b64: str = response.data[0].b64_json  # pyright: ignore[reportAssignmentType, reportOptionalSubscript]
         raw = base64.b64decode(b64)
-        return scale(raw, self._image_size)
+        return resize_to_square(raw, self._image_size)

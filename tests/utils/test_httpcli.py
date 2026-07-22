@@ -1,247 +1,204 @@
-"""Tests for HTTPSessionManager."""
+"""Tests for the httpx-based HTTP client module."""
 
 import asyncio
+import json
 from unittest.mock import AsyncMock, call
 
-import aiohttp
+import httpx
 import pytest
-from aiohttp import ClientSession
 from pytest_mock import MockerFixture
 
-from ankinote.utils._http_session import HttpClient, http, retry_middleware
+from ankinote.utils.httpcli import (
+    _RETRY_MAX_ATTEMPTS,
+    _RETRYABLE_EXCEPTIONS,
+    close_session,
+    get,
+    get_session,
+    init_session,
+    post,
+    request,
+)
 
 
-@pytest.fixture
-def http_cli():
-    return HttpClient()
+@pytest.fixture(autouse=True)
+async def cleanup_session():
+    """Ensure no leftover session between tests."""
+    await close_session()
+    yield
+    await close_session()
 
 
-class TestHttpClient:
-    """Test cases for HttpClient."""
-
-    @pytest.mark.asyncio
-    async def test_get_session_creates_new_session(self, http_cli):
-        """Test that get_session creates a new ClientSession."""
-        session = http_cli.get_session()
-
-        assert isinstance(session, ClientSession)
-        assert not session.closed
-
-        # Cleanup
-        await session.close()
-
-    @pytest.mark.asyncio
-    async def test_context_manager_closes_session(self, http_cli):
-        """Test that the context manager properly closes the session."""
-        async with http_cli:
-            session = http_cli.get_session()
-            assert not session.closed
-
-        # After exiting context, session should be closed
-        assert session.closed
+class TestSessionLifecycle:
+    """Tests for init_session / get_session / close_session."""
 
     @pytest.mark.asyncio
-    async def test_get_session_returns_same_instance(self, http_cli):
-        """Test that get_session returns the same session instance."""
-        async with http_cli:
-            session1 = http_cli.get_session()
-            session2 = http_cli.get_session()
-            assert session1 is session2
-
-        assert session1.closed
+    async def test_init_creates_session(self):
+        """init_session() creates a new AsyncClient."""
+        client = init_session()
+        assert isinstance(client, httpx.AsyncClient)
+        assert not client.is_closed
 
     @pytest.mark.asyncio
-    async def test_get_session_recreates_after_close(self, http_cli):
-        """Test that get_session creates a new session after the old one is closed."""
-
-        session1 = http_cli.get_session()
-        await session1.close()
-
-        session2 = http_cli.get_session()
-        assert session1 is not session2
-        assert not session2.closed
-
-        # Cleanup
-        await session2.close()
+    async def test_get_session_returns_same_instance(self):
+        """get_session() returns the same instance as init_session()."""
+        client1 = init_session()
+        client2 = get_session()
+        assert client1 is client2
 
     @pytest.mark.asyncio
-    async def test_context_http_cli_allows_reentry(self, http_cli):
-        """Test that http_cli can be used in multiple contexts."""
-
-        async with http_cli:
-            session1 = http_cli.get_session()
-            assert not session1.closed
-
-        assert session1.closed
-
-        async with http_cli:
-            session2 = http_cli.get_session()
-            assert not session2.closed
-            assert session1 is not session2
-
-        assert session2.closed
-
-    def test_get_session_requires_event_loop(self, http_cli):
-        """Test that get_session raises error when called outside event loop."""
-
-        with pytest.raises(
-            RuntimeError, match="must be called within a running event loop"
-        ):
-            # This should fail because there's no running event loop
-            http_cli.get_session()
+    async def test_close_session(self):
+        """close_session() closes the client."""
+        client = init_session()
+        assert not client.is_closed
+        await close_session()
+        assert client.is_closed
 
     @pytest.mark.asyncio
-    async def test_session_has_retry_middleware(self, http_cli):
-        """Test that the session is configured with retry middleware."""
-
-        session = http_cli.get_session()
-
-        # Check that middlewares are configured
-        assert hasattr(session, "_request_class")
-
-        # Cleanup
-        await session.close()
+    async def test_close_session_idempotent(self):
+        """close_session() is safe to call multiple times."""
+        await close_session()  # No session yet — should not raise
+        init_session()
+        await close_session()
+        await close_session()  # Already closed — should not raise
 
     @pytest.mark.asyncio
-    async def test_session_has_raise_for_status(self, http_cli):
-        """Test that the session raises for HTTP status errors."""
+    async def test_init_after_close_creates_new(self):
+        """init_session() after close creates a new client."""
+        client1 = init_session()
+        await close_session()
+        client2 = init_session()
+        assert client1 is not client2
+        assert not client2.is_closed
 
-        session = http_cli.get_session()
-
-        # Check that raise_for_status is enabled
-        # Note: This is a bit tricky to test directly, but we can verify the session config
-        assert session._raise_for_status is True
-
-        # Cleanup
-        await session.close()
-
-    @pytest.mark.asyncio
-    async def test_global_session_http_cli(self):
-        """Test the global http instance."""
-        session = http.get_session()
-        assert isinstance(session, ClientSession)
-        assert not session.closed
-
-        # Cleanup
-        await session.close()
+    def test_init_requires_event_loop(self):
+        """init_session() raises when called outside an event loop."""
+        with pytest.raises(RuntimeError, match="must be called within a running event loop"):
+            init_session()
 
     @pytest.mark.asyncio
-    async def test_concurrent_access(self, http_cli):
-        """Test that concurrent access to get_session returns the same instance."""
+    async def test_get_session_raises_before_init(self):
+        """get_session() raises if init_session() was never called."""
+        with pytest.raises(RuntimeError, match="not initialized"):
+            get_session()
 
-        # Start multiple coroutines trying to get the session
-        async def get_sess():
-            return http_cli.get_session()
 
-        sessions = await asyncio.gather(
-            get_sess(),
-            get_sess(),
-            get_sess(),
+class TestRequestHelpers:
+    """Tests for request / get / post helpers."""
+
+    @pytest.mark.asyncio
+    async def test_get_passes_method(self, mocker: MockerFixture):
+        """get() calls request() with method='GET'."""
+        mock = mocker.patch("ankinote.utils.httpcli.request", new_callable=AsyncMock)
+        await get("http://example.com")
+        mock.assert_awaited_once_with("GET", "http://example.com")
+
+    @pytest.mark.asyncio
+    async def test_post_passes_method(self, mocker: MockerFixture):
+        """post() calls request() with method='POST'."""
+        mock = mocker.patch("ankinote.utils.httpcli.request", new_callable=AsyncMock)
+        await post("http://example.com", json={"key": "value"})
+        mock.assert_awaited_once_with("POST", "http://example.com", json={"key": "value"})
+
+    @pytest.mark.asyncio
+    async def test_request_passes_kwargs(self, mocker: MockerFixture):
+        """request() forwards kwargs to the underlying client."""
+        captured: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["request"] = request
+            return httpx.Response(200)
+
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
         )
+        mocker.patch("ankinote.utils.httpcli._get_client_or_raise", return_value=client)
 
-        # All should be the same instance
-        assert all(s is sessions[0] for s in sessions)
+        resp = await request("POST", "http://example.com", json={"a": 1})
+        assert resp.status_code == 200
 
-        # Cleanup
-        await sessions[0].close()
+        sent = captured["request"]
+        assert sent.method == "POST"
+        assert str(sent.url) == "http://example.com"
+        assert sent.headers["content-type"] == "application/json"
+        assert json.loads(sent.content) == {"a": 1}
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_request_raises_before_init(self):
+        """request() raises if client is not initialized."""
+        with pytest.raises(RuntimeError, match="not initialized"):
+            await request("GET", "http://example.com")
 
 
-class TestRetryMiddleware:
-    """Test cases for the retry middleware logic."""
+class TestRetry:
+    """Tests for retry logic in request()."""
 
     @pytest.fixture
-    def mock_req(self, mocker: MockerFixture):
-        """Mock aiohttp ClientRequest."""
-        return mocker.MagicMock(spec=aiohttp.ClientRequest)
+    def failing_transport(self):
+        """A transport that fails N times then succeeds."""
+        call_count = 0
 
-    @pytest.fixture
-    def mock_sleep(self, mocker: MockerFixture):
-        """Mock asyncio.sleep to speed up tests and verify backoff timing."""
-        return mocker.patch("asyncio.sleep", new_callable=mocker.AsyncMock)
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                raise httpx.ConnectError("Connection refused", request=request)
+            return httpx.Response(200, json={"ok": True})
 
-    @pytest.mark.asyncio
-    async def test_successful_request_no_retry(self, mock_req, mock_sleep):
-        """Test that a successful request returns immediately without retry."""
-        mock_resp = AsyncMock(spec=aiohttp.ClientResponse)
-        mock_handler = AsyncMock(return_value=mock_resp)
-
-        result = await retry_middleware(mock_req, mock_handler)
-
-        assert result == mock_resp
-        assert mock_handler.call_count == 1
-        mock_sleep.assert_not_awaited()
+        return handler
 
     @pytest.mark.asyncio
-    async def test_retry_eventually_succeeds(self, mock_req, mock_sleep):
-        """Test that the middleware retries on error and eventually succeeds."""
-        mock_resp = AsyncMock(spec=aiohttp.ClientResponse)
-        mock_handler = AsyncMock(
-            side_effect=[
-                aiohttp.ServerDisconnectedError("Connection lost"),
-                asyncio.TimeoutError("Request timed out"),
-                mock_resp,
-            ]
-        )
+    async def test_retry_eventually_succeeds(self, mocker: MockerFixture, failing_transport):
+        """request() retries on transport errors and eventually succeeds."""
+        client = httpx.AsyncClient(transport=httpx.MockTransport(failing_transport))
+        mocker.patch("ankinote.utils.httpcli._get_client_or_raise", return_value=client)
+        mocker.patch("ankinote.utils.httpcli.asyncio.sleep", new_callable=AsyncMock)
 
-        result = await retry_middleware(mock_req, mock_handler)
-
-        assert result == mock_resp
-        assert mock_handler.call_count == 3
-
-        assert mock_sleep.call_count == 2
-        mock_sleep.assert_has_awaits([call(1), call(2)])
+        resp = await request("GET", "http://example.com")
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True}
+        await client.aclose()
 
     @pytest.mark.asyncio
-    async def test_retry_exhausted_raises_error(self, mock_req, mock_sleep):
-        """Test that after max_retries, the last exception is raised."""
-        last_error = aiohttp.ClientError("Permanent failure")
-        mock_handler = AsyncMock(
-            side_effect=[
-                aiohttp.ClientError("Fail 1"),
-                aiohttp.ClientError("Fail 2"),
-                last_error,
-            ]
-        )
+    async def test_retry_exhausted_raises(self, mocker: MockerFixture):
+        """request() raises after exhausting all retry attempts."""
+        def always_fail(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("Always fails", request=request)
 
-        with pytest.raises(aiohttp.ClientError) as exc_info:
-            await retry_middleware(mock_req, mock_handler)
+        client = httpx.AsyncClient(transport=httpx.MockTransport(always_fail))
+        mocker.patch("ankinote.utils.httpcli._get_client_or_raise", return_value=client)
+        sleep_mock = mocker.patch("ankinote.utils.httpcli.asyncio.sleep", new_callable=AsyncMock)
 
-        assert exc_info.value == last_error
-        assert mock_handler.call_count == 3
-        assert mock_sleep.call_count == 2
+        with pytest.raises(httpx.ConnectError, match="Always fails"):
+            await request("GET", "http://example.com")
 
-
-class TestSessionCleanup:
-    """Test cases for proper session cleanup."""
+        # Should sleep (RETRY_MAX_ATTEMPTS - 1) times with exponential
+        # backoff (1 s, 2 s, 4 s)
+        assert sleep_mock.await_count == _RETRY_MAX_ATTEMPTS - 1
+        sleep_mock.assert_has_awaits([call(1), call(2), call(4)])
+        await client.aclose()
 
     @pytest.mark.asyncio
-    async def test_manual_cleanup(self, http_cli):
-        """Test manual cleanup of session."""
+    async def test_successful_request_no_retry(self, mocker: MockerFixture):
+        """request() returns immediately without retry on success."""
+        def success(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200)
 
-        session = http_cli.get_session()
+        client = httpx.AsyncClient(transport=httpx.MockTransport(success))
+        mocker.patch("ankinote.utils.httpcli._get_client_or_raise", return_value=client)
+        sleep_mock = mocker.patch("ankinote.utils.httpcli.asyncio.sleep", new_callable=AsyncMock)
 
-        assert not session.closed
-        await session.close()
-        assert session.closed
+        resp = await request("GET", "http://example.com")
+        assert resp.status_code == 200
+        sleep_mock.assert_not_awaited()
+        await client.aclose()
 
-    @pytest.mark.asyncio
-    async def test_aexit_with_no_session(self, http_cli):
-        """Test that __aexit__ handles case when no session was created."""
 
-        # Don't create a session, just exit the context
-        async with http_cli:
-            pass  # No session created
+class TestRetryableExceptions:
+    """Verify the retryable exceptions tuple."""
 
-        # Should not raise any errors
-        assert http_cli._session is None
+    def test_includes_httpx_request_error(self):
+        assert httpx.RequestError in _RETRYABLE_EXCEPTIONS
 
-    @pytest.mark.asyncio
-    async def test_aexit_with_already_closed_session(self, http_cli):
-        """Test that __aexit__ handles already closed sessions gracefully."""
-
-        async with http_cli:
-            session = http_cli.get_session()
-            await session.close()  # Close it manually
-
-        # Should not raise any errors
-        assert http_cli._session is None
+    def test_includes_asyncio_timeout(self):
+        assert asyncio.TimeoutError in _RETRYABLE_EXCEPTIONS
