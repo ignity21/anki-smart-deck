@@ -1,0 +1,77 @@
+{{FrontSide}}
+<hr>
+
+<!-- Field: syllables -->
+{{#syllables}}
+<div class="syllables">{{syllables}}</div>
+{{/syllables}}
+
+<!-- Field: pronunciation & pron_audio -->
+{{#pronunciation}}
+<div class="badge-row">
+    <div class="badge pronunciation-badge">
+        <div class="phonetic-inline">
+            {{pronunciation}}
+            {{#pron_audio}}
+            <span class="audio-btn">{{pron_audio}}</span>
+            {{/pron_audio}}
+        </div>
+    </div>
+</div>
+{{/pronunciation}}
+
+<!-- Field: definitions -->
+{{#definitions}}
+<div class="section-container">
+    <div class="section-title">Definition</div>
+    <div class="definitions-container">{{definitions}}</div>
+</div>
+{{/definitions}}
+
+<!-- Field: synonyms -->
+{{#synonyms}}
+<div class="section-container">
+    <div class="section-title">Synonyms</div>
+    <div class="synonyms-container">{{synonyms}}</div>
+</div>
+{{/synonyms}}
+
+<!-- Field: examples -->
+{{#examples}}
+<div class="section-container">
+    <div class="section-title">Usage Examples</div>
+    <div class="examples-container">{{examples}}</div>
+</div>
+{{/examples}}
+
+<!-- Field: etymology -->
+{{#etymology}}
+<div class="section-container">
+    <div class="section-title">Etymology</div>
+    <div class="etymology-container">{{etymology}}</div>
+</div>
+{{/etymology}}
+
+<!-- Field: collocations -->
+{{#collocations}}
+<div class="section-container">
+    <div class="section-title">Collocations</div>
+    <div class="collocations-container">{{collocations}}</div>
+</div>
+{{/collocations}}
+
+<!-- Field: notes -->
+{{#notes}}
+<div class="section-container">
+    <div class="section-title">Notes</div>
+    <div class="notes-container">{{notes}}</div>
+</div>
+{{/notes}}
+
+<!-- Field: user_notes -->
+{{#user_notes}}
+<div class="user-notes-container">
+    <div class="section-title user-notes-title">My Study Notes</div>
+    <div>{{user_notes}}</div>
+</div>
+{{/user_notes}}

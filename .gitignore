@@ -212,4 +212,11 @@ __marimo__/
 # Other files to ignore
 *.mp3
 *.jpg
+*.jpeg
 *.png
+
+# project
+output/
+words.txt
+phrases.txt
+sentences.txt

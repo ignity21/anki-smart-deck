@@ -45,10 +45,8 @@ cp .env.example .env
 Create a `.env` file with your Google API credentials:
 
 ```env
-GOOGLE_AI_API_KEY=your_gemini_api_key
-GOOGLE_CLOUD_TTS_KEY=your_tts_api_key
-GOOGLE_CUSTOM_SEARCH_KEY=your_search_api_key
-GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
+GEMINI_API_KEY=your_gemini_key
+GOOGLE_TTS_KEY=your_tts_api_key
 ANKI_CONNECT_URL=http://localhost:8765
 ```
 

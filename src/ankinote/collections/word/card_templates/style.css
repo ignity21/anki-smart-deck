@@ -1,0 +1,206 @@
+/* --- Global Base & Variables --- */
+:root {
+  font-size: clamp(15px, 3vw, 20px);
+}
+
+body {
+  /* Light Theme */
+  --bg-color: #f0f2f5;
+  --section-bg: #ffffff;
+  --text-primary: #2d3436;
+  --text-secondary: #636e72;
+  --border-color: #eee;
+  --section-title-color: #999;
+  --shadow-sm: 0 0.1em 0.3em rgba(0, 0, 0, 0.05);
+  --badge-pos-bg: #e3f2fd;
+  --badge-pos-color: #1976d2;
+  --badge-difficulty-bg: #f3e5f5;
+  --badge-difficulty-color: #7b1fa2;
+  --user-notes-bg: rgba(255, 245, 157, 0.15);
+  --user-notes-title-color: #fbc02d;
+
+  /* Input States */
+  --input-success-bg: #e8f5e9;
+  --input-success-color: #2e7d32;
+  --input-error-bg: #fbe9e7;
+  --input-error-color: #d32f2f;
+  --input-neutral-bg: #f5f5f5;
+}
+
+body.nightMode {
+  /* Dark Theme */
+  --bg-color: #1a1c1e;
+  --section-bg: #242629;
+  --text-primary: #f0f2f5;
+  --text-secondary: #a0a6ac;
+  --border-color: #2f3338;
+  --section-title-color: #666;
+  --shadow-sm: 0 0.2em 0.5em rgba(255, 255, 255, 0.05);
+  --badge-pos-bg: #0d47a1;
+  --badge-pos-color: #bbdefb;
+  --badge-difficulty-bg: #4a148c;
+  --badge-difficulty-color: #e1bee7;
+  --user-notes-bg: rgba(255, 193, 7, 0.1);
+  --user-notes-title-color: #ffd54f;
+  --input-success-bg: #27ae60;
+  --input-error-bg: #c0392b;
+  --input-neutral-bg: #7f8c8d;
+}
+
+/* --- Layout Containers --- */
+.card {
+  font-size: 1rem;
+  text-align: left;
+  background-color: var(--bg-color) !important;
+  color: var(--text-primary) !important;
+  padding: 0.5em;
+  margin: 0 auto;
+  max-width: clamp(80vw, 700px, 100vw);
+  min-height: 100vh;
+}
+
+.word {
+  font-size: 2.2rem;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 0.4em;
+}
+
+.syllables {
+  font-size: 1.8rem;
+  font-weight: bold;
+  text-align: center;
+  letter-spacing: 0.1em;
+  padding-bottom: 0.2em;
+}
+
+/* --- Badges & Meta --- */
+.badge-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4em;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 0.25em 0.75em;
+  border-radius: 0.4em;
+  font-size: 0.8rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+}
+
+.part-of-speech-badge {
+  background-color: var(--badge-pos-bg);
+  color: var(--badge-pos-color);
+}
+
+.difficulty-badge {
+  background-color: var(--badge-difficulty-bg);
+  color: var(--badge-difficulty-color);
+}
+
+.pronunciation-badge {
+  background: var(--section-bg);
+  color: var(--text-secondary);
+  border: 0.1em solid var(--border-color);
+}
+
+.phonetic-inline {
+  display: inline-flex;
+  gap: 0.1em;
+  align-items: center;
+}
+
+/* --- Content Sections --- */
+.section-container {
+  font-size: 1rem;
+  background: var(--section-bg);
+  border-radius: 0.6em;
+  padding: 0.5em;
+  margin: 0.6em auto;
+  box-shadow: var(--shadow-sm);
+  border: 0.1em solid var(--border-color);
+}
+
+.section-title {
+  font-size: 0.9em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--section-title-color);
+  letter-spacing: 0.1em;
+  border-bottom: 0.1em solid var(--border-color);
+  padding-bottom: 0.1em;
+  margin-bottom:0.2em;
+}
+
+.definition {
+  margin-bottom: 0.5em;
+}
+
+.example {
+  margin-bottom: 1em;
+}
+
+.examples-container {
+  padding-left: 0.5em;
+  border-left: 0.3em solid var(--border-color);
+  font-style: italic;
+}
+
+.user-notes-container {
+  background-color: var(--user-notes-bg);
+  border: 0.1em dashed var(--user-notes-title-color);
+  border-radius: 0.6em;
+  padding: 1em;
+  margin-bottom: 1.2em;
+}
+
+.user-notes-title { color: var(--user-notes-title-color); }
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45em;
+  align-items: center;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+hr {
+  color: var(--border-color);
+  height: 0.15em;
+}
+
+/* --- Media & Assets --- */
+.replay-button svg, .audio-btn svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  vertical-align: middle;
+}
+
+img {
+  max-width: 25vw;
+  height: auto;
+  border-radius: 0.4em;
+}
+
+/* --- Input Typing (type:word) --- */
+#typeans {
+  font-size: 2rem;
+  background-color: var(--input-neutral-bg);
+  color: var(--text-primary);
+  border: 0.1em solid var(--border-color);
+  text-align: center;
+  max-width: 50vw;
+  margin: 0.2em auto;
+  padding: 0.1em;
+  display: block;
+}
+
+/* Feedback Colors */
+.typeGood { background-color: var(--input-success-bg) !important; color: var(--input-success-color) !important; }
+.typeBad { background-color: var(--input-error-bg) !important; color: var(--input-error-color) !important; }
+.typeMissed { background-color: var(--input-neutral-bg) !important; color: var(--text-primary) !important; }
