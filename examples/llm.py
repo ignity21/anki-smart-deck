@@ -2,6 +2,7 @@
 import asyncio
 import base64
 
+from dotenv import load_dotenv
 from litellm import acompletion, aimage_generation
 from rich import print as rprint
 
@@ -10,9 +11,9 @@ from ankinote.utils import img
 
 
 async def main():
-    model_id = "gemini/gemini-3.1-flash-lite-preview"
-    image_model_id = "gemini/gemini-2.5-flash-image"
-    image_quality = "low"
+    load_dotenv()
+    model_id = "deepseek/deepseek-v4-flash"
+    image_model_id = "gemini/gemini-3.1-flash-lite-image"
     image_size = "1024x1024"
 
     async with Application():
@@ -30,7 +31,6 @@ async def main():
         image_response = await aimage_generation(
             model=image_model_id,
             prompt=image_prompt,
-            quality=image_quality,
             n=1,
             size=image_size,
         )
@@ -39,7 +39,7 @@ async def main():
         img_b64: str = image_response.data[0].b64_json  # pyright: ignore[reportAssignmentType, reportOptionalSubscript]
         img_bytes = base64.b64decode(img_b64)
 
-        img_scaled = img.scale(img_bytes, target_size=128)
+        img_scaled = img.resize_to_square(img_bytes, target_size=256)
         with open("generated_image.png", "wb") as f:
             f.write(img_scaled)
 
