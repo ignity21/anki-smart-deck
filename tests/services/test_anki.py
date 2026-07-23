@@ -128,6 +128,14 @@ class TestModelClient:
         assert await client.get("AINote Word") is None
 
     @pytest.mark.asyncio
+    async def test_get_returns_none_when_anki_reports_model_not_found(self):
+        invoke = AsyncMock(side_effect=AnkiConnectError("model was not found: AINote Word"))
+        stub = StubInvoker(invoke)
+        client = ModelClient(stub)
+
+        assert await client.get("AINote Word") is None
+
+    @pytest.mark.asyncio
     async def test_require_raises_model_not_found(self):
         invoke = AsyncMock(return_value=[])
         stub = StubInvoker(invoke)

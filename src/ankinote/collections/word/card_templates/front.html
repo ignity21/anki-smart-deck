@@ -1,10 +1,12 @@
-<div class="word">{{word}}</div>
-<div class="badge-row">
-    {{#difficulty}}
-    <div class="badge difficulty-badge">{{difficulty}}</div>
-    {{/difficulty}}
-
-    {{#part_of_speech}}
-    <div class="badge part-of-speech-badge">{{part_of_speech}}</div>
-    {{/part_of_speech}}
-</div>
+<section class="stage-card">
+  <div class="eyebrow">Recognition</div>
+  <div class="lemma-stage">{{lemma}}</div>
+  <div class="meta-row">
+    {{#part_of_speech}}<span class="pill pos-pill">{{part_of_speech}}</span>{{/part_of_speech}}
+    {{#difficulty}}<span class="pill difficulty-pill">{{difficulty}}</span>{{/difficulty}}
+  </div>
+  <div class="pronunciation-row">
+    {{#pronunciation}}<span class="pronunciation-line">{{pronunciation}}</span>{{/pronunciation}}
+    {{#headword_audio}}<span class="audio-line inline-audio">{{headword_audio}}</span>{{/headword_audio}}
+  </div>
+</section>

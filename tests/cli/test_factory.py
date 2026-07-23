@@ -17,7 +17,7 @@ from ankinote.cli.factory import (
     collection_context,
 )
 from ankinote.consts import Language
-from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
+from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG, LiteLLMGeminiImageService
 from ankinote.services.anki import NoteModel
 
 
@@ -117,8 +117,10 @@ class TestCollectionBuilders:
         assert collection._native_language is Language.CHINESE_S
         assert collection._target_language is Language.ENGLISH
         assert collection._generator._text_model_id == "llm-x"
-        assert collection._generator._image_service._model_id == "img-y"
-        assert collection._generator._image_service._image_size == 256
+        image_service = collection._generator._image_service
+        assert isinstance(image_service, LiteLLMGeminiImageService)
+        assert image_service._model_id == "img-y"
+        assert image_service._image_size == 256
 
     def test_build_word_collection_uses_default_ai_config(self):
         client = FakeCollectionClient()
@@ -130,14 +132,10 @@ class TestCollectionBuilders:
         collection = build_word_collection(client, options)
 
         assert collection._generator._text_model_id == DEFAULT_AI_SERVICE_CONFIG.text_model_id
-        assert (
-            collection._generator._image_service._model_id
-            == DEFAULT_AI_SERVICE_CONFIG.image_model_id
-        )
-        assert (
-            collection._generator._image_service._image_size
-            == DEFAULT_AI_SERVICE_CONFIG.image_size
-        )
+        image_service = collection._generator._image_service
+        assert isinstance(image_service, LiteLLMGeminiImageService)
+        assert image_service._model_id == DEFAULT_AI_SERVICE_CONFIG.image_model_id
+        assert image_service._image_size == DEFAULT_AI_SERVICE_CONFIG.image_size
 
     def test_build_phrase_collection(self):
         client = FakeCollectionClient()
@@ -181,8 +179,10 @@ class TestCollectionBuilders:
 
         assert collection._anki_client is client
         assert collection._generator._text_model_id == "llm-x"
-        assert collection._generator._image_service._model_id == "img-y"
-        assert collection._generator._image_service._image_size == 512
+        image_service = collection._generator._image_service
+        assert isinstance(image_service, LiteLLMGeminiImageService)
+        assert image_service._model_id == "img-y"
+        assert image_service._image_size == 512
 
 
 class TestCollectionContext:

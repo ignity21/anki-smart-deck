@@ -134,6 +134,7 @@ def create_prompt_loader(
 
 
 _ANGLED_PHONETIC_PATTERN = re.compile(r"<([^:>]+):([^>]+)>")  # <汉:hàn>
+_INLINE_PHONETIC_PATTERN = re.compile(r"([一-龯々ヶヵ]+)<([^:>]+)>")  # 漢<かん>
 
 
 def strip_phonetic_annotations(text: str) -> str:
@@ -150,9 +151,11 @@ def strip_phonetic_annotations(text: str) -> str:
     Returns:
         Plain text with all phonetic annotations and brackets removed.
     """
+    text = _INLINE_PHONETIC_PATTERN.sub(r"\1", text)
     return _ANGLED_PHONETIC_PATTERN.sub(r"\1", text)
 
 
 def convert_to_html_ruby(text: str) -> str:
     """Convert angled-style phonetic annotations to HTML ruby tags."""
+    text = _INLINE_PHONETIC_PATTERN.sub(r"<ruby>\1<rt>\2</rt></ruby>", text)
     return _ANGLED_PHONETIC_PATTERN.sub(r"<ruby>\1<rt>\2</rt></ruby>", text)
