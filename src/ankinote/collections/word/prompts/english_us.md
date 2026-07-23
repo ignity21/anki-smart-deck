@@ -1,45 +1,52 @@
 # US English Vocabulary Anki Card Generation
 
-Return **only** valid JSON, no markdown, no comments.
+Return only valid JSON. No markdown. No comments.
+
+Goal: generate compact learning data for Anki cards optimized for recognition, recall, and spelling.
 
 ```json
 [
   {
-    "word": "string",
-    "part_of_speech": "n.|vt.|vi.|adj.|adv.|prep.|conj.|interj.",
-    "pronunciation": "/IPA/ or null; use US English",
-    "syllables": ["syl", "la", "bles"],
+    "lemma": "string",
+    "part_of_speech": "noun|verb|adjective|adverb|phrasal verb",
+    "pronunciation": "/IPA/ or null; use US English IPA",
     "difficulty": "A1|A2|B1|B2|C1|C2",
-    "definitions": [
+    "morphology": "Short morphology note such as plural, past tense, comparative, stress pattern, or null",
+    "core_meaning": {
+      "target_text": "One short English definition for the main sense.",
+      "native_text": "Short native-language translation for the main sense.",
+      "is_visualizable": true
+    },
+    "supporting_meanings": [
       {
-        "target_lang": "English definition",
-        "native_lang": "Simple translation in native language",
-        "is_visualizable": true
+        "target_text": "Short English gloss for a secondary useful sense.",
+        "native_text": "Short native-language translation.",
+        "is_visualizable": false
       }
     ],
-    "synonyms": ["word1", "word2"],
     "examples": [
       {
-        "sentence": "English sentence using word or inflected form.",
-        "translation": "Native language translation.",
-        "highlights": ["word/collocation containing the word"]
+        "sentence": "One high-value English example sentence using the lemma or an inflected form.",
+        "translation": "Native-language translation.",
+        "highlights": ["useful collocation or inflected form"]
       }
     ],
-    "etymology": "Use user's native lanuage; Content: Word origin or null",
-    "collocations": ["phrase1", "phrase2"],
-    "notes": ["Use user's native lanuage; Content: Irregular forms, UK/US differences, common mistakes;"]
+    "collocations": ["high-frequency phrase", "another phrase"],
+    "confusions": ["brief contrast with a similar word"],
+    "etymology_or_memory": "Optional memory hook in the user's native language. Explicitly include the main native-language translation or meaning anchor, or null",
+    "production_hint": "A short cue that helps the learner recall the lemma without revealing it."
   }
 ]
 ```
 
-## Rules
-- `level ≤ difficulty` means "Calibrate examples and notes to the word's CEFR level: use only vocabulary and grammar ≤ that difficulty"
-
-| Field | Constraint |
-|---|---|
-| `definitions` | 1–3 per `part_of_speech`; target language must be `level ≤ difficulty` |
-| `synonyms` | 0-3 true synonyms(word or phrase); `level ≤ difficulty` |
-| `examples` | 1–4 items; sentence must be `level ≤ difficulty`; highlights must contain word or inflected form |
-| `etymology` | Include if useful for memorizing; else `null` |
-| `collocations` | 0–5 most frequent combinations |
-| `notes` | 0–3 items; `[]` if nothing notable |
+Rules:
+- Return 1 to 2 records total for the queried word. Keep only the most common and worth-learning parts of speech.
+- `core_meaning` must contain exactly one primary sense. Keep it short and memorable.
+- `supporting_meanings` may contain 0 to 2 brief secondary sense summaries. Do not duplicate the core meaning.
+- `examples` must contain 1 to 2 high-value examples tied to the core meaning.
+- `collocations` must contain 2 to 4 common combinations when available.
+- `confusions` may contain 0 to 2 items about near-synonyms, false friends, or common misuse.
+- `production_hint` must help recall the target word but must not contain the lemma itself.
+- `etymology_or_memory`, when present, must be written in the user's native language and should explicitly mention the main native-language meaning anchor.
+- Prefer concise, learner-friendly wording over dictionary-style detail.
+- Keep every target-language string at or below the stated difficulty level.

@@ -9,8 +9,8 @@ from ankinote.collections.phrase.models import PhraseModel
 from ankinote.collections.sentence.generator import SentenceGenerator
 from ankinote.collections.sentence.models import SentenceModel
 from ankinote.collections.word.generator import WordGenerator
-from ankinote.collections.word.models import Definition as WordDefinition
 from ankinote.collections.word.models import Example as WordExample
+from ankinote.collections.word.models import Sense
 from ankinote.collections.word.models import WordModel
 from ankinote.consts import Language
 
@@ -57,30 +57,34 @@ class TestWordGenerator:
             text_model_id="text-model",
         )
         word_model = WordModel(
-            word="test",
-            part_of_speech="n.",
+            lemma="test",
+            part_of_speech="noun",
             pronunciation=None,
-            syllables=["test"],
             difficulty="A1",
-            definitions=[
-                WordDefinition(
-                    target_lang="test",
-                    native_lang="测试",
-                    is_visualizable=False,
+            morphology="plural tests",
+            core_meaning=Sense(
+                target_text="an exam or check",
+                native_text="测试",
+                is_visualizable=False,
+            ),
+            supporting_meanings=[],
+            examples=[
+                WordExample(
+                    sentence="a test example",
+                    translation="例句",
+                    highlights=[],
                 )
             ],
-            synonyms=[],
-            examples=[
-                WordExample(sentence="a test example", translation="例句", highlights=[])
-            ],
-            collocations=[],
-            notes=[],
+            collocations=["take a test"],
+            confusions=[],
+            etymology_or_memory=None,
+            production_hint="school check",
         )
 
         media = await generator.generate_media(word_model, Language.ENGLISH)
 
-        assert media.pronunciation == b"audio:test"
-        assert media.examples == [b"audio:a test example"]
+        assert media.headword_audio == b"audio:test"
+        assert media.example_audios == [b"audio:a test example"]
         assert synth.calls == ["test", "a test example"]
 
 

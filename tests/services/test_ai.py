@@ -1,8 +1,10 @@
 """Tests for the shared AI service layer."""
 
+import io
 from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 from pytest_mock import MockerFixture
 
 from ankinote.services.ai import LiteLLMGeminiImageService, LiteLLMTextService
@@ -65,21 +67,24 @@ async def test_litellm_text_service_rejects_non_string_content(
 async def test_litellm_gemini_image_service_decodes_and_resizes(
     mocker: MockerFixture,
 ):
+    image = Image.new("RGB", (80, 40), color=(10, 20, 30))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+
     image_generation = mocker.patch(
         "ankinote.services.ai.aimage_generation",
-        return_value=SimpleNamespace(data=[SimpleNamespace(b64_json="aW1hZ2UtYnl0ZXM=")]),
-    )
-    resize = mocker.patch(
-        "ankinote.services.ai.resize_to_square",
-        return_value=b"resized-image",
+        return_value=SimpleNamespace(
+            data=[SimpleNamespace(b64_json=buffer.getvalue().hex())]
+        ),
     )
 
     service = LiteLLMGeminiImageService(model_id="gemini/gemini-2.5-flash-image", image_size=128)
+    mocker.patch("ankinote.services.ai.base64.b64decode", return_value=buffer.getvalue())
     result = await service.generate_image(prompt="draw a cat")
 
-    assert result == b"resized-image"
+    with Image.open(io.BytesIO(result)) as out:
+        assert out.size == (80, 40)
     image_generation.assert_awaited_once_with(
         model="gemini/gemini-2.5-flash-image",
         prompt="draw a cat",
     )
-    resize.assert_called_once_with(b"image-bytes", 128)

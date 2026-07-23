@@ -118,6 +118,16 @@ class AnkiModelService(Protocol):
         """Create a new note model."""
         ...
 
+    async def update_templates(
+        self, model_name: str, templates: list[TemplateUpsert]
+    ) -> None:
+        """Update existing note model templates."""
+        ...
+
+    async def update_styling(self, model_name: str, css: str) -> None:
+        """Update note model CSS."""
+        ...
+
 
 class AnkiDeckService(Protocol):
     """Subset of deck operations required by collections."""
@@ -222,7 +232,12 @@ class ModelClient:
         Returns:
             NoteModel instance if present, otherwise ``None``.
         """
-        model_list = await self._find_models_by_name(model_name)
+        try:
+            model_list = await self._find_models_by_name(model_name)
+        except AnkiConnectError as exc:
+            if "model was not found" in str(exc):
+                return None
+            raise
         if not model_list:
             return None
 

@@ -1,5 +1,7 @@
 """Tests for unified AI service usage across generators."""
 
+from collections.abc import Sequence
+
 import pytest
 
 from ankinote.collections.math.generator import MathGenerator
@@ -11,6 +13,7 @@ from ankinote.collections.stem.generator import StemGenerator
 from ankinote.collections.stem.models import CardType
 from ankinote.collections.word.generator import WordGenerator
 from ankinote.consts import Language
+from ankinote.services.ai import TextMessage
 
 
 class FakeTextService:
@@ -24,7 +27,7 @@ class FakeTextService:
         self,
         *,
         model_id: str,
-        messages: list[dict[str, str]],
+        messages: Sequence[TextMessage],
         temperature: float,
     ) -> str:
         self.calls.append(
@@ -62,16 +65,22 @@ async def test_word_generator_uses_unified_text_service():
             """
             [
               {
-                "word": "test",
-                "part_of_speech": "n.",
+                "lemma": "test",
+                "part_of_speech": "noun",
                 "pronunciation": null,
-                "syllables": ["test"],
                 "difficulty": "A1",
-                "definitions": [{"target_lang": "test", "native_lang": "测试", "is_visualizable": false}],
-                "synonyms": [],
-                "examples": [{"sentence": "a test", "translation": "测试", "highlights": []}],
-                "collocations": [],
-                "notes": []
+                "morphology": "plural tests",
+                "core_meaning": {
+                  "target_text": "an exam or check",
+                  "native_text": "测试",
+                  "is_visualizable": false
+                },
+                "supporting_meanings": [],
+                "examples": [{"sentence": "The test starts now.", "translation": "测试现在开始。", "highlights": ["test"]}],
+                "collocations": ["take a test", "pass a test"],
+                "confusions": [],
+                "etymology_or_memory": null,
+                "production_hint": "school check"
               }
             ]
             """
@@ -90,8 +99,55 @@ async def test_word_generator_uses_unified_text_service():
         Language.CHINESE_S,
     )
 
-    assert models[0].word == "test"
+    assert models[0].lemma == "test"
     assert text_service.calls[0]["model_id"] == "word-model"
+    messages = text_service.calls[0]["messages"]
+    assert isinstance(messages, list)
+    assert "Goal: Create concise Anki cards optimized for recognition, recall, and spelling." in messages[1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_word_generator_accepts_fenced_json():
+    text_service = FakeTextService(
+        [
+            """```json
+            [
+              {
+                "lemma": "harvest",
+                "part_of_speech": "noun",
+                "pronunciation": "/ˈhɑːrvɪst/",
+                "difficulty": "B1",
+                "morphology": null,
+                "core_meaning": {
+                  "target_text": "the season of gathering crops",
+                  "native_text": "收获季节",
+                  "is_visualizable": true
+                },
+                "supporting_meanings": [],
+                "examples": [{"sentence": "The harvest was early this year.", "translation": "今年收成很早。", "highlights": ["harvest"]}],
+                "collocations": ["good harvest", "rice harvest"],
+                "confusions": [],
+                "etymology_or_memory": null,
+                "production_hint": "time when farmers gather crops"
+              }
+            ]
+            ```"""
+        ]
+    )
+    generator = WordGenerator(
+        tts_service=FakeSpeechSynthesizer(),
+        text_service=text_service,
+        image_service=FakeImageService(),
+        text_model_id="word-model",
+    )
+
+    models = await generator.generate_word_data(
+        "harvest",
+        Language.ENGLISH,
+        Language.CHINESE_S,
+    )
+
+    assert models[0].lemma == "harvest"
 
 
 @pytest.mark.asyncio

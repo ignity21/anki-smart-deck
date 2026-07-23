@@ -1,16 +1,17 @@
-<div class="type-result">
-    {{type:word}}
-</div>
-<hr>
-{{#definitions}}
-<div class="section-container">
-    <div class="section-title">Definition</div>
-    <div class="definitions-container">{{definitions}}</div>
-</div>
-{{/definitions}}
-{{#examples}}
-<div class="section-container">
-    <div class="section-title">Usage Examples</div>
-    <div class="examples-container">{{examples}}</div>
-</div>
-{{/examples}}
+<div class="type-result">{{type:lemma}}</div>
+<section class="stage-card answer-card">
+  <div class="lemma-stage">{{lemma}}</div>
+  <div class="pronunciation-row">
+    {{#pronunciation}}<span class="pronunciation-line">{{pronunciation}}</span>{{/pronunciation}}
+    {{#headword_audio}}<span class="audio-line inline-audio">{{headword_audio}}</span>{{/headword_audio}}
+  </div>
+  <div class="meta-row">
+    {{#part_of_speech}}<span class="pill pos-pill">{{part_of_speech}}</span>{{/part_of_speech}}
+    {{#difficulty}}<span class="pill difficulty-pill">{{difficulty}}</span>{{/difficulty}}
+  </div>
+</section>
+<section class="panel compact-panel">
+  {{#core_meaning}}<div class="section-title">Core Meaning</div><div>{{core_meaning}}</div>{{/core_meaning}}
+  {{#morphology}}<div class="section-title">Morphology</div><div class="detail-text">{{morphology}}</div>{{/morphology}}
+  {{#production_hint}}<div class="section-title">Recall Cue</div><div class="detail-text">{{production_hint}}</div>{{/production_hint}}
+</section>

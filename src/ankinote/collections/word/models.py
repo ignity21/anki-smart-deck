@@ -1,83 +1,77 @@
-"""
-Vocabulary card data models for Anki.
-
-Two-stage architecture:
-1. WordModel: Structured data returned by AI (with validation)
-2. WordNoteType: Anki note fields (all strings, ready for HTML rendering)
-"""
+"""Vocabulary card data models for the word v2 collection."""
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel
-
-# ============================================================================
-# AI Generation Models (structured data with validation)
-# ============================================================================
+from pydantic import BaseModel, Field, model_validator
 
 
-class Definition(BaseModel):
-    """A single definition in a specific language"""
+class Sense(BaseModel):
+    """A compact sense summary used to build learning-oriented cards."""
 
-    target_lang: str
-    native_lang: str
-    is_visualizable: bool  # whether the definition is easily visualizable
+    target_text: str
+    native_text: str
+    is_visualizable: bool = False
 
 
 class Example(BaseModel):
-    """Example sentence with translation"""
+    """A high-value example sentence with a concise explanation."""
 
     sentence: str
     translation: str
-    highlights: list[
-        str
-    ]  # words/phrases to highlight: collocations, idioms, phrasal verbs, inflections
+    highlights: list[str] = Field(default_factory=list)
 
 
 class WordModel(BaseModel):
-    """
-    Structured vocabulary data model for AI generation.
-    Includes validation and type checking via Pydantic.
-    """
+    """Structured data returned by the LLM for a single lemma + POS note."""
 
-    word: str
-    part_of_speech: str  # e.g., "n.", "vt.", "adj."
-    pronunciation: (
-        str | None
-    )  # IPA notation, e.g., "/wɜːrd/" (US pronunciation by default)
-    syllables: list[str]  # syllable breakdown, e.g., ["ex", "am", "ple"]
-    difficulty: str  # e.g., "beginner", "intermediate", or CEFR levels
-    definitions: list[Definition]
-    synonyms: list[str]  # word or phrase synonyms
-    examples: list[Example]
-    etymology: str | None = None  # word origin to enhance learning interest
-    collocations: list[str]  # common collocations, phrasal verbs, idioms
-    notes: list[
-        str
-    ]  # irregular inflections, UK pronunciation/spelling differences, related terms, etc.
+    lemma: str
+    part_of_speech: str
+    pronunciation: str | None = None
+    difficulty: str
+    morphology: str | None = None
+    core_meaning: Sense
+    supporting_meanings: list[Sense] = Field(default_factory=list, max_length=2)
+    examples: list[Example] = Field(default_factory=list, min_length=1, max_length=2)
+    collocations: list[str] = Field(default_factory=list, max_length=4)
+    confusions: list[str] = Field(default_factory=list, max_length=2)
+    etymology_or_memory: str | None = None
+    production_hint: str
 
-
-# ============================================================================
-# Anki Note Type (all fields are strings for Anki compatibility)
-# ============================================================================
+    @model_validator(mode="after")
+    def validate_content(self) -> "WordModel":
+        """Ensure the core sense is not duplicated in supporting meanings."""
+        normalized_core = (
+            self.core_meaning.target_text.strip(),
+            self.core_meaning.native_text.strip(),
+        )
+        supporting_pairs = {
+            (sense.target_text.strip(), sense.native_text.strip())
+            for sense in self.supporting_meanings
+        }
+        if normalized_core in supporting_pairs:
+            msg = "supporting_meanings must not duplicate core_meaning"
+            raise ValueError(msg)
+        return self
 
 
 @dataclass
 class WordNoteType:
-    """
-    Anki note type with all fields as strings.
-    Complex data (lists, dicts) should be converted to HTML before storing.
-    """
+    """Anki note fields for the word v2 note type."""
 
-    word: str
+    lemma: str
     part_of_speech: str
     pronunciation: str
-    pron_audio: str
-    syllables: str
+    headword_audio: str
     difficulty: str
-    definitions: str
-    synonyms: str
+    morphology: str
+    core_meaning: str
+    sense_notes: str
+    translations: str
     examples: str
-    etymology: str
+    example_audio_refs: str
     collocations: str
-    notes: str
+    confusions: str
+    etymology_or_memory: str
+    image_refs: str
+    production_hint: str
     user_notes: str

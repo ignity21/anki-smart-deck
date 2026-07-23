@@ -1,15 +1,7 @@
-{{#Tags}}
-<div class="section-container">
-    <div class="tags">{{Tags}}</div>
-</div>
-{{/Tags}}
-{{#definitions}}
-<div class="section-container">
-    <div class="section-title">Definition</div>
-    <div class="definitions-container">{{definitions}}</div>
-</div>
-{{/definitions}}
-
-<div class="type-area">
-    {{type:word}}
-</div>
+<section class="stage-card spelling-card">
+  <div class="eyebrow">Spelling</div>
+  {{#headword_audio}}<div class="audio-stage">{{headword_audio}}</div>{{/headword_audio}}
+  {{#translations}}<div class="translation-prompt">{{translations}}</div>{{/translations}}
+  {{#examples}}<div class="example-clue">{{examples}}</div>{{/examples}}
+  <div class="type-area">{{type:lemma}}</div>
+</section>

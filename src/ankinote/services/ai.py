@@ -7,7 +7,7 @@ from typing import Protocol, cast
 
 from litellm import acompletion, aimage_generation
 
-from ankinote.utils.img import resize_to_square
+from ankinote.utils.img import resize_to_max_edge
 
 TextMessage = dict[str, str]
 
@@ -108,7 +108,7 @@ class LiteLLMGeminiImageService:
         if not isinstance(b64, str):
             raise RuntimeError("Image generation returned no base64 payload")
         raw = base64.b64decode(b64)
-        return resize_to_square(raw, self._image_size)
+        return resize_to_max_edge(raw, self._image_size)
 
 
 __all__ = [
