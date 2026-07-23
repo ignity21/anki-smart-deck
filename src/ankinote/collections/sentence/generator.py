@@ -4,12 +4,12 @@ import json
 from dataclasses import dataclass
 from typing import cast
 
-from litellm import acompletion
 from loguru import logger
 
 from ankinote.collections.common import create_prompt_loader, strip_phonetic_annotations
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.tts import GoogleTTSService
+from ankinote.services.ai import TextGenerationService
+from ankinote.services.tts import SpeechSynthesizer
 
 from .models import SentenceModel
 
@@ -40,7 +40,8 @@ async def generate_sentence_data(
     target_sentence: str,
     target_language: Language,
     native_language: Language,
-    model_id: str = "gemini/gemini-3.1-flash-lite-preview",
+    text_service: TextGenerationService,
+    model_id: str,
     temperature: float = 0.3,
 ) -> SentenceModel:
     """Generate sentence card data via LLM.
@@ -62,21 +63,15 @@ async def generate_sentence_data(
     )
 
     try:
-        response = await acompletion(
-            model=model_id,
+        content = await text_service.generate_text(
+            model_id=model_id,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            stream=False,
             temperature=temperature,
-            drop_params=True,
         )
-
-        content = cast(
-            str,
-            response.choices[0].message.content,  # pyright: ignore[reportAttributeAccessIssue]
-        )
+        content = cast(str, content)
 
         logger.debug(content)
         logger.info(f"Raw AI response length: {len(content)} characters")
@@ -102,10 +97,12 @@ class SentenceGenerator:
 
     def __init__(
         self,
-        tts_service: GoogleTTSService,
-        llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
+        tts_service: SpeechSynthesizer,
+        text_service: TextGenerationService,
+        text_model_id: str,
     ) -> None:
-        self._llm_model_id = llm_model_id
+        self._text_service = text_service
+        self._text_model_id = text_model_id
         self._tts_service = tts_service
 
     async def generate_sentence_data(
@@ -120,7 +117,8 @@ class SentenceGenerator:
             target_sentence=target_sentence,
             target_language=target_lang,
             native_language=native_lang,
-            model_id=self._llm_model_id,
+            text_service=self._text_service,
+            model_id=self._text_model_id,
             temperature=temperature,
         )
 
@@ -142,9 +140,7 @@ class SentenceGenerator:
         logger.info(f"Generating media for sentence '{target_sentence}'")
         if target_lang in RUBY_ANNOTATION_LANGUAGES:
             target_sentence = strip_phonetic_annotations(target_sentence)
-        audio = await self._tts_service.synthesize_with_random_voice(
-            text=target_sentence
-        )
+        audio = await self._tts_service.synthesize(target_sentence)
         logger.success(f"Sentence audio generated for '{target_sentence}'")
 
         return SentenceMediaFiles(

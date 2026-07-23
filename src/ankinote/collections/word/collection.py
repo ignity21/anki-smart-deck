@@ -10,7 +10,8 @@ from loguru import logger
 from ankinote.collections.common import convert_to_html_ruby
 from ankinote.collections.word.models import Definition, Example, WordModel
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.anki import AnkiCollectionClient
+from ankinote.services.ai import ImageGenerationService, TextGenerationService
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import WordGenerator, WordMediaFiles
@@ -48,15 +49,15 @@ class WordCollection:
 
     def __init__(
         self,
-        anki_client: AnkiConnectClient,
+        anki_client: AnkiCollectionClient,
         *,
         native_language: Language,
         target_language: Language,
         notetype_name: str = "AINote Word",
         deck_name: str = "AINote::Words",
-        llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
-        image_model_id: str = "gemini/gemini-2.5-flash-image",
-        image_size: int = 256,
+        text_model_id: str,
+        text_service: TextGenerationService,
+        image_service: ImageGenerationService,
     ) -> None:
         """Initialize WordCollection.
 
@@ -66,9 +67,9 @@ class WordCollection:
             target_language: Language being learned
             notetype_name: Name of the Anki note type to use
             deck_name: Name of the Anki deck to add notes to
-            llm_model_id: Model ID for the LLM used to generate word data
-            image_model_id: Model ID for the image generator
-            image_size: Target size (pixels) for generated images (square)
+            text_model_id: Model ID for the LLM used to generate word data
+            text_service: Shared text generation service
+            image_service: Shared image generation service
         """
         self.notetype_name = notetype_name
         self.deck_name = deck_name
@@ -78,9 +79,9 @@ class WordCollection:
         self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
         self._generator = WordGenerator(
             tts_service=self._tts_service,
-            llm_model_id=llm_model_id,
-            image_model_id=image_model_id,
-            image_size=image_size,
+            text_service=text_service,
+            image_service=image_service,
+            text_model_id=text_model_id,
         )
         if target_language in RUBY_ANNOTATION_LANGUAGES:
             self._convert_target_lang_text = convert_to_html_ruby
@@ -89,14 +90,14 @@ class WordCollection:
 
     async def __aenter__(self) -> Self:
         """Async context manager entry: ensure note type and deck exist."""
-        await self._tts_service.__aenter__()
+        await self._tts_service.warmup()
         await self._ensure_note_type_exists()
         await self._ensure_deck_exists()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit: clean up TTS service."""
-        await self._tts_service.__aexit__(exc_type, exc_val, exc_tb)
+        self._tts_service.clear_cache()
 
     async def _ensure_note_type_exists(self) -> None:
         """Ensure the note type exists in Anki, create it if it doesn't.

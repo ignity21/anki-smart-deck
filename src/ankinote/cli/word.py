@@ -4,11 +4,14 @@ from pathlib import Path
 import click
 from asynciolimiter import StrictLimiter
 
-from ankinote.app import Application
 from ankinote.cli.phrase import MAX_CONCURRENCY
-from ankinote.collections import WordCollection
+from ankinote.cli.factory import (
+    WordCollectionOptions,
+    build_word_collection,
+    collection_context,
+)
 from ankinote.consts import Language
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
 
 # -- Shared options -----------------------------------------------------------
 
@@ -26,12 +29,21 @@ COLLECTION_OPTIONS = [
         type=click.Choice([lang.value for lang in Language]),
     ),
     click.option(
-        "--llm", default="gemini/gemini-3.1-flash-lite-preview", show_default=True
+        "--llm",
+        default=None,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model_id,
     ),
     click.option(
-        "--image-model", default="gemini/gemini-2.5-flash-image", show_default=True
+        "--image-model",
+        default=None,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.image_model_id,
     ),
-    click.option("--image-size", default=128, show_default=True, type=int),
+    click.option(
+        "--image-size",
+        default=None,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.image_size,
+        type=int,
+    ),
 ]
 
 
@@ -41,11 +53,15 @@ def collection_options(cmd):
     return cmd
 
 
-def make_collection(
-    client, native, target, llm, image_model, image_size
-) -> WordCollection:
-    return WordCollection(
-        client,
+def build_options(
+    native: str,
+    target: str,
+    llm: str | None,
+    image_model: str | None,
+    image_size: int | None,
+) -> WordCollectionOptions:
+    """Convert CLI parameters to typed collection options."""
+    return WordCollectionOptions(
         native_language=Language(native),
         target_language=Language(target),
         llm_model_id=llm,
@@ -72,13 +88,9 @@ def init(native, target, llm, image_model, image_size):
     """Create note type and deck in Anki."""
 
     async def _run():
-        async with Application():
-            client = AnkiConnectClient()
-            collection = make_collection(
-                client, native, target, llm, image_model, image_size
-            )
-            await collection._ensure_note_type_exists()
-            await collection._ensure_deck_exists()
+        options = build_options(native, target, llm, image_model, image_size)
+        async with collection_context(build_word_collection, options):
+            pass
 
     asyncio.run(_run())
     click.echo("✓ Ready (word collection)")
@@ -94,11 +106,8 @@ def add(word, native, target, llm, image_model, image_size):
     """Generate and push a single word card."""
 
     async def _run():
-        async with Application():
-            client = AnkiConnectClient()
-            collection = make_collection(
-                client, native, target, llm, image_model, image_size
-            )
+        options = build_options(native, target, llm, image_model, image_size)
+        async with collection_context(build_word_collection, options) as collection:
             await collection.generate_and_add_note(word)
 
     asyncio.run(_run())
@@ -145,6 +154,7 @@ def batch(words, file, native, target, llm, image_model, image_size, rpm):
 
         sem = asyncio.Semaphore(MAX_CONCURRENCY)
         limiter = StrictLimiter(rpm / 60)
+        options = build_options(native, target, llm, image_model, image_size)
 
         async def _process(w: str):
             nonlocal success
@@ -156,11 +166,7 @@ def batch(words, file, native, target, llm, image_model, image_size, rpm):
                 except Exception as e:
                     failed.append((w, str(e)))
 
-        async with Application():
-            client = AnkiConnectClient()
-            collection = make_collection(
-                client, native, target, llm, image_model, image_size
-            )
+        async with collection_context(build_word_collection, options) as collection:
             await asyncio.gather(*[_process(w) for w in all_words])
 
     total = len(all_words)

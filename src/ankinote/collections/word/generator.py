@@ -1,19 +1,17 @@
 """Word vocabulary card generator using AI."""
 
 import asyncio
-import base64
 import json
 from dataclasses import dataclass, field
 from importlib.resources import files
 from typing import cast
 
-from litellm import acompletion, aimage_generation
 from loguru import logger
 
 from ankinote.collections.common import create_prompt_loader, strip_phonetic_annotations
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.tts import GoogleTTSService
-from ankinote.utils.img import resize_to_square
+from ankinote.services.ai import ImageGenerationService, TextGenerationService
+from ankinote.services.tts import SpeechSynthesizer
 
 from .models import WordModel
 
@@ -67,7 +65,8 @@ async def generate_word_data(
     word: str,
     target_language: Language,
     native_language: Language,
-    model_id: str = "gemini/gemini-3.1-flash-lite-preview",
+    text_service: TextGenerationService,
+    model_id: str,
     temperature: float = 0.3,
 ) -> list[WordModel]:
     """Generate vocabulary card data for a word using AI.
@@ -100,18 +99,14 @@ async def generate_word_data(
     )
 
     try:
-        response = await acompletion(
-            model=model_id,
+        content = await text_service.generate_text(
+            model_id=model_id,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            stream=False,
             temperature=temperature,
-            drop_params=True,
         )
-
-        content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
         content = cast(str, content)
 
         logger.debug(content)
@@ -158,14 +153,14 @@ class WordGenerator:
 
     def __init__(
         self,
-        tts_service: GoogleTTSService,
-        llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
-        image_model_id: str = "gemini/gemini-2.5-flash-image",
-        image_size: int = 256,
+        tts_service: SpeechSynthesizer,
+        text_service: TextGenerationService,
+        image_service: ImageGenerationService,
+        text_model_id: str,
     ) -> None:
-        self._llm_model_id = llm_model_id
-        self._image_model_id = image_model_id
-        self._image_size = image_size
+        self._text_service = text_service
+        self._image_service = image_service
+        self._text_model_id = text_model_id
         self._tts_service = tts_service
 
     # ------------------------------------------------------------------
@@ -187,7 +182,8 @@ class WordGenerator:
             word=word,
             target_language=target_lang,
             native_language=native_lang,
-            model_id=self._llm_model_id,
+            text_service=self._text_service,
+            model_id=self._text_model_id,
             temperature=temperature,
         )
 
@@ -266,7 +262,7 @@ class WordGenerator:
     async def _generate_audio(self, text: str, target_lang: Language) -> bytes:
         if target_lang in RUBY_ANNOTATION_LANGUAGES:
             text = strip_phonetic_annotations(text)
-        return await self._tts_service.synthesize_with_random_voice(text)
+        return await self._tts_service.synthesize(text)
 
     async def _generate_image(self, word: str, definition: str) -> bytes:
         system_prompt = (
@@ -275,10 +271,6 @@ class WordGenerator:
             .read_text(encoding="utf-8")
         )
         user_prompt = _build_image_user_prompt(word, definition)
-        response = await aimage_generation(
-            model=self._image_model_id,
+        return await self._image_service.generate_image(
             prompt=f"{system_prompt}\n\n{user_prompt}",
         )
-        b64: str = response.data[0].b64_json  # pyright: ignore[reportAssignmentType, reportOptionalSubscript]
-        raw = base64.b64decode(b64)
-        return resize_to_square(raw, self._image_size)

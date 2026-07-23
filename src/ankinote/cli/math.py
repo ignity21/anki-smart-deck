@@ -8,9 +8,12 @@ from loguru import logger
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from ankinote.app import Application
-from ankinote.collections.math import MathCollection
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.cli.factory import (
+    MathCollectionOptions,
+    build_math_collection,
+    collection_context,
+)
+from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
 
 console = Console()
 
@@ -19,27 +22,33 @@ def collection_options(f):
     """Decorator for common collection options."""
     f = click.option(
         "--llm",
-        default="gemini/gemini-3.1-flash-lite-preview",
+        default=None,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model_id,
         help="LLM model ID for content generation",
     )(f)
     f = click.option(
         "--image-model",
-        default="gemini/gemini-2.5-flash-image",
+        default=None,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.image_model_id,
         help="Image model ID for diagram generation",
     )(f)
     f = click.option(
         "--image-size",
-        default=512,
+        default=None,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.image_size,
         type=int,
         help="Image size in pixels (square)",
     )(f)
     return f
 
 
-def make_collection(client, llm, image_model, image_size) -> MathCollection:
-    """Create a MathCollection instance with the given parameters."""
-    return MathCollection(
-        client,
+def build_options(
+    llm: str | None,
+    image_model: str | None,
+    image_size: int | None,
+) -> MathCollectionOptions:
+    """Convert CLI parameters to typed collection options."""
+    return MathCollectionOptions(
         llm_model_id=llm,
         image_model_id=image_model,
         image_size=image_size,
@@ -58,12 +67,11 @@ def init(llm, image_model, image_size):
     """Create note type and deck in Anki."""
 
     async def _run():
-        async with Application():
-            client = AnkiConnectClient()
-            async with make_collection(client, llm, image_model, image_size) as collection:
-                console.print(
-                    f"[green]✓[/green] Initialized math collection: {collection.deck_name}"
-                )
+        options = build_options(llm, image_model, image_size)
+        async with collection_context(build_math_collection, options) as collection:
+            console.print(
+                f"[green]✓[/green] Initialized math collection: {collection.deck_name}"
+            )
 
     asyncio.run(_run())
 
@@ -78,21 +86,20 @@ def add(front, llm, image_model, image_size):
     """
 
     async def _run():
-        async with Application():
-            client = AnkiConnectClient()
-            async with make_collection(client, llm, image_model, image_size) as collection:
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    console=console,
-                ) as progress:
-                    task = progress.add_task(
-                        f"Generating card for: {front[:50]}...", total=None
-                    )
-                    note_id = await collection.generate_and_add_note(front)
-                    progress.update(task, completed=True)
+        options = build_options(llm, image_model, image_size)
+        async with collection_context(build_math_collection, options) as collection:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task(
+                    f"Generating card for: {front[:50]}...", total=None
+                )
+                note_id = await collection.generate_and_add_note(front)
+                progress.update(task, completed=True)
 
-                console.print(f"[green]✓[/green] Created/updated note {note_id}")
+            console.print(f"[green]✓[/green] Created/updated note {note_id}")
 
     asyncio.run(_run())
 
@@ -143,29 +150,28 @@ def batch(questions, file, llm, image_model, image_size, rpm):
 
     async def _run():
         nonlocal success
+        options = build_options(llm, image_model, image_size)
 
-        async with Application():
-            client = AnkiConnectClient()
-            async with make_collection(client, llm, image_model, image_size) as collection:
-                # Calculate delay between requests
-                delay = 60.0 / rpm if rpm > 0 else 0
+        async with collection_context(build_math_collection, options) as collection:
+            # Calculate delay between requests
+            delay = 60.0 / rpm if rpm > 0 else 0
 
-                async def _process(q: str):
-                    nonlocal success
-                    try:
-                        with console.status(f"[bold cyan]Generating: {q[:50]}..."):
-                            note_id = await collection.generate_and_add_note(q)
-                        console.print(f"[green]✓[/green] Note {note_id}: {q[:60]}...")
-                        success += 1
-                    except Exception as e:
-                        logger.error(f"Failed to process '{q}': {e}")
-                        console.print(f"[red]✗[/red] Failed: {q[:60]}...")
+            async def _process(q: str):
+                nonlocal success
+                try:
+                    with console.status(f"[bold cyan]Generating: {q[:50]}..."):
+                        note_id = await collection.generate_and_add_note(q)
+                    console.print(f"[green]✓[/green] Note {note_id}: {q[:60]}...")
+                    success += 1
+                except Exception as e:
+                    logger.error(f"Failed to process '{q}': {e}")
+                    console.print(f"[red]✗[/red] Failed: {q[:60]}...")
 
-                for i, question in enumerate(all_questions):
-                    await _process(question)
-                    # Rate limiting
-                    if delay > 0 and i < len(all_questions) - 1:
-                        await asyncio.sleep(delay)
+            for i, question in enumerate(all_questions):
+                await _process(question)
+                # Rate limiting
+                if delay > 0 and i < len(all_questions) - 1:
+                    await asyncio.sleep(delay)
 
     asyncio.run(_run())
 

@@ -7,7 +7,8 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.anki import AnkiCollectionClient
+from ankinote.services.ai import ImageGenerationService, TextGenerationService
 
 from .generator import MathGenerator, MathMediaFiles
 from .models import MathModel, MathNoteType
@@ -43,13 +44,13 @@ class MathCollection:
 
     def __init__(
         self,
-        anki_client: AnkiConnectClient,
+        anki_client: AnkiCollectionClient,
         *,
         notetype_name: str = "AINote Math",
         deck_name: str = "AINote::Math",
-        llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
-        image_model_id: str = "gemini/gemini-2.5-flash-image",
-        image_size: int = 512,
+        text_model_id: str,
+        text_service: TextGenerationService,
+        image_service: ImageGenerationService,
     ) -> None:
         """Initialize MathCollection.
 
@@ -57,17 +58,17 @@ class MathCollection:
             anki_client: AnkiConnect client instance
             notetype_name: Name of the Anki note type to use
             deck_name: Name of the Anki deck to add notes to
-            llm_model_id: Model ID for the LLM used to generate content
-            image_model_id: Model ID for the image generator
-            image_size: Target size (pixels) for generated images (square)
+            text_model_id: Model ID for the LLM used to generate content
+            text_service: Shared text generation service
+            image_service: Shared image generation service
         """
         self.notetype_name = notetype_name
         self.deck_name = deck_name
         self._anki_client = anki_client
         self._generator = MathGenerator(
-            llm_model_id=llm_model_id,
-            image_model_id=image_model_id,
-            image_size=image_size,
+            text_service=text_service,
+            image_service=image_service,
+            text_model_id=text_model_id,
         )
 
     async def __aenter__(self) -> Self:

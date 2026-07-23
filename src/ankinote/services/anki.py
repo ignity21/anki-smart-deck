@@ -1,20 +1,34 @@
 import base64
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
+
+import httpx
 
 from ankinote.utils.httpcli import post
 
 
-class ModelAlreadyExists(Exception):
+class AnkiServiceError(Exception):
+    """Base exception for Anki service errors."""
+
+
+class AnkiTransportError(AnkiServiceError):
+    """Raised when AnkiConnect cannot be reached."""
+
+
+class AnkiConnectError(AnkiServiceError):
+    """Raised when AnkiConnect returns a business error."""
+
+
+class AnkiResponseError(AnkiServiceError):
+    """Raised when AnkiConnect returns an unexpected response."""
+
+
+class ModelAlreadyExists(AnkiConnectError):
     """Raised when attempting to create a model that already exists."""
 
-    pass
 
-
-class ModelNotFound(Exception):
+class ModelNotFound(AnkiServiceError):
     """Raised when a specified model is not found."""
-
-    pass
 
 
 @dataclass
@@ -69,10 +83,113 @@ class NoteModel:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class TemplateUpsert:
+    """Template update request keyed by stable template names."""
+
+    name: str
+    question_format: str
+    answer_format: str
+    previous_name: str | None = None
+
+
+class _AnkiInvoker(Protocol):
+    """Internal protocol for client groups that can invoke Anki actions."""
+
+    async def _invoke(self, action: str, params: dict[str, Any] | None = None) -> Any:
+        """Dispatch an AnkiConnect action."""
+
+
+class AnkiModelService(Protocol):
+    """Subset of model operations required by collections."""
+
+    async def exists(self, model_name: str) -> bool:
+        """Return whether a model exists."""
+        ...
+
+    async def create(
+        self,
+        model_name: str,
+        fields: list[str],
+        templates: list[dict[str, str]],
+        css: str = "",
+        is_cloze: bool = False,
+    ) -> NoteModel:
+        """Create a new note model."""
+        ...
+
+
+class AnkiDeckService(Protocol):
+    """Subset of deck operations required by collections."""
+
+    async def create(self, deck_name: str) -> int:
+        """Create a deck or return the existing deck id."""
+        ...
+
+
+class AnkiNoteService(Protocol):
+    """Subset of note operations required by collections."""
+
+    async def find(self, deck_name: str, unique_fields: dict[str, str]) -> int | None:
+        """Find a note by deck and unique fields."""
+        ...
+
+    async def add(
+        self,
+        deck_name: str,
+        model_name: str,
+        fields: dict[str, str],
+        tags: list[str] | None = None,
+        allow_duplicate: bool = False,
+    ) -> int:
+        """Add a new note."""
+        ...
+
+    async def update_fields(self, note_id: int, fields: dict[str, str]) -> None:
+        """Update note fields."""
+        ...
+
+    async def update_tags(self, note_id: int, tags: list[str]) -> None:
+        """Replace note tags."""
+        ...
+
+
+class AnkiMediaService(Protocol):
+    """Subset of media operations required by collections."""
+
+    async def store_file(self, filename: str, data: bytes) -> str:
+        """Store a media file."""
+        ...
+
+
+class AnkiCollectionClient(Protocol):
+    """Narrow client contract required by collection classes."""
+
+    @property
+    def models(self) -> AnkiModelService:
+        """Model service facade."""
+        ...
+
+    @property
+    def decks(self) -> AnkiDeckService:
+        """Deck service facade."""
+        ...
+
+    @property
+    def notes(self) -> AnkiNoteService:
+        """Note service facade."""
+        ...
+
+    @property
+    def media(self) -> AnkiMediaService:
+        """Media service facade."""
+        ...
+
+
 class ModelClient:
     """Client for managing Anki note models."""
 
-    def __init__(self, client: "AnkiConnectClient") -> None:
+    def __init__(self, client: _AnkiInvoker) -> None:
         """Initialize ModelClient.
 
         Args:
@@ -89,49 +206,75 @@ class ModelClient:
         return await self._client._invoke("modelNames")
 
     async def exists(self, model_name: str) -> bool:
-        try:
-            models = await self._client._invoke(
-                "findModelsByName",
-                params={
-                    "modelNames": [
-                        model_name,
-                    ]
-                },
-            )
-            assert len(models) == 1
-            return True
-        except RuntimeError:
-            return False
+        """Check whether a model exists.
 
-    async def info(self, model_name: str) -> NoteModel:
-        """get details of a note type (model) by name.
+        Raises:
+            AnkiServiceError: If AnkiConnect cannot answer the request cleanly.
+        """
+        return await self.get(model_name) is not None
+
+    async def get(self, model_name: str) -> NoteModel | None:
+        """Get details of a note type (model) by name.
 
         Args:
             model_name: The note type name
 
         Returns:
-            NoteModel instance
-
-        Raises:
-            KeyError: If model not found
+            NoteModel instance if present, otherwise ``None``.
         """
-        try:
-            model_list = await self._client._invoke(
-                "findModelsByName",
-                params={
-                    "modelNames": [
-                        model_name,
-                    ]
-                },
-            )
-        except RuntimeError:
-            raise KeyError(f"Model '{model_name}' not found")
+        model_list = await self._find_models_by_name(model_name)
+        if not model_list:
+            return None
 
         model_dict = model_list[0]
         return self._model_dict_to_notemodel(model_dict)
 
+    async def require(self, model_name: str) -> NoteModel:
+        """Get a model or raise if it does not exist."""
+        if (model := await self.get(model_name)) is None:
+            raise ModelNotFound(f"Model '{model_name}' not found")
+        return model
+
+    async def _find_models_by_name(self, model_name: str) -> list[dict[str, Any]]:
+        result = await self._client._invoke(
+            "findModelsByName",
+            params={"modelNames": [model_name]},
+        )
+        if not isinstance(result, list):
+            raise AnkiResponseError(
+                f"Expected list from findModelsByName, got {type(result).__name__}"
+            )
+        if len(result) > 1:
+            raise AnkiResponseError(
+                f"Expected at most one model named '{model_name}', got {len(result)}"
+            )
+        if result and not isinstance(result[0], dict):
+            raise AnkiResponseError(
+                "Expected model payload to be a dictionary from findModelsByName"
+            )
+        return result
+
     def _model_dict_to_notemodel(self, model_dict: dict[str, Any]) -> NoteModel:
         """Convert a model dictionary from AnkiConnect to a NoteModel instance."""
+        required_keys = {
+            "id",
+            "name",
+            "type",
+            "sortf",
+            "did",
+            "tmpls",
+            "flds",
+            "css",
+            "latexPre",
+            "latexPost",
+            "latexsvg",
+            "req",
+        }
+        missing_keys = required_keys - model_dict.keys()
+        if missing_keys:
+            missing = ", ".join(sorted(missing_keys))
+            raise AnkiResponseError(f"Model payload missing required keys: {missing}")
+
         # Convert field dictionaries to Field objects
         fields = [
             ModelField(
@@ -235,12 +378,12 @@ class ModelClient:
         else:
             return self._model_dict_to_notemodel(model_dict)
 
-    async def update_templates(self, model_name: str, templates: list[ModelTemplate]):
+    async def update_templates(self, model_name: str, templates: list[TemplateUpsert]):
         """Update the templates of a note model.
 
         Args:
             model_name: The name of the note model
-            templates: List of ModelTemplate instances with updated templates
+            templates: List of template upserts with stable template names
 
         Raises:
             RuntimeError: If AnkiConnect returns an error
@@ -251,14 +394,15 @@ class ModelClient:
                 "modelName": model_name,
             },
         )
-        front_to_tmpl_name = {
-            tmpl["Front"]: name for name, tmpl in existing_templates.items()
-        }
+        if not isinstance(existing_templates, dict):
+            raise AnkiResponseError(
+                "Expected dictionary from modelTemplates response"
+            )
+        known_template_names = set(existing_templates)
         for tmpl in templates:
-            existing_name = front_to_tmpl_name.get(tmpl.question_format, None)
-            # If no existing template has the same question format, we consider it a new template and add it.
-            if existing_name is None:
-                # Add new template
+            match_name = tmpl.previous_name or tmpl.name
+
+            if match_name not in known_template_names:
                 await self._client._invoke(
                     "modelTemplateAdd",
                     params={
@@ -270,20 +414,21 @@ class ModelClient:
                         },
                     },
                 )
+                known_template_names.add(tmpl.name)
                 continue
 
-            # If the question format matches an existing template, we consider it an update.
-            if tmpl.name != existing_name:
-                # Rename first
+            if tmpl.previous_name is not None and tmpl.name != tmpl.previous_name:
                 await self._client._invoke(
                     "modelTemplateRename",
                     params={
                         "modelName": model_name,
-                        "oldTemplateName": existing_name,
+                        "oldTemplateName": tmpl.previous_name,
                         "newTemplateName": tmpl.name,
                     },
                 )
-            # Update
+                known_template_names.discard(tmpl.previous_name)
+                known_template_names.add(tmpl.name)
+
             await self._client._invoke(
                 "updateModelTemplates",
                 params={
@@ -323,7 +468,7 @@ class ModelClient:
 class MediaClient:
     """Client for managing Anki media files."""
 
-    def __init__(self, client: "AnkiConnectClient") -> None:
+    def __init__(self, client: _AnkiInvoker) -> None:
         """Initialize MediaClient.
 
         Args:
@@ -367,7 +512,7 @@ class MediaClient:
 class DeckClient:
     """Client for managing Anki decks."""
 
-    def __init__(self, client: "AnkiConnectClient") -> None:
+    def __init__(self, client: _AnkiInvoker) -> None:
         """Initialize DeckClient.
 
         Args:
@@ -408,7 +553,7 @@ class DeckClient:
 class NoteClient:
     """Client for managing Anki notes."""
 
-    def __init__(self, client: "AnkiConnectClient") -> None:
+    def __init__(self, client: _AnkiInvoker) -> None:
         """Initialize NoteClient.
 
         Args:
@@ -498,9 +643,9 @@ class NoteClient:
 
         try:
             return await self._client._invoke("addNote", params={"note": note_data})
-        except RuntimeError as e:
+        except AnkiConnectError as e:
             error_msg = str(e)
-            if error_msg.startswith("model was not found"):
+            if "model was not found" in error_msg:
                 raise ModelNotFound(f"Model '{model_name}' not found") from e
             raise
 
@@ -588,10 +733,29 @@ class AnkiConnectClient:
         payload = {"action": action, "version": 6}
         if params is not None:
             payload["params"] = params
-        response = await post(self._url, json=payload)
-        result = response.json()
+        try:
+            response = await post(self._url, json=payload)
+        except httpx.RequestError as exc:
+            raise AnkiTransportError(
+                f"Failed to reach AnkiConnect at {self._url}"
+            ) from exc
+
+        try:
+            result = response.json()
+        except ValueError as exc:
+            raise AnkiResponseError("AnkiConnect returned invalid JSON") from exc
+
+        if not isinstance(result, dict):
+            raise AnkiResponseError(
+                f"AnkiConnect returned {type(result).__name__}, expected dict"
+            )
+        if "error" not in result or "result" not in result:
+            raise AnkiResponseError(
+                "AnkiConnect response must include both 'error' and 'result'"
+            )
+
         error = result["error"]
         if error is not None:
-            raise RuntimeError(f"AnkiConnect error: {error}")
+            raise AnkiConnectError(f"AnkiConnect error: {error}")
 
         return result["result"]
