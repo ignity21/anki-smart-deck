@@ -1,5 +1,5 @@
 import random
-from typing import Self
+from typing import Protocol, Self
 
 from google.api_core.client_options import ClientOptions
 from google.cloud.texttospeech import (
@@ -25,6 +25,14 @@ TTS_LANG_CODES: dict[Language, str] = {
 }
 
 
+class SpeechSynthesizer(Protocol):
+    """Narrow speech synthesis contract used by generators."""
+
+    async def synthesize(self, text: str) -> bytes:
+        """Generate speech audio for plain text."""
+        ...
+
+
 class GoogleTTSService:
     def __init__(self, language_code: str = "en-US", model: str = "Neural2"):
         """
@@ -45,11 +53,19 @@ class GoogleTTSService:
         Async context manager entry. Pre-fetches and caches the list of
         available voices so that subsequent calls to synthesize are fast.
         """
-        self._available_voices = await self._get_all_voices()
+        await self.warmup()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit. Reserved for future cleanup logic."""
+        self.clear_cache()
+
+    async def warmup(self) -> None:
+        """Prime the voice cache so the first synthesis call is faster."""
+        self._available_voices = await self._get_all_voices()
+
+    def clear_cache(self) -> None:
+        """Reset the cached voice list."""
         self._available_voices = []
 
     async def _get_all_voices(self) -> list[str]:
@@ -134,3 +150,7 @@ class GoogleTTSService:
         )
 
         return response.audio_content
+
+    async def synthesize(self, text: str) -> bytes:
+        """Generate speech audio using a random matching voice."""
+        return await self.synthesize_with_random_voice(text)

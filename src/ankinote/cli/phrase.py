@@ -4,10 +4,13 @@ from pathlib import Path
 import click
 from asynciolimiter import StrictLimiter
 
-from ankinote.app import Application
-from ankinote.collections import PhraseCollection
+from ankinote.cli.factory import (
+    LanguageCollectionOptions,
+    build_phrase_collection,
+    collection_context,
+)
 from ankinote.consts import Language
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
 
 MAX_CONCURRENCY = 10
 
@@ -27,7 +30,9 @@ COLLECTION_OPTIONS = [
         type=click.Choice([lang.value for lang in Language]),
     ),
     click.option(
-        "--llm", default="gemini/gemini-3.1-flash-lite-preview", show_default=True
+        "--llm",
+        default=None,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model_id,
     ),
 ]
 
@@ -38,9 +43,13 @@ def collection_options(cmd):
     return cmd
 
 
-def make_collection(client, native, target, llm) -> PhraseCollection:
-    return PhraseCollection(
-        client,
+def build_options(
+    native: str,
+    target: str,
+    llm: str | None,
+) -> LanguageCollectionOptions:
+    """Convert CLI parameters to typed collection options."""
+    return LanguageCollectionOptions(
         native_language=Language(native),
         target_language=Language(target),
         llm_model_id=llm,
@@ -65,15 +74,9 @@ def init(native, target, llm):
     """Create phrase note type and deck in Anki."""
 
     async def _run():
-        async with Application():
-            client = AnkiConnectClient()
-            async with PhraseCollection(
-                client,
-                native_language=Language(native),
-                target_language=Language(target),
-                llm_model_id=llm,
-            ):
-                pass
+        options = build_options(native, target, llm)
+        async with collection_context(build_phrase_collection, options):
+            pass
 
     asyncio.run(_run())
     click.echo("✓ Ready (phrase collection)")
@@ -89,15 +92,9 @@ def add(phrase, native, target, llm):
     """Generate and push a single phrase card."""
 
     async def _run():
-        async with Application():
-            client = AnkiConnectClient()
-            async with PhraseCollection(
-                client,
-                native_language=Language(native),
-                target_language=Language(target),
-                llm_model_id=llm,
-            ) as collection:
-                await collection.generate_and_add_note(phrase)
+        options = build_options(native, target, llm)
+        async with collection_context(build_phrase_collection, options) as collection:
+            await collection.generate_and_add_note(phrase)
 
     asyncio.run(_run())
     click.echo(f"✓ Added phrase: {phrase}")
@@ -151,6 +148,7 @@ def batch(phrases, file, native, target, llm, rpm):
 
         sem = asyncio.Semaphore(MAX_CONCURRENCY)
         limiter = StrictLimiter(rpm / 60)
+        options = build_options(native, target, llm)
 
         async def _process(p: str):
             nonlocal success
@@ -162,15 +160,8 @@ def batch(phrases, file, native, target, llm, rpm):
                 except Exception as e:
                     failed.append((p, str(e)))
 
-        async with Application():
-            client = AnkiConnectClient()
-            async with PhraseCollection(
-                client,
-                native_language=Language(native),
-                target_language=Language(target),
-                llm_model_id=llm,
-            ) as collection:
-                await asyncio.gather(*[_process(p) for p in all_phrases])
+        async with collection_context(build_phrase_collection, options) as collection:
+            await asyncio.gather(*[_process(p) for p in all_phrases])
 
     total = len(all_phrases)
     click.echo(f"Processing {total} phrases (concurrency={MAX_CONCURRENCY}) ...")

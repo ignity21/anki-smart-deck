@@ -220,3 +220,8 @@ output/
 words.txt
 phrases.txt
 sentences.txt
+
+# AI tools
+/.claude
+CLAUDE.md
+AGENTS.md

@@ -4,10 +4,10 @@ import json
 from importlib.resources import files
 from typing import cast
 
-from litellm import acompletion
 from loguru import logger
 
 from ankinote.collections.common import create_prompt_loader
+from ankinote.services.ai import TextGenerationService
 
 from .models import CardType, StemModel
 
@@ -33,7 +33,8 @@ def _load_system_prompt() -> str:
 async def generate_stem_data(
     topic: str,
     card_type: CardType,
-    model_id: str = "gemini/gemini-2.5-flash-lite-preview",
+    text_service: TextGenerationService,
+    model_id: str,
     temperature: float = 0.3,
 ) -> StemModel:
     """Generate STEM card data via LLM.
@@ -47,21 +48,15 @@ async def generate_stem_data(
     logger.info(f"Generating {card_type} card for '{topic}'")
 
     try:
-        response = await acompletion(
-            model=model_id,
+        content = await text_service.generate_text(
+            model_id=model_id,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            stream=False,
             temperature=temperature,
-            drop_params=True,
         )
-
-        content = cast(
-            str,
-            response.choices[0].message.content,  # pyright: ignore[reportAttributeAccessIssue]
-        )
+        content = cast(str, content)
 
         logger.debug(content)
         logger.info(f"Raw AI response length: {len(content)} characters")
@@ -87,9 +82,11 @@ class StemGenerator:
 
     def __init__(
         self,
-        llm_model_id: str = "gemini/gemini-2.5-flash-lite-preview",
+        text_service: TextGenerationService,
+        text_model_id: str,
     ) -> None:
-        self._llm_model_id = llm_model_id
+        self._text_service = text_service
+        self._text_model_id = text_model_id
 
     async def generate(
         self,
@@ -101,6 +98,7 @@ class StemGenerator:
         return await generate_stem_data(
             topic=topic,
             card_type=card_type,
-            model_id=self._llm_model_id,
+            text_service=self._text_service,
+            model_id=self._text_model_id,
             temperature=temperature,
         )

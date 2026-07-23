@@ -4,10 +4,13 @@ from pathlib import Path
 import click
 from asynciolimiter import StrictLimiter
 
-from ankinote.app import Application
-from ankinote.collections import SentenceCollection
+from ankinote.cli.factory import (
+    LanguageCollectionOptions,
+    build_sentence_collection,
+    collection_context,
+)
 from ankinote.consts import Language
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
 
 MAX_CONCURRENCY = 10
 
@@ -27,7 +30,9 @@ COLLECTION_OPTIONS = [
         type=click.Choice([lang.value for lang in Language]),
     ),
     click.option(
-        "--llm", default="gemini/gemini-3.1-flash-lite-preview", show_default=True
+        "--llm",
+        default=None,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model_id,
     ),
 ]
 
@@ -38,9 +43,13 @@ def collection_options(cmd):
     return cmd
 
 
-def make_collection(client, native, target, llm) -> SentenceCollection:
-    return SentenceCollection(
-        client,
+def build_options(
+    native: str,
+    target: str,
+    llm: str | None,
+) -> LanguageCollectionOptions:
+    """Convert CLI parameters to typed collection options."""
+    return LanguageCollectionOptions(
         native_language=Language(native),
         target_language=Language(target),
         llm_model_id=llm,
@@ -65,15 +74,9 @@ def init(native, target, llm):
     """Create sentence note type and deck in Anki."""
 
     async def _run():
-        async with Application():
-            client = AnkiConnectClient()
-            async with SentenceCollection(
-                client,
-                native_language=Language(native),
-                target_language=Language(target),
-                llm_model_id=llm,
-            ):
-                pass
+        options = build_options(native, target, llm)
+        async with collection_context(build_sentence_collection, options):
+            pass
 
     asyncio.run(_run())
     click.echo("✓ Ready (sentence collection)")
@@ -92,15 +95,9 @@ def add(sentence, native, target, llm):
     """
 
     async def _run():
-        async with Application():
-            client = AnkiConnectClient()
-            async with SentenceCollection(
-                client,
-                native_language=Language(native),
-                target_language=Language(target),
-                llm_model_id=llm,
-            ) as collection:
-                await collection.generate_and_add_note(sentence)
+        options = build_options(native, target, llm)
+        async with collection_context(build_sentence_collection, options) as collection:
+            await collection.generate_and_add_note(sentence)
 
     asyncio.run(_run())
     click.echo(f"✓ Added sentence: {sentence}")
@@ -154,6 +151,7 @@ def batch(sentences, file, native, target, llm, rpm):
 
         sem = asyncio.Semaphore(MAX_CONCURRENCY)
         limiter = StrictLimiter(rpm / 60)
+        options = build_options(native, target, llm)
 
         async def _process(s: str):
             nonlocal success
@@ -165,10 +163,8 @@ def batch(sentences, file, native, target, llm, rpm):
                 except Exception as e:
                     failed.append((s, str(e)))
 
-        async with Application():
-            client = AnkiConnectClient()
-            async with make_collection(client, native, target, llm) as collection:
-                await asyncio.gather(*[_process(s) for s in all_sentences])
+        async with collection_context(build_sentence_collection, options) as collection:
+            await asyncio.gather(*[_process(s) for s in all_sentences])
 
     total = len(all_sentences)
     click.echo(

@@ -9,7 +9,8 @@ from loguru import logger
 
 from ankinote.collections.common import convert_to_html_ruby
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.anki import AnkiCollectionClient
+from ankinote.services.ai import TextGenerationService
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import SentenceGenerator, SentenceMediaFiles
@@ -37,13 +38,14 @@ class SentenceCollection:
 
     def __init__(
         self,
-        anki_client: AnkiConnectClient,
+        anki_client: AnkiCollectionClient,
         *,
         native_language: Language,
         target_language: Language,
         notetype_name: str = "AINote Sentence",
         deck_name: str = "AINote::Sentences",
-        llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
+        text_model_id: str,
+        text_service: TextGenerationService,
     ) -> None:
         self.notetype_name = notetype_name
         self.deck_name = deck_name
@@ -52,7 +54,9 @@ class SentenceCollection:
         self._anki_client = anki_client
         self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
         self._generator = SentenceGenerator(
-            tts_service=self._tts_service, llm_model_id=llm_model_id
+            tts_service=self._tts_service,
+            text_service=text_service,
+            text_model_id=text_model_id,
         )
 
         if target_language in RUBY_ANNOTATION_LANGUAGES:
@@ -61,13 +65,13 @@ class SentenceCollection:
             self._convert_target_lang_text = lambda x: x  # No conversion needed
 
     async def __aenter__(self) -> Self:
-        await self._tts_service.__aenter__()
+        await self._tts_service.warmup()
         await self._ensure_note_type_exists()
         await self._ensure_deck_exists()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        await self._tts_service.__aexit__(exc_type, exc_val, exc_tb)
+        self._tts_service.clear_cache()
 
     async def _ensure_note_type_exists(self) -> None:
         """Ensure the note type exists in Anki, create it if it doesn't."""

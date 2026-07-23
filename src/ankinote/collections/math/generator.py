@@ -1,15 +1,13 @@
 """Math/Science knowledge card generator using AI."""
 
 import asyncio
-import base64
 import json
 from dataclasses import dataclass, field
 from importlib.resources import files
 
-from litellm import acompletion, aimage_generation
 from loguru import logger
 
-from ankinote.utils.img import resize_to_square
+from ankinote.services.ai import ImageGenerationService, TextGenerationService
 
 from .models import MathModel
 
@@ -73,7 +71,8 @@ def _build_image_user_prompt(context: str, description: str) -> str:
 
 async def generate_math_data(
     front: str,
-    model_id: str = "gemini/gemini-3.1-flash-lite-preview",
+    text_service: TextGenerationService,
+    model_id: str,
     temperature: float = 0.3,
 ) -> MathModel:
     """Generate math/science card data using AI.
@@ -94,20 +93,14 @@ async def generate_math_data(
     logger.info(f"Generating math card data for: {front[:50]}...")
 
     try:
-        response = await acompletion(
-            model=model_id,
+        content = await text_service.generate_text(
+            model_id=model_id,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": front},
             ],
-            stream=False,
             temperature=temperature,
-            drop_params=True,
         )
-
-        content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
-        if not isinstance(content, str):
-            raise RuntimeError("AI returned non-string content")
 
         logger.debug(content)
         logger.info(f"Raw AI response length: {len(content)} characters")
@@ -150,13 +143,13 @@ class MathGenerator:
 
     def __init__(
         self,
-        llm_model_id: str = "gemini/gemini-3.1-flash-lite-preview",
-        image_model_id: str = "gemini/gemini-2.5-flash-image",
-        image_size: int = 512,
+        text_service: TextGenerationService,
+        image_service: ImageGenerationService,
+        text_model_id: str,
     ) -> None:
-        self._llm_model_id = llm_model_id
-        self._image_model_id = image_model_id
-        self._image_size = image_size
+        self._text_service = text_service
+        self._image_service = image_service
+        self._text_model_id = text_model_id
 
     # ------------------------------------------------------------------
     # Public API
@@ -173,7 +166,8 @@ class MathGenerator:
         """
         return await generate_math_data(
             front=front,
-            model_id=self._llm_model_id,
+            text_service=self._text_service,
+            model_id=self._text_model_id,
             temperature=temperature,
         )
 
@@ -286,10 +280,6 @@ class MathGenerator:
         system_prompt = _load_image_prompt()
         user_prompt = _build_image_user_prompt(context, description)
 
-        response = await aimage_generation(
-            model=self._image_model_id,
+        return await self._image_service.generate_image(
             prompt=f"{system_prompt}\n\n{user_prompt}",
         )
-        b64: str = response.data[0].b64_json  # pyright: ignore[reportAssignmentType, reportOptionalSubscript]
-        raw = base64.b64decode(b64)
-        return resize_to_square(raw, self._image_size)
