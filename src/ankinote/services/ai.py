@@ -18,7 +18,7 @@ class AIServiceConfig:
 
     text_model_id: str = "deepseek/deepseek-v4-flash"
     image_model_id: str = "gemini/gemini-2.5-flash-image"
-    image_size: int = 128
+    image_size: int = 512
 
 
 @dataclass(frozen=True, slots=True)

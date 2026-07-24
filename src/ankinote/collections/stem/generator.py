@@ -6,19 +6,9 @@ from typing import cast
 
 from loguru import logger
 
-from ankinote.collections.common import create_prompt_loader
-from ankinote.services.ai import TextGenerationService
+from ankinote.services.ai import ImageGenerationService, TextGenerationService
 
-from .models import CardType, StemModel
-
-_load_prompt_template = create_prompt_loader(
-    "ankinote.collections.stem",
-    {
-        CardType.CONCEPT: "concept.md",
-        CardType.FORMULA: "formula.md",
-        CardType.PROCEDURE: "procedure.md",
-    },
-)
+from .models import StemModel
 
 
 def _load_system_prompt() -> str:
@@ -30,22 +20,62 @@ def _load_system_prompt() -> str:
     )
 
 
+def _load_prompt(prompt_name: str) -> str:
+    """Load a specific prompt template."""
+    return (
+        files("ankinote.collections.stem.prompts")
+        .joinpath(prompt_name)
+        .read_text(encoding="utf-8")
+    )
+
+
+def _load_image_prompt() -> str:
+    """Load the image generation prompt template."""
+    return (
+        files("ankinote.collections.stem.prompts")
+        .joinpath("image.md")
+        .read_text(encoding="utf-8")
+    )
+
+
+
+def _strip_json_fences(content: str) -> str:
+    """Strip markdown code fences (```json ... ```) from AI response."""
+    content = content.strip()
+    if content.startswith("```"):
+        # Remove opening fence
+        first_newline = content.find("\n")
+        if first_newline != -1:
+            content = content[first_newline + 1:]
+        # Remove closing fence
+        if content.endswith("```"):
+            content = content[:-3].rstrip()
+        elif "\n```" in content:
+            content = content[:content.rindex("\n```")]
+    return content.strip()
+
+
+
 async def generate_stem_data(
     topic: str,
-    card_type: CardType,
     text_service: TextGenerationService,
     model_id: str,
     temperature: float = 0.3,
 ) -> StemModel:
     """Generate STEM card data via LLM.
 
-    The *topic* is a short description of the concept, formula, or procedure
-    to generate a card for (e.g. "eigenvalues", "Fourier transform", "Newton's second law").
+    The *topic* is the user's natural language question or concept
+    (e.g. "What is a derivative?", "请解释平行线的概念", "State Newton's second law").
+    The AI automatically determines the card type (concept, formula, or procedure).
     """
     system_prompt = _load_system_prompt()
-    user_message = _load_prompt_template(card_type) + f"\n\nTopic: {topic}"
+    user_message = (
+        "Generate a STEM flashcard for the following topic. "
+        "Determine the card type (concept, formula, or procedure) based on the topic itself.\n\n"
+        f"Topic: {topic}"
+    )
 
-    logger.info(f"Generating {card_type} card for '{topic}'")
+    logger.info(f"Generating STEM card for '{topic}'")
 
     try:
         content = await text_service.generate_text(
@@ -57,6 +87,7 @@ async def generate_stem_data(
             temperature=temperature,
         )
         content = cast(str, content)
+        content = _strip_json_fences(content)
 
         logger.debug(content)
         logger.info(f"Raw AI response length: {len(content)} characters")
@@ -69,7 +100,9 @@ async def generate_stem_data(
             raise RuntimeError(f"AI returned invalid JSON: {e}") from e
 
         stem_model = StemModel.model_validate(data)
-        logger.success(f"Generated {card_type} card for '{topic}'")
+        logger.success(
+            f"Generated {stem_model.card_type} card for '{topic}'"
+        )
         return stem_model
 
     except Exception as e:
@@ -78,27 +111,53 @@ async def generate_stem_data(
 
 
 class StemGenerator:
-    """Generator for STEM card data."""
+    """Generator for STEM card data, with optional image generation."""
 
     def __init__(
         self,
         text_service: TextGenerationService,
         text_model_id: str,
+        image_service: ImageGenerationService | None = None,
     ) -> None:
         self._text_service = text_service
         self._text_model_id = text_model_id
+        self._image_service = image_service
 
     async def generate(
         self,
         topic: str,
-        card_type: CardType,
         temperature: float = 0.3,
     ) -> StemModel:
-        """Generate structured STEM card data via LLM."""
+        """Generate structured STEM card data via LLM.
+
+        The AI automatically determines the card type and decides
+        whether a diagram is needed.
+        """
         return await generate_stem_data(
             topic=topic,
-            card_type=card_type,
             text_service=self._text_service,
             model_id=self._text_model_id,
             temperature=temperature,
         )
+
+    async def generate_image(self, description: str) -> bytes:
+        """Generate an image from a description.
+
+        Args:
+            description: The image_description from the StemModel.
+
+        Returns:
+            PNG image bytes.
+
+        Raises:
+            RuntimeError: If no image service is configured.
+        """
+        if self._image_service is None:
+            raise RuntimeError(
+                "Image generation requested but no image service configured"
+            )
+
+        system_prompt = _load_image_prompt()
+        prompt = f"{system_prompt}\n\n{description}"
+
+        return await self._image_service.generate_image(prompt=prompt)
