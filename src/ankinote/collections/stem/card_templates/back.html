@@ -1,22 +1,17 @@
 {{FrontSide}}
+<section class="panel">
+  {{#back_brief}}
+  <div class="section-title">Answer</div>
+  <div class="brief">{{back_brief}}</div>
+  {{/back_brief}}
 
-<hr>
+  {{#back_detail}}
+  <div class="section-title">Detail</div>
+  <div class="detail">{{back_detail}}</div>
+  {{/back_detail}}
 
-{{#back_brief}}
-<div class="section-container">
-    <div class="section-title">Answer</div>
-    <div class="brief">{{back_brief}}</div>
-</div>
-{{/back_brief}}
-
-{{#back_detail}}
-<div class="section-container">
-    <div class="section-title">Detail</div>
-    <div class="detail">{{back_detail}}</div>
-</div>
-{{/back_detail}}
-{{#Tags}}
-<div class="section-container">
-    <div class="tags">{{Tags}}</div>
-</div>
-{{/Tags}}
+  {{#Tags}}
+  <div class="section-title">Tags</div>
+  <div class="tags">{{Tags}}</div>
+  {{/Tags}}
+</section>

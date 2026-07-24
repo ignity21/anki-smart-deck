@@ -13,20 +13,26 @@ class CardType(StrEnum):
 
 
 class StemModel(BaseModel):
-    """Structured STEM model for AI generation.
+    """Structured STEM card model for AI generation.
 
     The STEM collection covers concept definitions, formulas/theorems,
     and step-by-step procedures across Math, Physics, CS, and Engineering.
     card_type controls which Anki template is rendered.
-    back_brief is a concise answer (≤2 sentences, no derivation).
+    back_brief is a concise answer (<=2 sentences, no derivation).
     back_detail is the full explanation, derivation, or worked steps.
     Supports LaTeX in all text fields via MathJax.
+
+    If the AI determines that a diagram would aid understanding (e.g. graphs,
+    geometry, flowcharts), it should set image_description. The system will
+    generate an image from that description and embed it in back_detail.
     """
 
     card_type: CardType
     front: str
     back_brief: str
     back_detail: str
+    tags: list[str]
+    image_description: str | None = None
 
 
 @dataclass
@@ -37,3 +43,4 @@ class StemNoteType:
     front: str
     back_brief: str
     back_detail: str
+    tags: str

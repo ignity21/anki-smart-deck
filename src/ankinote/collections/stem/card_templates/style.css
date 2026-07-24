@@ -1,147 +1,182 @@
-/* STEM cards — consistent with sentence/phrase card styling */
-
-/* --- Global Base & Variables --- */
 :root {
-  font-size: clamp(15px, 3vw, 20px);
+  font-size: clamp(16px, 2.7vw, 21px);
 }
 
 body {
-  /* Light Theme */
-  --bg-color: #f0f2f5;
-  --section-bg: #ffffff;
-  --text-primary: #2d3436;
-  --text-secondary: #636e72;
-  --border-color: #eee;
-  --section-title-color: #999;
-  --shadow-sm: 0 0.1em 0.3em rgba(0, 0, 0, 0.05);
+  --bg: #f5efe4;
+  --paper: #fffaf1;
+  --paper-strong: #f1e4c8;
+  --ink: #1e2430;
+  --muted: #6b7280;
+  --accent: #b45309;
+  --accent-soft: #f59e0b;
+  --accent-deep: #7c2d12;
+  --border: rgba(124, 45, 18, 0.12);
+  --shadow: 0 10px 30px rgba(30, 36, 48, 0.08);
+  --success: #1d8348;
+  --error: #b42318;
 
-  /* Card type badge colors */
-  --badge-concept-bg: #e3f2fd;
-  --badge-concept-color: #1565c0;
-  --badge-formula-bg: #f3e5f5;
-  --badge-formula-color: #6a1b9a;
-  --badge-procedure-bg: #e8f5e9;
-  --badge-procedure-color: #2e7d32;
+  --badge-concept-bg: rgba(30, 36, 48, 0.08);
+  --badge-concept-color: var(--ink);
+  --badge-formula-bg: rgba(180, 83, 9, 0.12);
+  --badge-formula-color: var(--accent-deep);
+  --badge-procedure-bg: rgba(29, 131, 72, 0.12);
+  --badge-procedure-color: var(--success);
 }
 
 body.nightMode {
-  /* Dark Theme */
-  --bg-color: #1a1c1e;
-  --section-bg: #242629;
-  --text-primary: #f0f2f5;
-  --text-secondary: #a0a6ac;
-  --border-color: #2f3338;
-  --section-title-color: #666;
-  --shadow-sm: 0 0.2em 0.5em rgba(255, 255, 255, 0.05);
+  --bg: #1f2229;
+  --paper: #2a2f39;
+  --paper-strong: #383d47;
+  --ink: #f6f0e5;
+  --muted: #c7c2b7;
+  --accent: #f2b84b;
+  --accent-soft: #f8d57e;
+  --accent-deep: #f6e0af;
+  --border: rgba(248, 213, 126, 0.14);
+  --shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
+  --success: #7dd3a4;
+  --error: #fca5a5;
 
-  --badge-concept-bg: #0d47a1;
-  --badge-concept-color: #bbdefb;
-  --badge-formula-bg: #4a148c;
-  --badge-formula-color: #e1bee7;
-  --badge-procedure-bg: #1b5e20;
-  --badge-procedure-color: #c8e6c9;
+  --badge-concept-bg: rgba(30, 36, 48, 0.25);
+  --badge-concept-color: var(--ink);
+  --badge-formula-bg: rgba(180, 83, 9, 0.25);
+  --badge-formula-color: var(--accent-soft);
+  --badge-procedure-bg: rgba(29, 131, 72, 0.25);
+  --badge-procedure-color: var(--success);
 }
 
-/* --- Layout Containers --- */
 .card {
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 1rem;
   text-align: left;
-  background-color: var(--bg-color) !important;
-  color: var(--text-primary) !important;
-  padding: 0.5em;
-  margin: 0 auto;
-  max-width: clamp(80vw, 700px, 100vw);
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.12), transparent 35%),
+    linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 82%, black 18%));
+  color: var(--ink);
   min-height: 100vh;
+  margin: 0 auto;
+  padding: 1rem 0.85rem 1.6rem;
+  max-width: 42rem;
 }
 
-/* --- Front: question prompt --- */
+.stage-card,
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow);
+}
+
+.stage-card {
+  padding: 1.2rem 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.panel {
+  padding: 1rem;
+}
+
+.eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.9rem;
+  font-weight: 700;
+}
+
 .stem-front {
-  font-size: 1.4rem;
-  text-align: center;
-  margin-bottom: 0.4em;
-  line-height: 1.4;
+  font-size: clamp(1.1rem, 3.5vw, 1.6rem);
+  line-height: 1.2;
+  font-weight: 700;
+  text-align: left;
+  margin-bottom: 0.8rem;
 }
 
-/* --- Badges & Meta --- */
 .badge-row {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.4em;
+  gap: 0.45rem;
   flex-wrap: wrap;
-  margin-bottom: 0.4em;
+  margin-bottom: 0.75rem;
 }
 
 .badge {
-  padding: 0.25em 0.75em;
-  border-radius: 0.4em;
-  font-size: 0.8rem;
-  font-weight: 800;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
 }
 
 .badge-concept  { background: var(--badge-concept-bg);   color: var(--badge-concept-color); }
 .badge-formula  { background: var(--badge-formula-bg);   color: var(--badge-formula-color); }
 .badge-procedure{ background: var(--badge-procedure-bg); color: var(--badge-procedure-color); }
 
-/* --- Content Sections --- */
-.section-container {
-  font-size: 1rem;
-  background: var(--section-bg);
-  border-radius: 0.6em;
-  padding: 0.5em;
-  margin: 0.6em auto;
-  box-shadow: var(--shadow-sm);
-  border: 0.1em solid var(--border-color);
+.section-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  margin: 0.95rem 0 0.45rem;
+  font-weight: 700;
 }
 
-.section-title {
-  font-size: 0.9em;
-  font-weight: 900;
-  text-transform: uppercase;
-  color: var(--section-title-color);
-  letter-spacing: 0.1em;
-  border-bottom: 0.1em solid var(--border-color);
-  padding-bottom: 0.1em;
-  margin-bottom: 0.2em;
+.section-title:first-child {
+  margin-top: 0;
 }
 
 .brief {
   font-size: 1.1rem;
-  line-height: 1.5;
+  line-height: 1.4;
+  margin-bottom: 0.6rem;
+  font-weight: 600;
 }
 
 .detail {
   font-size: 1rem;
-  line-height: 1.7;
-  color: var(--text-secondary);
+  line-height: 1.6;
+  color: var(--ink);
 }
 
-/* --- Tags --- */
+.detail p {
+  margin: 0.5rem 0;
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45em;
+  gap: 0.45rem;
   align-items: center;
   font-size: 0.82rem;
   line-height: 1.5;
+  color: var(--muted);
 }
 
 hr {
-  color: var(--border-color);
-  height: 0.15em;
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5rem 0;
 }
 
-/* --- LaTeX / MathJax --- */
+/* LaTeX / MathJax */
 .MathJax {
   font-size: 1.1em !important;
   overflow-x: auto;
 }
 
-/* --- Media --- */
-img {
-  max-width: 25vw;
+/* Diagram */
+.diagram-container {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.diagram {
+  max-width: 100%;
   height: auto;
-  border-radius: 0.4em;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }

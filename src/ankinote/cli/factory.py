@@ -7,6 +7,7 @@ from typing import Protocol, TypeVar
 
 from ankinote.app import Application
 from ankinote.collections.math import MathCollection
+from ankinote.collections.stem import StemCollection
 from ankinote.collections.phrase import PhraseCollection
 from ankinote.collections.sentence import SentenceCollection
 from ankinote.collections.word import WordCollection
@@ -48,6 +49,15 @@ class LanguageCollectionOptions:
 class WordCollectionOptions(LanguageCollectionOptions):
     """CLI options for the word collection."""
 
+    image_model_id: str | None = None
+    image_size: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class StemCollectionOptions:
+    """CLI options for the STEM collection."""
+
+    llm_model_id: str | None = None
     image_model_id: str | None = None
     image_size: int | None = None
 
@@ -115,6 +125,31 @@ def build_sentence_collection(
         target_language=options.target_language,
         text_model_id=config.text_model_id,
         text_service=LiteLLMTextService(),
+    )
+
+
+
+def build_stem_collection(
+    client: AnkiCollectionClient,
+    options: StemCollectionOptions,
+) -> StemCollection:
+    """Build a STEM collection from typed CLI options."""
+    config = AIServiceConfigOverrides(
+        text_model_id=options.llm_model_id,
+        image_model_id=options.image_model_id,
+        image_size=options.image_size,
+    ).resolve(DEFAULT_AI_SERVICE_CONFIG)
+    image_service = None
+    if config.image_model_id:
+        image_service = LiteLLMGeminiImageService(
+            model_id=config.image_model_id,
+            image_size=config.image_size,
+        )
+    return StemCollection(
+        client,
+        text_model_id=config.text_model_id,
+        text_service=LiteLLMTextService(),
+        image_service=image_service,
     )
 
 

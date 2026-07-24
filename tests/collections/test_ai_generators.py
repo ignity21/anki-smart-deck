@@ -275,7 +275,9 @@ async def test_stem_generator_uses_unified_text_service():
               "card_type": "concept",
               "front": "What is a vector space?",
               "back_brief": "A set closed under vector addition and scalar multiplication.",
-              "back_detail": "It satisfies the vector space axioms over a field."
+              "back_detail": "It satisfies the vector space axioms over a field.",
+              "tags": ["Math", "Linear Algebra"],
+              "image_description": null
             }
             """
         ]
@@ -285,7 +287,9 @@ async def test_stem_generator_uses_unified_text_service():
         text_model_id="stem-model",
     )
 
-    model = await generator.generate("vector space", CardType.CONCEPT)
+    model = await generator.generate("vector space")
 
-    assert model.card_type is CardType.CONCEPT
+    assert model.card_type.value == "concept"
+    assert model.tags == ["Math", "Linear Algebra"]
+    assert model.image_description is None
     assert text_service.calls[0]["model_id"] == "stem-model"
