@@ -1,20 +1,21 @@
-"""Phrase collection management for Anki."""
+"""Phrase collection management for Anki V2."""
 
 import dataclasses
 import hashlib
+import html
 from dataclasses import dataclass
 from typing import Self
 
 from loguru import logger
 
-from ankinote.collections.common import convert_to_html_ruby
+from ankinote.collections.common import convert_to_html_ruby, strip_phonetic_annotations
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.anki import AnkiCollectionClient
+from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
 from ankinote.services.ai import TextGenerationService
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import PhraseGenerator, PhraseMediaFiles
-from .models import Definition, Example, PhraseModel, PhraseNoteType
+from .models import PhraseModel, PhraseNoteType, Sense
 from .templates import load_card_style, load_template
 
 
@@ -35,7 +36,7 @@ class MediaReferences:
 
 
 class PhraseCollection:
-    """Manages phrase / idiom / sentence notes in Anki."""
+    """Manages phrase / idiom / sentence notes in Anki (V2)."""
 
     def __init__(
         self,
@@ -43,7 +44,7 @@ class PhraseCollection:
         *,
         native_language: Language,
         target_language: Language,
-        notetype_name: str = "AINote Phrase",
+        notetype_name: str = "AINote Phrase V2",
         deck_name: str = "AINote::Phrases",
         text_model_id: str,
         text_service: TextGenerationService,
@@ -63,7 +64,7 @@ class PhraseCollection:
         if target_language in RUBY_ANNOTATION_LANGUAGES:
             self._convert_target_lang_text = convert_to_html_ruby
         else:
-            self._convert_target_lang_text = lambda x: x  # No conversion needed
+            self._convert_target_lang_text = lambda value: value
 
     async def __aenter__(self) -> Self:
         """Async context manager entry: ensure note type and deck exist."""
@@ -77,37 +78,46 @@ class PhraseCollection:
         self._tts_service.clear_cache()
 
     async def _ensure_note_type_exists(self) -> None:
-        """Ensure the note type exists in Anki, create it if it doesn't."""
+        """Ensure the note type exists in Anki, create or update it."""
+        fields = [field.name for field in dataclasses.fields(PhraseNoteType)]
+        css = load_card_style()
+        templates = [
+            {
+                "Name": "Recognition",
+                "Front": load_template("front.html"),
+                "Back": load_template("back.html"),
+            },
+            {
+                "Name": "Recall",
+                "Front": load_template("reverse_front.html"),
+                "Back": load_template("reverse_back.html"),
+            },
+        ]
         exists = await self._anki_client.models.exists(self.notetype_name)
-        if exists:
+        if not exists:
+            await self._anki_client.models.create(
+                model_name=self.notetype_name,
+                fields=fields,
+                templates=templates,
+                css=css,
+                is_cloze=False,
+            )
+            logger.success(f"Created note type: {self.notetype_name}")
             return
 
-        fields = [f.name for f in dataclasses.fields(PhraseNoteType)]
-        front_template = load_template("front.html")
-        back_template = load_template("back.html")
-        rfront_template = load_template("reverse_front.html")
-        rback_template = load_template("reverse_back.html")
-        style = load_card_style()
-
-        await self._anki_client.models.create(
-            model_name=self.notetype_name,
-            fields=fields,
-            templates=[
-                {
-                    "Name": "Recognition",
-                    "Front": front_template,
-                    "Back": back_template,
-                },
-                {
-                    "Name": "Recall",
-                    "Front": rfront_template,
-                    "Back": rback_template,
-                },
+        await self._anki_client.models.update_templates(
+            self.notetype_name,
+            [
+                TemplateUpsert(
+                    name=template["Name"],
+                    question_format=template["Front"],
+                    answer_format=template["Back"],
+                )
+                for template in templates
             ],
-            css=style,
-            is_cloze=False,
         )
-        logger.success(f"Created phrase note type: {self.notetype_name}")
+        await self._anki_client.models.update_styling(self.notetype_name, css)
+        logger.success(f"Updated note type: {self.notetype_name}")
 
     async def _ensure_deck_exists(self) -> int:
         """Ensure the deck exists in Anki, create it if it doesn't."""
@@ -207,72 +217,160 @@ class PhraseCollection:
         media_refs: MediaReferences,
     ) -> dict[str, str]:
         """Convert PhraseModel and media references to Anki note fields."""
+        senses = [phrase_model.core_meaning, *phrase_model.supporting_meanings]
         return {
             "phrase": phrase_model.phrase,
             "pron_audio": f"[sound:{media_refs.phrase_audio}]",
             "difficulty": phrase_model.difficulty,
-            "definitions": self._format_definitions_html(phrase_model.definitions),
-            "examples": self._format_examples_html(
+            "core_meaning": self._format_core_meaning(phrase_model.core_meaning),
+            "sense_notes": self._format_sense_notes(phrase_model.supporting_meanings),
+            "translations": self._format_translations(senses),
+            "examples": self._format_examples(
                 phrase_model.examples,
                 media_refs.example_audios,
+                phrase_model.phrase,
             ),
-            "notes": self._format_notes_html(phrase_model.notes),
-            "associations": self._format_associations_html(phrase_model.associations),
+            "example_audio_refs": self._format_example_audio_refs(media_refs.example_audios),
+            "usage_pattern": self._format_text_block(phrase_model.usage_pattern),
+            "confusions": self._format_bullets(phrase_model.confusions),
+            "etymology_or_memory": self._format_text_block(phrase_model.etymology_or_memory),
+            "associations": self._format_chip_list(phrase_model.associations, "association"),
+            "production_hint": self._format_text_block(phrase_model.production_hint),
             "user_notes": "",
         }
 
-    def _format_definitions_html(self, definitions: list[Definition]) -> str:
-        """Format definitions as HTML."""
-        html_parts: list[str] = []
-        for idx, definition in enumerate(definitions):
-            target_lang = self._convert_target_lang_text(definition.target_lang)
-            html_parts.append(
-                f"<div class='definition'>"
-                f"<strong>{idx + 1}.</strong> "
-                f"{target_lang} "
-                f"<span class='translation'>({definition.native_lang})</span>"
-                f"</div>"
-            )
-        return "\n".join(html_parts)
+    def _format_core_meaning(self, sense: Sense) -> str:
+        meaning = self._render_target_text(sense.target_text)
+        native = html.escape(sense.native_text)
+        return (
+            "<div class='meaning-anchor'>"
+            f"<div class='meaning-target'>{meaning}</div>"
+            f"<div class='meaning-native'>{native}</div>"
+            "</div>"
+        )
 
-    def _format_examples_html(
-        self,
-        examples: list[Example],
-        audio_refs: list[str],
-    ) -> str:
-        """Format examples with audio as HTML."""
-        html_parts: list[str] = []
-        for example, audio_ref in zip(examples, audio_refs):
-            sentence = self._convert_target_lang_text(example.sentence)
-            if example.highlight:
-                ruby_highlight = self._convert_target_lang_text(example.highlight)
-                sentence = sentence.replace(
-                    ruby_highlight,
-                    f"<strong>{ruby_highlight}</strong>",
-                )
-
-            html_parts.append(
-                f"<div class='example'>"
-                f"<div class='example-sentence'>"
-                f"{sentence} [sound:{audio_ref}]"
-                f"</div>"
-                f"<div class='example-translation'>{example.translation}</div>"
-                f"</div>"
-            )
-        return "\n".join(html_parts)
-
-    def _format_notes_html(self, notes: list[str]) -> str:
-        """Format notes as HTML."""
-        if not notes:
+    def _format_sense_notes(self, senses: list[Sense]) -> str:
+        if not senses:
             return ""
-        formatted = [f"• {self._convert_target_lang_text(note)}" for note in notes]
-        return "<br>".join(formatted)
+        items = []
+        for sense in senses:
+            target = self._render_target_text(sense.target_text)
+            native = html.escape(sense.native_text)
+            items.append(
+                "<div class='sense-note'>"
+                f"<span class='sense-target'>{target}</span>"
+                f"<span class='sense-native'>{native}</span>"
+                "</div>"
+            )
+        return "".join(items)
 
-    def _format_associations_html(self, associations: list[str]) -> str:
-        """Format associations (related phrases) as HTML."""
-        if not associations:
-            return ""
-        formatted = [
-            f"• {self._convert_target_lang_text(assoc)}" for assoc in associations
+    def _format_translations(self, senses: list[Sense]) -> str:
+        supporting_senses = senses[1:] or senses[:1]
+        entries = [
+            html.escape(sense.native_text)
+            for sense in supporting_senses
+            if sense.native_text
         ]
-        return "<br>".join(formatted)
+        if not entries:
+            return ""
+        unique_entries = list(dict.fromkeys(entries))
+        return " / ".join(unique_entries)
+
+    def _format_examples(
+        self,
+        examples: list["Example"],
+        audio_refs: list[str],
+        phrase: str,
+    ) -> str:
+        blocks: list[str] = []
+        for index, example in enumerate(examples):
+            sentence = self._strip_wrapping_quotes(example.sentence)
+            # For phrases, highlights typically include the phrase itself;
+            # we filter empty / non-matching entries
+            highlights = self._filter_highlights(example.highlights, phrase)
+            sentence_html = self._render_sentence(sentence, highlights)
+            translation_html = html.escape(example.translation)
+            audio_html = ""
+            if index < len(audio_refs):
+                audio_html = (
+                    "<span class='example-audio inline-audio'>"
+                    f"[sound:{audio_refs[index]}]"
+                    "</span>"
+                )
+            blocks.append(
+                "<article class='example-block'>"
+                f"<div class='example-sentence'>{sentence_html}{audio_html}</div>"
+                f"<div class='example-translation'>{translation_html}</div>"
+                "</article>"
+            )
+        return "".join(blocks)
+
+    def _format_example_audio_refs(self, audio_refs: list[str]) -> str:
+        if not audio_refs:
+            return ""
+        return "".join(
+            f"<span class='example-audio-ref'>[sound:{audio_ref}]</span>"
+            for audio_ref in audio_refs
+        )
+
+    def _format_chip_list(self, items: list[str], css_class: str) -> str:
+        if not items:
+            return ""
+        return "".join(
+            f"<span class='{css_class}-chip'>{self._render_target_text(item)}</span>"
+            for item in items
+        )
+
+    def _format_bullets(self, items: list[str]) -> str:
+        if not items:
+            return ""
+        return "".join(f"<li>{self._render_mixed_text(item)}</li>" for item in items)
+
+    def _format_text_block(self, value: str | None) -> str:
+        if not value:
+            return ""
+        return self._render_target_text(value)
+
+    def _strip_wrapping_quotes(self, value: str) -> str:
+        stripped = value.strip()
+        if stripped.startswith("「") and stripped.endswith("」"):
+            return stripped.removeprefix("「").removesuffix("」")
+        return value
+
+    def _filter_highlights(self, highlights: list[str], phrase: str) -> list[str]:
+        if self._target_language not in RUBY_ANNOTATION_LANGUAGES:
+            return highlights
+        return [
+            highlight
+            for highlight in highlights
+            if strip_phonetic_annotations(highlight) != phrase
+        ]
+
+    def _render_target_text(self, value: str) -> str:
+        if self._target_language in RUBY_ANNOTATION_LANGUAGES:
+            return self._convert_target_lang_text(value)
+        return html.escape(value)
+
+    def _render_mixed_text(self, value: str) -> str:
+        if self._target_language in RUBY_ANNOTATION_LANGUAGES and "<" in value and ":" in value:
+            return self._convert_target_lang_text(value)
+        return html.escape(value)
+
+    def _render_sentence(self, sentence: str, highlights: list[str]) -> str:
+        if self._target_language in RUBY_ANNOTATION_LANGUAGES:
+            rendered = sentence
+            for phrase in highlights:
+                rendered = rendered.replace(
+                    phrase,
+                    f"<span class='example-highlight'>{phrase}</span>",
+                )
+            return self._convert_target_lang_text(rendered)
+
+        rendered = html.escape(sentence)
+        for phrase in highlights:
+            escaped_phrase = html.escape(phrase)
+            rendered = rendered.replace(
+                escaped_phrase,
+                f"<span class='example-highlight'>{escaped_phrase}</span>",
+            )
+        return rendered

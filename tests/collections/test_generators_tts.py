@@ -3,7 +3,6 @@
 import pytest
 
 from ankinote.collections.phrase.generator import PhraseGenerator
-from ankinote.collections.phrase.models import Definition as PhraseDefinition
 from ankinote.collections.phrase.models import Example as PhraseExample
 from ankinote.collections.phrase.models import PhraseModel
 from ankinote.collections.sentence.generator import SentenceGenerator
@@ -102,15 +101,19 @@ class TestPhraseGenerator:
         phrase_model = PhraseModel(
             phrase="take off",
             difficulty="B1",
-            definitions=[PhraseDefinition(target_lang="起飞", native_lang="take off")],
+            core_meaning={"target_text": "to leave the ground", "native_text": "起飞"},
+            supporting_meanings=[],
             examples=[
                 PhraseExample(
                     sentence="The plane takes off.",
                     translation="飞机起飞。",
-                    highlight="takes off",
+                    highlights=["takes off"],
                 )
             ],
-            notes=[],
+            usage_pattern=None,
+            production_hint=None,
+            confusions=[],
+            etymology_or_memory=None,
             associations=[],
         )
 
