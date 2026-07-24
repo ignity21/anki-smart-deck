@@ -1,38 +1,16 @@
 {{FrontSide}}
-<hr>
-<div class="phrase">{{phrase}}</div>
-{{#pron_audio}}
-<div class="badge-row">
-    <div class="badge pronunciation-badge">
-        <span class="audio-btn">{{pron_audio}}</span>
-    </div>
-</div>
-{{/pron_audio}}
-
-{{#examples}}
-<div class="section-container">
-    <div class="section-title">Usage Examples</div>
-    <div class="examples-container">{{examples}}</div>
-</div>
-{{/examples}}
-
-{{#notes}}
-<div class="section-container">
-    <div class="section-title">Notes</div>
-    <div class="notes-container">{{notes}}</div>
-</div>
-{{/notes}}
-
-{{#associations}}
-<div class="section-container">
-    <div class="section-title">Related Expressions</div>
-    <div class="associations-container">{{associations}}</div>
-</div>
-{{/associations}}
-
-{{#user_notes}}
-<div class="user-notes-container">
-    <div class="section-title user-notes-title">My Study Notes</div>
-    <div>{{user_notes}}</div>
-</div>
-{{/user_notes}}
+<section class="stage-card answer-card">
+  <div class="phrase-stage">{{phrase}}</div>
+  <div class="meta-row">
+    {{#difficulty}}<span class="pill difficulty-pill">{{difficulty}}</span>{{/difficulty}}
+  </div>
+  <div class="pronunciation-row">
+    {{#pron_audio}}<span class="audio-line inline-audio">{{pron_audio}}</span>{{/pron_audio}}
+  </div>
+</section>
+<section class="panel">
+  {{#usage_pattern}}<div class="section-title">Usage</div><div class="detail-text">{{usage_pattern}}</div>{{/usage_pattern}}
+  {{#examples}}<div class="section-title">Examples</div><div>{{examples}}</div>{{/examples}}
+  {{#confusions}}<div class="section-title">Confusions</div><ul class="bullet-list">{{confusions}}</ul>{{/confusions}}
+  {{#associations}}<div class="section-title">Related Expressions</div><div class="chip-row">{{associations}}</div>{{/associations}}
+</section>

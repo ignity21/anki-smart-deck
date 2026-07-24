@@ -158,10 +158,14 @@ async def test_phrase_generator_uses_unified_text_service():
             {
               "phrase": "take off",
               "difficulty": "B1",
-              "definitions": [{"target_lang": "起飞", "native_lang": "take off"}],
-              "examples": [{"sentence": "The plane takes off.", "translation": "飞机起飞。", "highlight": "takes off"}],
-              "notes": [],
-              "associations": []
+              "core_meaning": {"target_text": "to leave the ground", "native_text": "起飞"},
+              "supporting_meanings": [],
+              "examples": [{"sentence": "The plane takes off.", "translation": "飞机起飞。", "highlights": ["takes off"]}],
+              "usage_pattern": "verb + particle",
+              "production_hint": "飞机离开地面",
+              "confusions": [],
+              "etymology_or_memory": null,
+              "associations": ["take off (remove)"]
             }
             """
         ]

@@ -1,18 +1,6 @@
-<!-- Use definition as the main prompt on the front side -->
-{{#Tags}}
-<div class="section-container">
-    <div class="tags">{{Tags}}</div>
-</div>
-{{/Tags}}
-{{#definitions}}
-<div class="section-container">
-    <div class="section-title">Meaning</div>
-    <div class="definitions-container">{{definitions}}</div>
-</div>
-{{/definitions}}
-
-<div class="badge-row">
-    {{#difficulty}}
-    <div class="badge difficulty-badge">{{difficulty}}</div>
-    {{/difficulty}}
-</div>
+<section class="stage-card recall-card">
+  <div class="eyebrow">Recall</div>
+  {{#core_meaning}}<div class="meaning-prompt">{{core_meaning}}</div>{{/core_meaning}}
+  {{#translations}}<div class="translation-prompt">{{translations}}</div>{{/translations}}
+  {{#production_hint}}<div class="hint-box">{{production_hint}}</div>{{/production_hint}}
+</section>

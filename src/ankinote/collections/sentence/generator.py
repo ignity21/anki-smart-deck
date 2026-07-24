@@ -36,8 +36,21 @@ _load_prompt_template = create_prompt_loader(
 )
 
 
+def _extract_json_payload(content: str) -> str:
+    """Extract a JSON payload from common fenced LLM output."""
+    stripped = content.strip()
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        return "\n".join(lines).strip()
+    return stripped
+
+
 async def generate_sentence_data(
-    target_sentence: str,
+    native_sentence: str,
     target_language: Language,
     native_language: Language,
     text_service: TextGenerationService,
@@ -46,20 +59,20 @@ async def generate_sentence_data(
 ) -> SentenceModel:
     """Generate sentence card data via LLM.
 
-    The *target_sentence* is provided in the target language; the model
-    generates the corresponding native sentence and any useful notes.
+    The *native_sentence* is provided in the user's native language; the model
+    generates the corresponding target sentence and any useful notes.
     """
 
     system_prompt = _load_prompt_template(target_language)
     user_message = (
-        f"Target sentence: {target_sentence}\n"
+        f"Native sentence: {native_sentence}\n"
         f"Target language: {target_language.value}\n"
         f"Native language: {native_language.value}"
     )
 
     logger.info(
-        f"Generating sentence data for '{target_sentence}' "
-        f"(target: {target_language.value}, native: {native_language.value})"
+        f"Generating sentence data for '{native_sentence}' "
+        f"(native: {native_language.value}, target: {target_language.value})"
     )
 
     try:
@@ -77,18 +90,18 @@ async def generate_sentence_data(
         logger.info(f"Raw AI response length: {len(content)} characters")
 
         try:
-            data = json.loads(content)
+            data = json.loads(_extract_json_payload(content))
         except json.JSONDecodeError as e:
             logger.exception("Failed to parse JSON response")
             logger.debug(f"Response content: {content[:500]}...")
             raise RuntimeError(f"AI returned invalid JSON: {e}") from e
 
         sentence_model = SentenceModel.model_validate(data)
-        logger.success(f"Generated sentence model for '{target_sentence}'")
+        logger.success(f"Generated sentence model for '{native_sentence}'")
         return sentence_model
 
     except Exception as e:
-        logger.error(f"Failed to generate sentence data for '{target_sentence}': {e}")
+        logger.error(f"Failed to generate sentence data for '{native_sentence}': {e}")
         raise
 
 
@@ -107,14 +120,14 @@ class SentenceGenerator:
 
     async def generate_sentence_data(
         self,
-        target_sentence: str,
+        native_sentence: str,
         target_lang: Language,
         native_lang: Language,
         temperature: float = 0.3,
     ) -> SentenceModel:
         """Generate structured sentence data via LLM."""
         return await generate_sentence_data(
-            target_sentence=target_sentence,
+            native_sentence=native_sentence,
             target_language=target_lang,
             native_language=native_lang,
             text_service=self._text_service,

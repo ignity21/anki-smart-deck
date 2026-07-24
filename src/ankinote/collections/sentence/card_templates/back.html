@@ -1,30 +1,25 @@
 {{FrontSide}}
-<hr>
+<section class="panel">
+  {{#target_sentence}}
+  <div class="section-title">Target Sentence</div>
+  <div class="sentence-target">
+    <span class="target-text">{{target_sentence}}</span>
+    {{#pron_audio}}<span class="inline-audio">{{pron_audio}}</span>{{/pron_audio}}
+  </div>
+  {{/target_sentence}}
 
-{{#target_sentence}}
-<div class="section-container">
-    <div class="section-title">Target Sentence</div>
-    <div class="sentence">{{target_sentence}}</div>
-</div>
-{{/target_sentence}}
+  {{#phrases}}
+  <div class="section-title">Key Phrases</div>
+  <div>{{phrases}}</div>
+  {{/phrases}}
 
-{{#phrases}}
-<div class="section-container">
-    <div class="section-title">Phrases</div>
-    <div class="notes-container">{{phrases}}</div>
-</div>
-{{/phrases}}
+  {{#notes}}
+  <div class="section-title">Notes</div>
+  <div class="notes-list">{{notes}}</div>
+  {{/notes}}
 
-{{#notes}}
-<div class="section-container">
-    <div class="section-title">Notes</div>
-    <div class="notes-container">{{notes}}</div>
-</div>
-{{/notes}}
-
-{{#user_notes}}
-<div class="user-notes-container">
-    <div class="section-title user-notes-title">My Study Notes</div>
-    <div>{{user_notes}}</div>
-</div>
-{{/user_notes}}
+  {{#user_notes}}
+  <div class="section-title">My Notes</div>
+  <div class="notes-list">{{user_notes}}</div>
+  {{/user_notes}}
+</section>

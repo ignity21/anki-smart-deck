@@ -1,6 +1,10 @@
-<div class="phrase">{{phrase}}</div>
-<div class="badge-row">
-    {{#difficulty}}
-    <div class="badge difficulty-badge">{{difficulty}}</div>
-    {{/difficulty}}
-</div>
+<section class="stage-card">
+  <div class="eyebrow">Recognition</div>
+  <div class="phrase-stage">{{phrase}}</div>
+  <div class="meta-row">
+    {{#difficulty}}<span class="pill difficulty-pill">{{difficulty}}</span>{{/difficulty}}
+  </div>
+  <div class="pronunciation-row">
+    {{#pron_audio}}<span class="audio-line inline-audio">{{pron_audio}}</span>{{/pron_audio}}
+  </div>
+</section>

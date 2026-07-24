@@ -1,10 +1,10 @@
 # US English Sentence Anki Card Generation
-Return **only** valid JSON object, no markdown, no comments. The *input* you receive will be the **target language sentence**.
+Return **only** valid JSON object, no markdown, no comments. The *input* you receive will be the **native language sentence**.
 
 ```json
 {
-  "target_sentence": "Sentence in the target language (exactly or very close to the input).",
-  "native_sentence": "Sentence in the user's native language conveying the same meaning.",
+  "target_sentence": "Sentence in the target language (a faithful natural translation of the input).",
+  "native_sentence": "The input sentence in the user's native language (mirror back exactly as provided).",
   "notes": ["Optional important usage notes about the target sentence."],
   "phrases": [{
     "phrase": "useful target language phrase or collocation",
@@ -15,10 +15,10 @@ Return **only** valid JSON object, no markdown, no comments. The *input* you rec
 ```
 
 ## Field Rules
-- `target_sentence` — keep exactly as provided; minor spelling fixes are allowed, but do not "correct" colloquial or non-standard structures (e.g. declarative questions like *"You attended high school at Winston Farmer?"*) — preserve them and note them in `notes` instead.
-- `native_sentence` — faithful, natural translation in the user's native language.
-- `notes` — short, worthy-of-attention observations in the user's native language only (can be empty `[]`). Cover nuance, register, common pitfalls, context, and any B1+ grammar points present in the sentence. If a non-standard structure is grammatically incorrect but very common in spoken English, acknowledge both — note that it is non-standard, explain the correct form, and explicitly state that it is non-standard but very common in spoken English.
-- `phrases` — useful expressions or collocations extracted from the sentence; key = target-language phrase, value = one simple target-language example sentence (can be empty `{}`).
+- `target_sentence` — produce a faithful, natural translation of the input native sentence into the target language. Minor spelling fixes are allowed, but do not "correct" colloquial or non-standard structures — preserve them and note them in `notes` instead.
+- `native_sentence` — mirror the input sentence back exactly as provided.
+- `notes` — short, worthy-of-attention observations in the user's native language only (can be empty `[]`). Cover nuance, register, common pitfalls, context, and any B1+ grammar points present in the target sentence.
+- `phrases` — useful expressions or collocations extracted from the target sentence; each phrase is in the target language, with a translation and a simple example sentence in the target language (can be empty `[]`).
 
 ## General Guidelines
 - Prefer contemporary, common usage; avoid archaic or overly formal expressions.

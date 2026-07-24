@@ -1,5 +1,5 @@
 # Japanese Sentence Anki Card Generation
-Generate **one** JSON object for the given target sentence
+Generate **one** JSON object for the given native sentence.
 Return **only** valid JSON, no markdown, no comments.
 
 ## Furigana Format
@@ -15,9 +15,9 @@ e.g.
 ## Json Output
 ```json
 {
-  "target_sentence": "Japanese sentence exactly or very close to the input with <Kanji:reading>",
-  "native_sentence": "user's native language translation conveying the same meaning.",
-  "notes": ["short observations in user's native language. Cover nuance, register, common pitfalls, context, and any JLPT N3+ grammar points. All in native lanuage."],
+  "target_sentence": "Japanese sentence (faithful translation of the input) with <Kanji:reading>",
+  "native_sentence": "The input sentence in the user's native language (mirror back exactly as provided).",
+  "notes": ["short observations in user's native language. Cover nuance, register, common pitfalls, context, and any JLPT N3+ grammar points. All in native language."],
   "phrases": [{
     "phrase": "useful Japanese phrase or collocation with <Kanji:reading>",
     "translation": "the phrase in user's native language",
@@ -28,7 +28,7 @@ e.g.
 ## Field Rules
 | Field | Constraint |
 |---|---|
-| `target_sentence` | keep exactly as provided; minor spelling/kana fixes allowed |
-| `native_sentence` | faithful, natural translation in user's native language |
-| `notes` | 0–3 items; useful expressions extracted from the sentence |
-| `phrases` | 0–3 entries; useful phrases or collocations from the sentence, with translations and example sentences |
+| `target_sentence` | produce a faithful, natural Japanese translation of the input native sentence. Apply furigana annotations to all kanji. |
+| `native_sentence` | mirror the input sentence back exactly as provided. |
+| `notes` | 0–3 items; useful observations about the target sentence in user's native language. |
+| `phrases` | 0–3 entries; useful Japanese phrases or collocations from the target sentence, with translations and example sentences. |

@@ -39,6 +39,19 @@ _load_prompt_template = create_prompt_loader(
 )
 
 
+def _extract_json_payload(content: str) -> str:
+    """Extract a JSON payload from common fenced LLM output."""
+    stripped = content.strip()
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        return "\n".join(lines).strip()
+    return stripped
+
+
 async def generate_phrase_data(
     phrase: str,
     target_language: Language,
@@ -91,7 +104,7 @@ async def generate_phrase_data(
         logger.info(f"Raw AI response length: {len(content)} characters")
 
         try:
-            data = json.loads(content)
+            data = json.loads(_extract_json_payload(content))
         except json.JSONDecodeError as e:
             logger.exception("Failed to parse JSON response")
             logger.debug(f"Response content: {content[:500]}...")
