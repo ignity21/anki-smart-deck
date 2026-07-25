@@ -431,7 +431,7 @@ make check
 
 ## Documentation
 - [Note Types](docs/NoteType.md)
-- [Codex Skill](skills/ankinote-cli/SKILL.md) — for using ankinote with AI coding assistants
+- [Skill](skills/ankinote-cli/SKILL.md) — for using ankinote with AI coding assistants
 
 ## 📄 License
 
