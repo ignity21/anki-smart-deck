@@ -89,10 +89,14 @@ class DummyNoteService:
     ) -> int:
         return 1
 
-    async def update_fields(self, note_id: int, fields: dict[str, str]) -> None:  # pragma: no cover
+    async def update_fields(
+        self, note_id: int, fields: dict[str, str]
+    ) -> None:  # pragma: no cover
         return None
 
-    async def update_tags(self, note_id: int, tags: list[str]) -> None:  # pragma: no cover
+    async def update_tags(
+        self, note_id: int, tags: list[str]
+    ) -> None:  # pragma: no cover
         return None
 
 
@@ -149,7 +153,9 @@ def _build_model() -> PhraseModel:
         ],
         usage_pattern="verb + particle (no object)",
         production_hint="飞机离开地面",
-        confusions=["Do not confuse with 'take off' (remove clothing) which is a different meaning."],
+        confusions=[
+            "Do not confuse with 'take off' (remove clothing) which is a different meaning."
+        ],
         etymology_or_memory="Aviation metaphor that extends to careers and businesses.",
         associations=["take off (remove)", "landing", "touch down"],
     )

@@ -410,9 +410,7 @@ class ModelClient:
             },
         )
         if not isinstance(existing_templates, dict):
-            raise AnkiResponseError(
-                "Expected dictionary from modelTemplates response"
-            )
+            raise AnkiResponseError("Expected dictionary from modelTemplates response")
         known_template_names = set(existing_templates)
         for tmpl in templates:
             match_name = tmpl.previous_name or tmpl.name

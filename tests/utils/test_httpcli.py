@@ -72,7 +72,9 @@ class TestSessionLifecycle:
 
     def test_init_requires_event_loop(self):
         """init_session() raises when called outside an event loop."""
-        with pytest.raises(RuntimeError, match="must be called within a running event loop"):
+        with pytest.raises(
+            RuntimeError, match="must be called within a running event loop"
+        ):
             init_session()
 
     @pytest.mark.asyncio
@@ -97,7 +99,9 @@ class TestRequestHelpers:
         """post() calls request() with method='POST'."""
         mock = mocker.patch("ankinote.utils.httpcli.request", new_callable=AsyncMock)
         await post("http://example.com", json={"key": "value"})
-        mock.assert_awaited_once_with("POST", "http://example.com", json={"key": "value"})
+        mock.assert_awaited_once_with(
+            "POST", "http://example.com", json={"key": "value"}
+        )
 
     @pytest.mark.asyncio
     async def test_request_passes_kwargs(self, mocker: MockerFixture):
@@ -108,9 +112,7 @@ class TestRequestHelpers:
             captured["request"] = request
             return httpx.Response(200)
 
-        client = httpx.AsyncClient(
-            transport=httpx.MockTransport(handler)
-        )
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         mocker.patch("ankinote.utils.httpcli._get_client_or_raise", return_value=client)
 
         resp = await request("POST", "http://example.com", json={"a": 1})
@@ -148,7 +150,9 @@ class TestRetry:
         return handler
 
     @pytest.mark.asyncio
-    async def test_retry_eventually_succeeds(self, mocker: MockerFixture, failing_transport):
+    async def test_retry_eventually_succeeds(
+        self, mocker: MockerFixture, failing_transport
+    ):
         """request() retries on transport errors and eventually succeeds."""
         client = httpx.AsyncClient(transport=httpx.MockTransport(failing_transport))
         mocker.patch("ankinote.utils.httpcli._get_client_or_raise", return_value=client)
@@ -162,12 +166,15 @@ class TestRetry:
     @pytest.mark.asyncio
     async def test_retry_exhausted_raises(self, mocker: MockerFixture):
         """request() raises after exhausting all retry attempts."""
+
         def always_fail(request: httpx.Request) -> httpx.Response:
             raise httpx.ConnectError("Always fails", request=request)
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(always_fail))
         mocker.patch("ankinote.utils.httpcli._get_client_or_raise", return_value=client)
-        sleep_mock = mocker.patch("ankinote.utils.httpcli.asyncio.sleep", new_callable=AsyncMock)
+        sleep_mock = mocker.patch(
+            "ankinote.utils.httpcli.asyncio.sleep", new_callable=AsyncMock
+        )
 
         with pytest.raises(httpx.ConnectError, match="Always fails"):
             await request("GET", "http://example.com")
@@ -181,12 +188,15 @@ class TestRetry:
     @pytest.mark.asyncio
     async def test_successful_request_no_retry(self, mocker: MockerFixture):
         """request() returns immediately without retry on success."""
+
         def success(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200)
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(success))
         mocker.patch("ankinote.utils.httpcli._get_client_or_raise", return_value=client)
-        sleep_mock = mocker.patch("ankinote.utils.httpcli.asyncio.sleep", new_callable=AsyncMock)
+        sleep_mock = mocker.patch(
+            "ankinote.utils.httpcli.asyncio.sleep", new_callable=AsyncMock
+        )
 
         resp = await request("GET", "http://example.com")
         assert resp.status_code == 200

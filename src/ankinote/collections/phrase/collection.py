@@ -15,7 +15,7 @@ from ankinote.services.ai import TextGenerationService
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import PhraseGenerator, PhraseMediaFiles
-from .models import PhraseModel, PhraseNoteType, Sense
+from .models import Example, PhraseModel, PhraseNoteType, Sense
 from .templates import load_card_style, load_template
 
 
@@ -230,11 +230,17 @@ class PhraseCollection:
                 media_refs.example_audios,
                 phrase_model.phrase,
             ),
-            "example_audio_refs": self._format_example_audio_refs(media_refs.example_audios),
+            "example_audio_refs": self._format_example_audio_refs(
+                media_refs.example_audios
+            ),
             "usage_pattern": self._format_text_block(phrase_model.usage_pattern),
             "confusions": self._format_bullets(phrase_model.confusions),
-            "etymology_or_memory": self._format_text_block(phrase_model.etymology_or_memory),
-            "associations": self._format_chip_list(phrase_model.associations, "association"),
+            "etymology_or_memory": self._format_text_block(
+                phrase_model.etymology_or_memory
+            ),
+            "associations": self._format_chip_list(
+                phrase_model.associations, "association"
+            ),
             "production_hint": self._format_text_block(phrase_model.production_hint),
             "user_notes": "",
         }
@@ -278,7 +284,7 @@ class PhraseCollection:
 
     def _format_examples(
         self,
-        examples: list["Example"],
+        examples: list[Example],
         audio_refs: list[str],
         phrase: str,
     ) -> str:
@@ -352,7 +358,11 @@ class PhraseCollection:
         return html.escape(value)
 
     def _render_mixed_text(self, value: str) -> str:
-        if self._target_language in RUBY_ANNOTATION_LANGUAGES and "<" in value and ":" in value:
+        if (
+            self._target_language in RUBY_ANNOTATION_LANGUAGES
+            and "<" in value
+            and ":" in value
+        ):
             return self._convert_target_lang_text(value)
         return html.escape(value)
 

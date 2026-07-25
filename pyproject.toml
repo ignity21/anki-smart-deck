@@ -33,15 +33,16 @@ dependencies = [
 [project.scripts]
 ankinote = "ankinote.cli.main:main"
 
+[project.urls]
+Homepage = "https://github.com/ignity21/ankinote-ai"
+Repository = "https://github.com/ignity21/ankinote-ai"
+Documentation = "https://github.com/ignity21/ankinote-ai"
+
 [tool.hatch.version]
 path = "src/ankinote/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ankinote"]
-
-[[tool.uv.index]]
-url = "https://mirrors.aliyun.com/pypi/simple/"
-default = true
 
 [dependency-groups]
 dev = [

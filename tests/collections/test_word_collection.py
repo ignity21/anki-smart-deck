@@ -96,10 +96,14 @@ class DummyNoteService:
     ) -> int:
         return 1
 
-    async def update_fields(self, note_id: int, fields: dict[str, str]) -> None:  # pragma: no cover
+    async def update_fields(
+        self, note_id: int, fields: dict[str, str]
+    ) -> None:  # pragma: no cover
         return None
 
-    async def update_tags(self, note_id: int, tags: list[str]) -> None:  # pragma: no cover
+    async def update_tags(
+        self, note_id: int, tags: list[str]
+    ) -> None:  # pragma: no cover
         return None
 
 
@@ -110,7 +114,9 @@ class DummyMediaService:
         return filename
 
 
-def _build_collection(target_language: Language) -> tuple[WordCollection, RecordingModelService]:
+def _build_collection(
+    target_language: Language,
+) -> tuple[WordCollection, RecordingModelService]:
     models = RecordingModelService()
     client = cast(
         AnkiCollectionClient,
@@ -276,7 +282,7 @@ def test_convert_to_note_type_renders_ruby_for_japanese():
                         "<飾:かざ>る",
                         "<縁起:えんぎ>が<良:よ>い",
                     ],
-                )
+                ),
             ],
             collocations=["<招:まね>き<猫:ねこ>を<飾:かざ>る"],
             confusions=[
@@ -297,8 +303,14 @@ def test_convert_to_note_type_renders_ruby_for_japanese():
     assert "example-highlight" in note["examples"]
     assert "「" not in note["examples"]
     assert "」" not in note["examples"]
-    assert "<span class='example-highlight'><ruby>飾<rt>かざ</rt></ruby>る</span>" in note["examples"]
-    assert "<span class='example-highlight'><ruby>招<rt>まね</rt></ruby>き<ruby>猫<rt>ねこ</rt></ruby></span>" not in note["examples"]
+    assert (
+        "<span class='example-highlight'><ruby>飾<rt>かざ</rt></ruby>る</span>"
+        in note["examples"]
+    )
+    assert (
+        "<span class='example-highlight'><ruby>招<rt>まね</rt></ruby>き<ruby>猫<rt>ねこ</rt></ruby></span>"
+        not in note["examples"]
+    )
     assert "<ruby>意味<rt>いみ</rt></ruby>" in note["confusions"]
     assert "中文里常作招财摆件理解" in note["confusions"]
 

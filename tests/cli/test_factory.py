@@ -131,7 +131,10 @@ class TestCollectionBuilders:
 
         collection = build_word_collection(client, options)
 
-        assert collection._generator._text_model_id == DEFAULT_AI_SERVICE_CONFIG.text_model_id
+        assert (
+            collection._generator._text_model_id
+            == DEFAULT_AI_SERVICE_CONFIG.text_model_id
+        )
         image_service = collection._generator._image_service
         assert isinstance(image_service, LiteLLMGeminiImageService)
         assert image_service._model_id == DEFAULT_AI_SERVICE_CONFIG.image_model_id
@@ -201,7 +204,9 @@ class TestCollectionContext:
         async def fake_application():
             yield
 
-        mocker.patch("ankinote.cli.factory.Application", return_value=fake_application())
+        mocker.patch(
+            "ankinote.cli.factory.Application", return_value=fake_application()
+        )
         mocker.patch("ankinote.cli.factory.AnkiConnectClient", return_value=client)
 
         async with collection_context(builder, options) as collection:

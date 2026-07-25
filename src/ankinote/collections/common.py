@@ -128,7 +128,9 @@ def create_prompt_loader(
                 f"Available keys: {list(key_to_filename.keys())}"
             )
 
-        return files(f"{package}.prompts").joinpath(filename).read_text(encoding="utf-8")
+        return (
+            files(f"{package}.prompts").joinpath(filename).read_text(encoding="utf-8")
+        )
 
     return _load_prompt
 
