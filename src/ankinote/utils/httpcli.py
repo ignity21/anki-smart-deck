@@ -89,7 +89,9 @@ async def request(method: str, url: str, **kwargs) -> httpx.Response:
             return await client.request(method, url, **kwargs)
         except _RETRYABLE_EXCEPTIONS as exc:
             if attempt == _RETRY_MAX_ATTEMPTS - 1:
-                logger.error(f"Request failed after {_RETRY_MAX_ATTEMPTS} attempts: {exc}")
+                logger.error(
+                    f"Request failed after {_RETRY_MAX_ATTEMPTS} attempts: {exc}"
+                )
                 raise
             await asyncio.sleep(1 * (2**attempt))
     raise RuntimeError("Unreachable code reached in request")

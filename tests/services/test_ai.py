@@ -78,8 +78,12 @@ async def test_litellm_gemini_image_service_decodes_and_resizes(
         ),
     )
 
-    service = LiteLLMGeminiImageService(model_id="gemini/gemini-2.5-flash-image", image_size=128)
-    mocker.patch("ankinote.services.ai.base64.b64decode", return_value=buffer.getvalue())
+    service = LiteLLMGeminiImageService(
+        model_id="gemini/gemini-2.5-flash-image", image_size=128
+    )
+    mocker.patch(
+        "ankinote.services.ai.base64.b64decode", return_value=buffer.getvalue()
+    )
     result = await service.generate_image(prompt="draw a cat")
 
     with Image.open(io.BytesIO(result)) as out:

@@ -23,7 +23,9 @@ class TestGoogleTTSService:
                 )
             )
         )
-        mocker.patch("ankinote.services.tts.TextToSpeechAsyncClient", return_value=mock_client)
+        mocker.patch(
+            "ankinote.services.tts.TextToSpeechAsyncClient", return_value=mock_client
+        )
 
         service = GoogleTTSService("en-US", "Neural2")
         await service.warmup()
@@ -32,9 +34,7 @@ class TestGoogleTTSService:
         mock_client.list_voices.assert_awaited_once_with(language_code="en-US")
 
     @pytest.mark.asyncio
-    async def test_synthesize_works_without_prior_warmup(
-        self, mocker: MockerFixture
-    ):
+    async def test_synthesize_works_without_prior_warmup(self, mocker: MockerFixture):
         mock_client = SimpleNamespace(
             list_voices=mocker.AsyncMock(
                 return_value=SimpleNamespace(
@@ -45,8 +45,12 @@ class TestGoogleTTSService:
                 return_value=SimpleNamespace(audio_content=b"audio")
             ),
         )
-        mocker.patch("ankinote.services.tts.TextToSpeechAsyncClient", return_value=mock_client)
-        mocker.patch("ankinote.services.tts.random.choice", return_value="en-US-Neural2-A")
+        mocker.patch(
+            "ankinote.services.tts.TextToSpeechAsyncClient", return_value=mock_client
+        )
+        mocker.patch(
+            "ankinote.services.tts.random.choice", return_value="en-US-Neural2-A"
+        )
 
         service = GoogleTTSService("en-US", "Neural2")
 
@@ -65,7 +69,9 @@ class TestGoogleTTSService:
                 )
             )
         )
-        mocker.patch("ankinote.services.tts.TextToSpeechAsyncClient", return_value=mock_client)
+        mocker.patch(
+            "ankinote.services.tts.TextToSpeechAsyncClient", return_value=mock_client
+        )
 
         service = GoogleTTSService("en-US", "Neural2")
 
@@ -84,8 +90,12 @@ class TestGoogleTTSService:
                 return_value=SimpleNamespace(audio_content=b"audio")
             ),
         )
-        mocker.patch("ankinote.services.tts.TextToSpeechAsyncClient", return_value=mock_client)
-        mocker.patch("ankinote.services.tts.random.choice", return_value="en-US-Neural2-A")
+        mocker.patch(
+            "ankinote.services.tts.TextToSpeechAsyncClient", return_value=mock_client
+        )
+        mocker.patch(
+            "ankinote.services.tts.random.choice", return_value="en-US-Neural2-A"
+        )
 
         service = GoogleTTSService("en-US", "Neural2")
         await service.warmup()
@@ -95,4 +105,3 @@ class TestGoogleTTSService:
 
         mock_client.list_voices.assert_awaited_once()
         assert mock_client.synthesize_speech.await_count == 2
-

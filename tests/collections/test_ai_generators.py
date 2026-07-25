@@ -10,7 +10,6 @@ from ankinote.collections.math.models import MathModel
 from ankinote.collections.phrase.generator import PhraseGenerator
 from ankinote.collections.sentence.generator import SentenceGenerator
 from ankinote.collections.stem.generator import StemGenerator
-from ankinote.collections.stem.models import CardType
 from ankinote.collections.word.generator import WordGenerator
 from ankinote.consts import Language
 from ankinote.services.ai import TextMessage
@@ -103,7 +102,10 @@ async def test_word_generator_uses_unified_text_service():
     assert text_service.calls[0]["model_id"] == "word-model"
     messages = text_service.calls[0]["messages"]
     assert isinstance(messages, list)
-    assert "Goal: Create concise Anki cards optimized for recognition, recall, and spelling." in messages[1]["content"]
+    assert (
+        "Goal: Create concise Anki cards optimized for recognition, recall, and spelling."
+        in messages[1]["content"]
+    )
 
 
 @pytest.mark.asyncio

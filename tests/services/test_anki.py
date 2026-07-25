@@ -129,7 +129,9 @@ class TestModelClient:
 
     @pytest.mark.asyncio
     async def test_get_returns_none_when_anki_reports_model_not_found(self):
-        invoke = AsyncMock(side_effect=AnkiConnectError("model was not found: AINote Word"))
+        invoke = AsyncMock(
+            side_effect=AnkiConnectError("model was not found: AINote Word")
+        )
         stub = StubInvoker(invoke)
         client = ModelClient(stub)
 
@@ -292,7 +294,9 @@ class TestAnkiConnectInvoke:
         client = AnkiConnectClient()
         response = Mock()
         response.json.side_effect = ValueError("bad json")
-        mocker.patch("ankinote.services.anki.post", new=AsyncMock(return_value=response))
+        mocker.patch(
+            "ankinote.services.anki.post", new=AsyncMock(return_value=response)
+        )
 
         with pytest.raises(AnkiResponseError, match="invalid JSON"):
             await client._invoke("modelNames")
@@ -304,9 +308,13 @@ class TestAnkiConnectInvoke:
         client = AnkiConnectClient()
         response = Mock()
         response.json.return_value = {"result": []}
-        mocker.patch("ankinote.services.anki.post", new=AsyncMock(return_value=response))
+        mocker.patch(
+            "ankinote.services.anki.post", new=AsyncMock(return_value=response)
+        )
 
-        with pytest.raises(AnkiResponseError, match="include both 'error' and 'result'"):
+        with pytest.raises(
+            AnkiResponseError, match="include both 'error' and 'result'"
+        ):
             await client._invoke("modelNames")
 
     @pytest.mark.asyncio
@@ -314,7 +322,9 @@ class TestAnkiConnectInvoke:
         client = AnkiConnectClient()
         response = Mock()
         response.json.return_value = {"result": None, "error": "model was not found"}
-        mocker.patch("ankinote.services.anki.post", new=AsyncMock(return_value=response))
+        mocker.patch(
+            "ankinote.services.anki.post", new=AsyncMock(return_value=response)
+        )
 
         with pytest.raises(AnkiConnectError, match="model was not found"):
             await client._invoke("addNote")

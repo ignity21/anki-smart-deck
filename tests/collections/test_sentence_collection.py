@@ -89,10 +89,14 @@ class DummyNoteService:
     ) -> int:
         return 1
 
-    async def update_fields(self, note_id: int, fields: dict[str, str]) -> None:  # pragma: no cover
+    async def update_fields(
+        self, note_id: int, fields: dict[str, str]
+    ) -> None:  # pragma: no cover
         return None
 
-    async def update_tags(self, note_id: int, tags: list[str]) -> None:  # pragma: no cover
+    async def update_tags(
+        self, note_id: int, tags: list[str]
+    ) -> None:  # pragma: no cover
         return None
 
 

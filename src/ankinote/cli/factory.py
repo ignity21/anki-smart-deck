@@ -128,7 +128,6 @@ def build_sentence_collection(
     )
 
 
-
 def build_stem_collection(
     client: AnkiCollectionClient,
     options: StemCollectionOptions,
@@ -176,7 +175,9 @@ def build_math_collection(
 
 @asynccontextmanager
 async def collection_context(
-    builder: Callable[[AnkiCollectionClient, TOptions], AsyncContextManagerLike[TCollection]],
+    builder: Callable[
+        [AnkiCollectionClient, TOptions], AsyncContextManagerLike[TCollection]
+    ],
     options: TOptions,
 ) -> AsyncIterator[TCollection]:
     """Create application, transport client, and collection in one place."""

@@ -38,7 +38,6 @@ def _load_image_prompt() -> str:
     )
 
 
-
 def _strip_json_fences(content: str) -> str:
     """Strip markdown code fences (```json ... ```) from AI response."""
     content = content.strip()
@@ -46,14 +45,13 @@ def _strip_json_fences(content: str) -> str:
         # Remove opening fence
         first_newline = content.find("\n")
         if first_newline != -1:
-            content = content[first_newline + 1:]
+            content = content[first_newline + 1 :]
         # Remove closing fence
         if content.endswith("```"):
             content = content[:-3].rstrip()
         elif "\n```" in content:
-            content = content[:content.rindex("\n```")]
+            content = content[: content.rindex("\n```")]
     return content.strip()
-
 
 
 async def generate_stem_data(
@@ -100,9 +98,7 @@ async def generate_stem_data(
             raise RuntimeError(f"AI returned invalid JSON: {e}") from e
 
         stem_model = StemModel.model_validate(data)
-        logger.success(
-            f"Generated {stem_model.card_type} card for '{topic}'"
-        )
+        logger.success(f"Generated {stem_model.card_type} card for '{topic}'")
         return stem_model
 
     except Exception as e:

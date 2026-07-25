@@ -3,16 +3,26 @@ import sys
 import click
 from loguru import logger
 
+from ankinote import __version__
 from .stem import stem
 from .phrase import phrase
 from .sentence import sentence
 from .word import word
 
 
+_VERSION_BANNER = f"""╔══════════════════════════════════════════════╗
+║               ankinote v{__version__}                ║
+║       AI-powered Anki card generator        ║
+╚══════════════════════════════════════════════╝"""
+
+
 @click.group()
-@click.version_option()
+@click.version_option(
+    prog_name="ankinote",
+    message=_VERSION_BANNER,
+)
 def cli():
-    """Anki card generator"""
+    """AI-powered Anki card generator — vocabulary, phrases, sentences, STEM concepts."""
     pass
 
 

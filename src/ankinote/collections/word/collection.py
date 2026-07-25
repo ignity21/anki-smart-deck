@@ -206,7 +206,9 @@ class WordCollection:
         word_hash = hashlib.md5(word_base.encode()).hexdigest()[:12]
 
         headword_audio_name = f"{word_hash}.mp3"
-        await self._anki_client.media.store_file(headword_audio_name, media.headword_audio)
+        await self._anki_client.media.store_file(
+            headword_audio_name, media.headword_audio
+        )
 
         example_audio_names: list[str] = []
         for index, audio in enumerate(media.example_audios):
@@ -247,10 +249,16 @@ class WordCollection:
                 media_refs.example_audios,
                 word_model.lemma,
             ),
-            "example_audio_refs": self._format_example_audio_refs(media_refs.example_audios),
-            "collocations": self._format_chip_list(word_model.collocations, "collocation"),
+            "example_audio_refs": self._format_example_audio_refs(
+                media_refs.example_audios
+            ),
+            "collocations": self._format_chip_list(
+                word_model.collocations, "collocation"
+            ),
             "confusions": self._format_bullets(word_model.confusions),
-            "etymology_or_memory": self._format_text_block(word_model.etymology_or_memory),
+            "etymology_or_memory": self._format_text_block(
+                word_model.etymology_or_memory
+            ),
             "image_refs": self._format_image_refs(senses, media_refs.images),
             "production_hint": self._format_text_block(word_model.production_hint),
             "user_notes": "",
@@ -341,7 +349,9 @@ class WordCollection:
             return ""
         return "".join(f"<li>{self._render_mixed_text(item)}</li>" for item in items)
 
-    def _format_image_refs(self, senses: list[Sense], image_refs: dict[int, str]) -> str:
+    def _format_image_refs(
+        self, senses: list[Sense], image_refs: dict[int, str]
+    ) -> str:
         blocks: list[str] = []
         for index, image_ref in image_refs.items():
             if index >= len(senses):
@@ -377,7 +387,11 @@ class WordCollection:
         return html.escape(value)
 
     def _render_mixed_text(self, value: str) -> str:
-        if self._target_language in RUBY_ANNOTATION_LANGUAGES and "<" in value and ":" in value:
+        if (
+            self._target_language in RUBY_ANNOTATION_LANGUAGES
+            and "<" in value
+            and ":" in value
+        ):
             return self._convert_target_lang_text(value)
         return html.escape(value)
 

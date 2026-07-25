@@ -1,10 +1,10 @@
-# AnkiSmartDeck
+# ankinote
 
-> 🤖 AI-powered Anki vocabulary card generator using Google's suite of APIs
+> AI-powered Anki card generator — vocabulary, phrases, sentences, and STEM concepts
 
 ## 📖 About
 
-AnkiSmartDeck is an automated Anki flashcard generator that leverages Google's ecosystem of APIs to create comprehensive vocabulary cards. It automatically fetches pronunciations, definitions, examples, images, and audio, then syncs directly with Anki through AnkiConnect plugin.
+ankinote is an automated Anki flashcard generator that leverages Google's ecosystem of APIs to create comprehensive language and STEM cards. It automatically generates definitions, examples, mnemonics, images, and audio, then syncs directly with Anki through AnkiConnect.
 
 ## ✨ Features
 
@@ -29,8 +29,8 @@ AnkiSmartDeck is an automated Anki flashcard generator that leverages Google's e
 
 ```bash
 # Clone the repository
-git clone https://github.com/ignity21/anki-smart-deck.git
-cd anki-smart-deck
+git clone https://github.com/ignity21/ankinote-ai.git
+cd ankinote-ai
 
 # Install dependencies with uv
 uv install
@@ -50,11 +50,11 @@ GOOGLE_TTS_KEY=your_tts_api_key
 ANKI_CONNECT_URL=http://localhost:8765
 ```
 
-# Anki Smart Deck CLI - Usage Guide
+# ankinote CLI - Usage Guide
 
 ## Overview
 
-The Anki Smart Deck CLI is a powerful command-line tool for generating AI-powered Anki flashcards with automatic definitions, examples, pronunciations, audio, and images.
+The ankinote CLI is a powerful command-line tool for generating AI-powered Anki flashcards with automatic definitions, examples, pronunciations, audio, and images.
 
 ## Installation
 
@@ -74,25 +74,25 @@ Generate a card for a single word.
 
 **Basic usage:**
 ```bash
-anki-deck generate serendipity
+ankinote generate serendipity
 ```
 
 **Options:**
 ```bash
 # Skip images
-anki-deck generate serendipity --no-images
+ankinote generate serendipity --no-images
 
 # Add custom tags
-anki-deck generate ephemeral -t poetry -t beautiful-word
+ankinote generate ephemeral -t poetry -t beautiful-word
 
 # Specify custom deck
-anki-deck generate word --deck "My Deck::Vocabulary"
+ankinote generate word --deck "My Deck::Vocabulary"
 
 # Force create new card (even if exists)
-anki-deck generate word --force
+ankinote generate word --force
 
 # All options combined
-anki-deck generate eloquent -d "English::Advanced" -t literature --no-images --force
+ankinote generate eloquent -d "English::Advanced" -t literature --no-images --force
 ```
 
 ### 2. `interactive` - Interactive Mode
@@ -101,7 +101,7 @@ Add multiple words one by one with prompts.
 
 **Basic usage:**
 ```bash
-anki-deck interactive
+ankinote interactive
 ```
 
 **Features:**
@@ -113,10 +113,10 @@ anki-deck interactive
 **Options:**
 ```bash
 # Start with images disabled by default
-anki-deck interactive --no-images
+ankinote interactive --no-images
 
 # Add default tags to all words
-anki-deck interactive -t chapter-5 -t vocabulary
+ankinote interactive -t chapter-5 -t vocabulary
 ```
 
 **Example session:**
@@ -148,19 +148,19 @@ Generate multiple cards at once from command-line arguments.
 
 **Basic usage:**
 ```bash
-anki-deck batch serendipity ephemeral eloquent
+ankinote batch serendipity ephemeral eloquent
 ```
 
 **Options:**
 ```bash
 # Skip images for all words
-anki-deck batch word1 word2 word3 --no-images
+ankinote batch word1 word2 word3 --no-images
 
 # Add tags to all cards
-anki-deck batch word1 word2 -t batch-2024 -t important
+ankinote batch word1 word2 -t batch-2024 -t important
 
 # Custom deck
-anki-deck batch word1 word2 --deck "English::GRE"
+ankinote batch word1 word2 --deck "English::GRE"
 ```
 
 ### 4. `from-file` - Generate from File
@@ -181,19 +181,19 @@ ubiquitous
 
 **Basic usage:**
 ```bash
-anki-deck from-file words.txt
+ankinote from-file words.txt
 ```
 
 **Options:**
 ```bash
 # Skip images
-anki-deck from-file vocabulary.txt --no-images
+ankinote from-file vocabulary.txt --no-images
 
 # Add tags
-anki-deck from-file chapter-1.txt -t chapter-1 -t gre-prep
+ankinote from-file chapter-1.txt -t chapter-1 -t gre-prep
 
 # Force update existing cards
-anki-deck from-file words.txt --force
+ankinote from-file words.txt --force
 ```
 
 ## Common Options
@@ -215,13 +215,13 @@ All commands support these options:
 Use tags to organize your vocabulary:
 ```bash
 # By topic
-anki-deck generate serendipity -t emotions -t positive
+ankinote generate serendipity -t emotions -t positive
 
 # By source
-anki-deck batch word1 word2 -t book-name -t chapter-3
+ankinote batch word1 word2 -t book-name -t chapter-3
 
 # By difficulty
-anki-deck generate word -t advanced -t gre
+ankinote generate word -t advanced -t gre
 ```
 
 ### 2. When to Skip Images
@@ -232,15 +232,15 @@ Skip images for:
 - Fast batch processing
 
 ```bash
-anki-deck generate abstract-word --no-images
+ankinote generate abstract-word --no-images
 ```
 
 ### 3. Deck Organization
 
 Use hierarchical deck names:
 ```bash
-anki-deck generate word -d "English::Vocabulary::GRE"
-anki-deck generate word -d "English::Business::Technical"
+ankinote generate word -d "English::Vocabulary::GRE"
+ankinote generate word -d "English::Business::Technical"
 ```
 
 ### 4. Batch Processing Large Lists
@@ -255,14 +255,14 @@ word3
 EOF
 
 # Generate all at once
-anki-deck from-file vocabulary.txt --no-images -t batch-import
+ankinote from-file vocabulary.txt --no-images -t batch-import
 ```
 
 ### 5. Updating Cards
 
 To update an existing card with new information:
 ```bash
-anki-deck generate word --force
+ankinote generate word --force
 ```
 
 ## Troubleshooting
@@ -295,22 +295,22 @@ serendipity
 EOF
 
 # Generate all cards
-anki-deck from-file gre-words.txt -d "English::GRE" -t gre-vocab
+ankinote from-file gre-words.txt -d "English::GRE" -t gre-vocab
 ```
 
 ### Example 2: Build Theme-Based Vocabulary
 ```bash
 # Emotions
-anki-deck batch elated melancholy serene anxious -t emotions
+ankinote batch elated melancholy serene anxious -t emotions
 
 # Business terms
-anki-deck batch synergy leverage paradigm -t business --no-images
+ankinote batch synergy leverage paradigm -t business --no-images
 ```
 
 ### Example 3: Interactive Study Session
 ```bash
 # Start interactive mode
-anki-deck interactive -d "English::Daily" -t daily-vocab
+ankinote interactive -d "English::Daily" -t daily-vocab
 
 # Then add words as you encounter them:
 # - serendipity (with images)
@@ -323,30 +323,30 @@ anki-deck interactive -d "English::Daily" -t daily-vocab
 ### Custom Note Type
 If you've customized the note type:
 ```bash
-anki-deck generate word -m "My Custom Note Type"
+ankinote generate word -m "My Custom Note Type"
 ```
 
 ### Force Recreate All Cards
 ```bash
-anki-deck from-file words.txt --force
+ankinote from-file words.txt --force
 ```
 
 ### Multiple Tag Assignments
 ```bash
-anki-deck generate word -t tag1 -t tag2 -t tag3
+ankinote generate word -t tag1 -t tag2 -t tag3
 ```
 
 ## Getting Help
 
 ```bash
 # General help
-anki-deck --help
+ankinote --help
 
 # Command-specific help
-anki-deck generate --help
-anki-deck interactive --help
-anki-deck batch --help
-anki-deck from-file --help
+ankinote generate --help
+ankinote interactive --help
+ankinote batch --help
+ankinote from-file --help
 ```
 
 ## 📦 Tech Stack
@@ -386,7 +386,7 @@ anki-deck from-file --help
 ### Single Word
 
 ```python
-from ankismartdeck import CardGenerator
+from ankinote import CardGenerator
 
 generator = CardGenerator()
 card = generator.generate("ephemeral")
@@ -415,7 +415,7 @@ make test
 make format
 
 # Type checking
-make type-check
+make check
 ```
 
 ## Documentation
