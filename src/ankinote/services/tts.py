@@ -1,5 +1,15 @@
 import random
 from typing import Protocol, Self
+
+from google.api_core.client_options import ClientOptions
+from google.cloud.texttospeech import (
+    AudioConfig,
+    AudioEncoding,
+    SynthesisInput,
+    TextToSpeechAsyncClient,
+    VoiceSelectionParams,
+)
+
 from ankinote.config import envs
 from ankinote.consts import Language
 
@@ -28,11 +38,7 @@ class GoogleTTSService:
             language_code: BCP-47 language tag (e.g. "en-US", "ja-JP").
             model: Voice model family to filter by (e.g. "Neural2", "Wavenet").
         """
-        from google.api_core.client_options import ClientOptions
-        from google.cloud.texttospeech import TextToSpeechAsyncClient
-
-        client_options = ClientOptions(api_key=envs.GOOGLE_TTS_KEY)
-        self._tts_cli = TextToSpeechAsyncClient(client_options=client_options)
+        self._tts_cli: TextToSpeechAsyncClient | None = None
         self._lang_code = language_code
         self._model = model
         self._available_voices: list[str] = []
@@ -69,12 +75,19 @@ class GoogleTTSService:
         if self._available_voices:
             return self._available_voices
 
-        response = await self._tts_cli.list_voices(language_code=self._lang_code)
+        response = await self._get_client().list_voices(language_code=self._lang_code)
         for voice in response.voices:
             if self._model in voice.name:
                 self._available_voices.append(voice.name)
 
         return self._available_voices
+
+    def _get_client(self) -> TextToSpeechAsyncClient:
+        """Create the Google client only when text-to-speech is actually used."""
+        if self._tts_cli is None:
+            client_options = ClientOptions(api_key=envs.GOOGLE_TTS_KEY)
+            self._tts_cli = TextToSpeechAsyncClient(client_options=client_options)
+        return self._tts_cli
 
     async def synthesize_with_random_voice(
         self,
@@ -107,13 +120,6 @@ class GoogleTTSService:
             RuntimeError: If no voices are available for the configured
                           language code and model family.
         """
-        from google.cloud.texttospeech import (
-            AudioConfig,
-            AudioEncoding,
-            SynthesisInput,
-            VoiceSelectionParams,
-        )
-
         if audio_encoding is None:
             audio_encoding = AudioEncoding.MP3
 
@@ -142,7 +148,7 @@ class GoogleTTSService:
             pitch=pitch,
         )
 
-        response = await self._tts_cli.synthesize_speech(
+        response = await self._get_client().synthesize_speech(
             input=synthesis_input,
             voice=voice_params,
             audio_config=audio_config,

@@ -73,3 +73,6 @@ typeCheckingMode = "standard"
 minversion = "8.4.1"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning:litellm\\.litellm_core_utils\\.logging_utils",
+]
