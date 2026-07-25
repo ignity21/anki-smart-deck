@@ -1,7 +1,7 @@
 [project]
 name = "ankinote-ai"
 dynamic = ["version"]
-description = "AI-powered Anki vocabulary card generator using Google's suite of APIs"
+description = "AI-powered Anki card generator for vocabulary, phrases, sentences, and STEM concepts, powered by litellm"
 requires-python = ">=3.13"
 license = { text = "MIT" }
 readme = "README.md"
