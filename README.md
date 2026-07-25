@@ -4,17 +4,19 @@
 
 ## 📖 About
 
-ankinote is an automated Anki flashcard generator that leverages Google's ecosystem of APIs to create comprehensive language and STEM cards. It automatically generates definitions, examples, mnemonics, images, and audio, then syncs directly with Anki through AnkiConnect.
+ankinote is an automated Anki flashcard generator that uses litellm to support a wide range of AI providers — Gemini, GPT, Claude, DeepSeek, and more — for generating definitions, examples, mnemonics, and images, then syncs directly with Anki through AnkiConnect.
 
 ## ✨ Features
 
-- 🤖 **Google AI Integration** - Powered by Google's Generative AI API for high-quality definitions and examples
-- 🔊 **Audio Generation** - Text-to-Speech using Google Cloud TTS API for both US and UK pronunciations
-- 🖼️ **Smart Image Search** - Automatic image retrieval via Google Custom Search API
+- 🤖 **Multi-Provider AI** - Powered by litellm, supporting Gemini, GPT, Claude, DeepSeek, and more for text and image generation
+- 🔊 **Audio Generation** - Text-to-Speech using Google Cloud TTS API
+- 🖼️ **AI Image Generation** - Automatic image generation via Google AI (Gemini)
 - 🔄 **Direct Anki Sync** - Seamless integration with Anki through AnkiConnect plugin
 - 📝 **Dual-Direction Cards** - Supports both word→definition and definition→word learning modes
 - 🎨 **Beautiful Templates** - Built-in Light/Dark mode responsive card templates
 - ⚡ **Batch Processing** - Generate multiple cards from word lists efficiently
+- 🌐 **Multi-Language** - Japanese, English (US), and extensible for more languages
+- 🧮 **STEM Concepts** - Math, science, and programming concept cards with MathJax rendering
 
 ## 🚀 Quick Start
 
@@ -23,7 +25,7 @@ ankinote is an automated Anki flashcard generator that leverages Google's ecosys
 - Python 3.13+
 - [uv](https://github.com/astral-sh/uv) package manager
 - Anki with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) plugin installed
-- Google Cloud Platform account with API access
+- An API key for at least one AI provider (see Configuration below)
 
 ### Installation
 
@@ -33,20 +35,28 @@ git clone https://github.com/ignity21/ankinote-ai.git
 cd ankinote-ai
 
 # Install dependencies with uv
-uv install
+uv sync
 
 # Configure API credentials
 cp .env.example .env
-# Edit .env and add your Google API keys
+# Edit .env and add your API keys
 ```
 
 ### Configuration
 
-Create a `.env` file with your Google API credentials:
+Create a `.env` file with your API keys. At minimum, you need one AI provider key and the Google TTS key:
 
 ```env
+# At least one AI provider (for text and image generation)
 GEMINI_API_KEY=your_gemini_key
+# OPENAI_API_KEY=sk-...
+# ANTHROPIC_API_KEY=sk-ant-...
+# DEEPSEEK_API_KEY=sk-...
+
+# Google Cloud TTS (for audio generation)
 GOOGLE_TTS_KEY=your_tts_api_key
+
+# AnkiConnect (defaults to http://localhost:8765)
 ANKI_CONNECT_URL=http://localhost:8765
 ```
 
@@ -63,7 +73,7 @@ The ankinote CLI is a powerful command-line tool for generating AI-powered Anki 
 pip install click rich --break-system-packages
 
 # Make sure your services are configured
-# (Google AI API key, Google TTS, Google Custom Search, etc.)
+# (Google AI API key, Google TTS, an AI provider, etc.)
 ```
 
 ## Commands
@@ -353,28 +363,22 @@ ankinote from-file --help
 
 - **Language**: Python 3.13+
 - **Package Manager**: uv
-- **AI/ML**: Google Generative AI API (Gemini)
+- **AI/ML**: litellm (Gemini, GPT, Claude, DeepSeek, etc.)
 - **TTS**: Google Cloud Text-to-Speech API
-- **Image Search**: Google Custom Search API
+- **Image Generation**: Google AI (Gemini)
 - **Anki Integration**: AnkiConnect
 - **Card Templates**: HTML + CSS
 
 ## 🔧 API Services
 
-### Google Generative AI
-- Generate contextual definitions
-- Create example sentences
-- Suggest synonyms and mnemonics
+### AI Provider (via litellm)
+- Text generation for definitions, examples, and mnemonics
+- Image generation (Gemini) for card visuals
+- Supports Gemini, GPT, Claude, DeepSeek, Qwen, and more
 
 ### Google Cloud TTS
 - High-quality audio generation
-- Support for US and UK accents
 - Multiple voice options
-
-### Google Custom Search
-- Retrieve relevant images
-- Filter for educational content
-- Safe search enabled
 
 ### AnkiConnect
 - Direct communication with Anki
@@ -420,6 +424,7 @@ make check
 
 ## Documentation
 - [Note Types](docs/NoteType.md)
+- [Codex Skill](skills/ankinote-cli/SKILL.md) — for using ankinote with AI coding assistants
 
 ## 📄 License
 
