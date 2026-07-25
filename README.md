@@ -37,16 +37,14 @@ ankinote is an automated Anki flashcard generator that uses litellm to support a
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/ignity21/ankinote-ai.git
-cd ankinote-ai
+# Install from PyPI
+uv pip install ankinote-ai
 
-# Install dependencies with uv
-uv sync
+# Or install the CLI as an isolated uv tool
+uv tool install ankinote-ai
 
 # Configure API credentials
-cp .env.example .env
-# Edit .env and add your API keys
+# Create a .env file in your working directory and add your API keys
 ```
 
 ### Configuration
@@ -55,10 +53,10 @@ Create a `.env` file with your API keys. At minimum, you need one AI provider ke
 
 ```env
 # At least one AI provider (for text and image generation)
-GEMINI_API_KEY=your_gemini_key
+DEEPSEEK_API_KEY=your_deepseek_key
+# GEMINI_API_KEY=your_gemini_key
 # OPENAI_API_KEY=sk-...
 # ANTHROPIC_API_KEY=sk-ant-...
-# DEEPSEEK_API_KEY=sk-...
 
 # Google Cloud TTS (for audio generation)
 GOOGLE_TTS_KEY=your_tts_api_key
@@ -73,213 +71,66 @@ ANKI_CONNECT_URL=http://localhost:8765
 
 The ankinote CLI is a powerful command-line tool for generating AI-powered Anki flashcards with automatic definitions, examples, pronunciations, audio, and images.
 
-## Installation
-
-```bash
-# Install dependencies
-pip install click rich --break-system-packages
-
-# Make sure your services are configured
-# (Google AI API key, Google TTS, an AI provider, etc.)
-```
-
 ## Commands
 
-### 1. `generate` - Single Word Generation
+The CLI currently provides four card types. Run `ankinote <type> --help` or
+`ankinote <type> <command> --help` for the complete, current option list.
 
-Generate a card for a single word.
-
-**Basic usage:**
-```bash
-ankinote generate serendipity
-```
-
-**Options:**
-```bash
-# Skip images
-ankinote generate serendipity --no-images
-
-# Add custom tags
-ankinote generate ephemeral -t poetry -t beautiful-word
-
-# Specify custom deck
-ankinote generate word --deck "My Deck::Vocabulary"
-
-# Force create new card (even if exists)
-ankinote generate word --force
-
-# All options combined
-ankinote generate eloquent -d "English::Advanced" -t literature --no-images --force
-```
-
-### 2. `interactive` - Interactive Mode
-
-Add multiple words one by one with prompts.
-
-**Basic usage:**
-```bash
-ankinote interactive
-```
-
-**Features:**
-- Prompts for each word
-- Ask whether to include images for each word
-- Continue adding or stop at any time
-- Summary table at the end
-
-**Options:**
-```bash
-# Start with images disabled by default
-ankinote interactive --no-images
-
-# Add default tags to all words
-ankinote interactive -t chapter-5 -t vocabulary
-```
-
-**Example session:**
-```
-Enter a word: serendipity
-Include images for this word? [Y/n]: y
-✓ Created! Note ID: 12345
-
-Add another word? [Y/n]: y
-
-Enter a word: ephemeral
-Include images for this word? [Y/n]: n
-✓ Created! Note ID: 12346
-
-Add another word? [Y/n]: n
-
-Generation Summary
-┌──────────────┬──────────┬─────────┐
-│ Word         │ Status   │ Note ID │
-├──────────────┼──────────┼─────────┤
-│ serendipity  │ ✓ Created│ 12345   │
-│ ephemeral    │ ✓ Created│ 12346   │
-└──────────────┴──────────┴─────────┘
-```
-
-### 3. `batch` - Batch Generation
-
-Generate multiple cards at once from command-line arguments.
-
-**Basic usage:**
-```bash
-ankinote batch serendipity ephemeral eloquent
-```
-
-**Options:**
-```bash
-# Skip images for all words
-ankinote batch word1 word2 word3 --no-images
-
-# Add tags to all cards
-ankinote batch word1 word2 -t batch-2024 -t important
-
-# Custom deck
-ankinote batch word1 word2 --deck "English::GRE"
-```
-
-### 4. `from-file` - Generate from File
-
-Generate cards from a word list file.
-
-**File format:**
-```txt
-# comments start with #
-serendipity
-ephemeral
-eloquent
-
-# empty lines are ignored
-
-ubiquitous
-```
-
-**Basic usage:**
-```bash
-ankinote from-file words.txt
-```
-
-**Options:**
-```bash
-# Skip images
-ankinote from-file vocabulary.txt --no-images
-
-# Add tags
-ankinote from-file chapter-1.txt -t chapter-1 -t gre-prep
-
-# Force update existing cards
-ankinote from-file words.txt --force
-```
-
-## Common Options
-
-All commands support these options:
-
-| Option | Short | Description | Default |
-|--------|-------|-------------|---------|
-| `--deck` | `-d` | Target Anki deck name | `English::AI Words` |
-| `--model` | `-m` | Note type/model name | `AI Word (R)` |
-| `--no-images` | | Skip image search | Include images |
-| `--tags` | `-t` | Add custom tags (multiple) | None |
-| `--force` | `-f` | Force create new cards | Update existing |
-
-## Tips
-
-### 1. Organizing with Tags
-
-Use tags to organize your vocabulary:
-```bash
-# By topic
-ankinote generate serendipity -t emotions -t positive
-
-# By source
-ankinote batch word1 word2 -t book-name -t chapter-3
-
-# By difficulty
-ankinote generate word -t advanced -t gre
-```
-
-### 2. When to Skip Images
-
-Skip images for:
-- Abstract concepts (serendipity, ephemeral)
-- Words that don't visualize well
-- Fast batch processing
+### Word cards
 
 ```bash
-ankinote generate abstract-word --no-images
+# Create the word note type and deck in Anki
+ankinote word init
+
+# Add one word
+ankinote word add serendipity
+
+# Add multiple words, either as arguments or from a file
+ankinote word batch serendipity ephemeral eloquent
+ankinote word batch --file words.txt
 ```
 
-### 3. Deck Organization
+### Phrase cards
 
-Use hierarchical deck names:
 ```bash
-ankinote generate word -d "English::Vocabulary::GRE"
-ankinote generate word -d "English::Business::Technical"
+ankinote phrase init
+ankinote phrase add "look after"
+ankinote phrase batch "focus on" "call off"
+ankinote phrase batch --file phrases.txt
 ```
 
-### 4. Batch Processing Large Lists
+### Sentence cards
 
-For large vocabulary lists:
+The sentence argument should be in the native language; the target-language
+version is generated for the card back.
+
 ```bash
-# Create a file with all words
-cat > vocabulary.txt << EOF
-word1
-word2
-word3
-EOF
-
-# Generate all at once
-ankinote from-file vocabulary.txt --no-images -t batch-import
+ankinote sentence init
+ankinote sentence add "我今天起晚了。"
+ankinote sentence batch --file sentences.txt
 ```
 
-### 5. Updating Cards
+### STEM cards
 
-To update an existing card with new information:
 ```bash
-ankinote generate word --force
+ankinote stem init
+ankinote stem add "What is a derivative?"
+ankinote stem batch --file topics.txt
+```
+
+### Common options
+
+Language-learning commands accept `--native`, `--target`, and `--llm`.
+Batch commands also accept `--file` and `--rpm`. STEM commands accept
+`--llm`, and can additionally configure diagram generation with
+`--image-model` and `--image-size`.
+
+For example:
+
+```bash
+ankinote word add serendipity --native English --target 'Chinese(Simplified)'
+ankinote word batch --file words.txt --rpm 30
+ankinote stem add "State Bayes' theorem" --image-size 1024
 ```
 
 ## Troubleshooting
@@ -290,68 +141,13 @@ ankinote generate word --force
 - Verify AnkiConnect is listening on port 8765
 
 ### Error: "No images found"
-- Some abstract words may not have good images
-- Use `--no-images` flag to skip
-- Or continue without images when prompted
+- Some STEM topics may not need a generated diagram
+- Check the configured image model with `ankinote stem add --help`
 
 ### Error: "API key not found"
 - Check your configuration file
 - Ensure environment variables are set
 - Verify API keys are valid
-
-## Examples
-
-### Example 1: Study GRE Vocabulary
-```bash
-# Create a GRE word list file
-cat > gre-words.txt << EOF
-ubiquitous
-ephemeral
-eloquent
-serendipity
-EOF
-
-# Generate all cards
-ankinote from-file gre-words.txt -d "English::GRE" -t gre-vocab
-```
-
-### Example 2: Build Theme-Based Vocabulary
-```bash
-# Emotions
-ankinote batch elated melancholy serene anxious -t emotions
-
-# Business terms
-ankinote batch synergy leverage paradigm -t business --no-images
-```
-
-### Example 3: Interactive Study Session
-```bash
-# Start interactive mode
-ankinote interactive -d "English::Daily" -t daily-vocab
-
-# Then add words as you encounter them:
-# - serendipity (with images)
-# - ephemeral (skip images)
-# - eloquent (with images)
-```
-
-## Advanced Usage
-
-### Custom Note Type
-If you've customized the note type:
-```bash
-ankinote generate word -m "My Custom Note Type"
-```
-
-### Force Recreate All Cards
-```bash
-ankinote from-file words.txt --force
-```
-
-### Multiple Tag Assignments
-```bash
-ankinote generate word -t tag1 -t tag2 -t tag3
-```
 
 ## Getting Help
 
@@ -360,10 +156,11 @@ ankinote generate word -t tag1 -t tag2 -t tag3
 ankinote --help
 
 # Command-specific help
-ankinote generate --help
-ankinote interactive --help
-ankinote batch --help
-ankinote from-file --help
+ankinote word --help
+ankinote phrase --help
+ankinote sentence --help
+ankinote stem --help
+ankinote word batch --help
 ```
 
 ## 📦 Tech Stack
@@ -416,7 +213,11 @@ for word in words:
 ## 🛠️ Development
 
 ```bash
-# Install development dependencies
+# Clone the repository
+git clone https://github.com/ignity21/ankinote-ai.git
+cd ankinote-ai
+
+# Install the project and development dependencies
 uv sync
 
 # Run tests
@@ -436,5 +237,3 @@ make check
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details
-
-
