@@ -1,15 +1,5 @@
 import random
 from typing import Protocol, Self
-
-from google.api_core.client_options import ClientOptions
-from google.cloud.texttospeech import (
-    AudioConfig,
-    AudioEncoding,
-    SynthesisInput,
-    TextToSpeechAsyncClient,
-    VoiceSelectionParams,
-)
-
 from ankinote.config import envs
 from ankinote.consts import Language
 
@@ -23,16 +13,12 @@ TTS_LANG_CODES: dict[Language, str] = {
     Language.GERMAN: "de-DE",
     Language.KOREAN: "ko-KR",
 }
-
-
 class SpeechSynthesizer(Protocol):
     """Narrow speech synthesis contract used by generators."""
 
     async def synthesize(self, text: str) -> bytes:
         """Generate speech audio for plain text."""
         ...
-
-
 class GoogleTTSService:
     def __init__(self, language_code: str = "en-US", model: str = "Neural2"):
         """
@@ -42,6 +28,9 @@ class GoogleTTSService:
             language_code: BCP-47 language tag (e.g. "en-US", "ja-JP").
             model: Voice model family to filter by (e.g. "Neural2", "Wavenet").
         """
+        from google.api_core.client_options import ClientOptions
+        from google.cloud.texttospeech import TextToSpeechAsyncClient
+
         client_options = ClientOptions(api_key=envs.GOOGLE_TTS_KEY)
         self._tts_cli = TextToSpeechAsyncClient(client_options=client_options)
         self._lang_code = language_code
@@ -90,7 +79,7 @@ class GoogleTTSService:
     async def synthesize_with_random_voice(
         self,
         text: str,
-        audio_encoding: AudioEncoding = AudioEncoding.MP3,
+        audio_encoding = None,
         speaking_rate: float = 1.0,
         pitch: float = 0.0,
     ) -> bytes:
@@ -118,6 +107,16 @@ class GoogleTTSService:
             RuntimeError: If no voices are available for the configured
                           language code and model family.
         """
+        from google.cloud.texttospeech import (
+            AudioConfig,
+            AudioEncoding,
+            SynthesisInput,
+            VoiceSelectionParams,
+        )
+
+        if audio_encoding is None:
+            audio_encoding = AudioEncoding.MP3
+
         # Populate the voice list if this method is called outside a context manager.
         if not self._available_voices:
             await self._get_all_voices()
