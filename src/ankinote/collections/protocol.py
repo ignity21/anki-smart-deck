@@ -15,6 +15,16 @@ class CollectionProtocol(Protocol):
     notetype_name: str
     deck_name: str
 
+    async def ensure_in_anki(self) -> None:
+        """Create or update the note type and its deck in Anki.
+
+        Idempotent equivalent of the CLI ``init`` command. Creates the note
+        type when missing, refreshes templates/styling/missing fields when it
+        exists, then ensures the deck is present. Must not start TTS or LLM
+        services.
+        """
+        ...
+
     async def ensure_note_type_exists(self) -> None:
         """Ensure the note type exists in Anki, create it if it doesn't.
 

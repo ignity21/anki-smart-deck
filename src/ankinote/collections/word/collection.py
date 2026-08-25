@@ -77,6 +77,18 @@ class WordCollection:
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         self._tts_service.clear_cache()
 
+    async def ensure_in_anki(self) -> None:
+        """Create or update this note type and its deck in Anki.
+
+        Idempotent equivalent of the CLI ``init`` command: creates the note
+        type with the current fields, templates and styling when missing, or
+        refreshes templates, styling and missing fields when it already exists,
+        then ensures the deck is present. Does not start TTS or LLM services,
+        so it is safe to call from the GUI setup flow.
+        """
+        await self._ensure_note_type_exists()
+        await self._ensure_deck_exists()
+
     async def _ensure_note_type_exists(self) -> None:
         fields = [field.name for field in dataclasses.fields(WordNoteType)]
         css = load_card_style()

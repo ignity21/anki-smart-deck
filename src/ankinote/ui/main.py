@@ -2,6 +2,7 @@
 
 from nicegui import ui
 
+from ankinote.ui.pages.notetypes import notetypes_page
 from ankinote.ui.pages.phrase import phrase_page
 from ankinote.ui.pages.sentence import sentence_page
 from ankinote.ui.pages.settings import settings_page
@@ -30,6 +31,9 @@ def _create_layout() -> None:
             ui.link("💭  Sentence Cards", "/sentences").classes(
                 "w-full px-3 py-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
             )
+            ui.link("🃏  Card Types", "/notetypes").classes(
+                "w-full px-3 py-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+            )
             ui.link("⚙️  Settings", "/settings").classes(
                 "w-full px-3 py-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
             )
@@ -43,6 +47,7 @@ def _create_layout() -> None:
             value=dark.value,
             on_change=lambda e: dark.set_value(e.value),
         ).classes("px-4")
+
 
 @ui.page("/")
 def _word_page() -> None:
@@ -63,6 +68,13 @@ def _sentence_page() -> None:
     """Sentence card generation page."""
     _create_layout()
     sentence_page()
+
+
+@ui.page("/notetypes")
+def _notetypes_page() -> None:
+    """Card Types (note type + deck setup) page."""
+    _create_layout()
+    notetypes_page()
 
 
 @ui.page("/settings")
