@@ -97,6 +97,8 @@ class SentenceCollection:
             logger.success(f"Created note type: {self.notetype_name}")
             return
 
+        # Ensure new fields (e.g. target_language) are added for existing note types
+        await self._anki_client.models.ensure_fields(self.notetype_name, fields)
         await self._anki_client.models.update_templates(
             self.notetype_name,
             [
@@ -215,6 +217,7 @@ class SentenceCollection:
             "notes": self._format_notes_html(sentence_model.notes),
             "phrases": self._format_phrases_html(sentence_model.phrases),
             "user_notes": "",
+            "target_language": self._target_language.value,
         }
 
     def _format_notes_html(self, notes: list[str]) -> str:

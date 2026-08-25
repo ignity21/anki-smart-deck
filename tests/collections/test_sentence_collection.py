@@ -34,9 +34,22 @@ class RecordingModelService:
         self.updated_templates: list[object] = []
         self.updated_css: str | None = None
         self.exists_result = False
+        self.ensured_fields: list[str] | None = None
+        self.added_fields: list[str] = []
 
     async def exists(self, model_name: str) -> bool:
         return self.exists_result
+
+    async def get(self, model_name: str) -> NoteModel | None:
+        if not self.exists_result:
+            return None
+        return NoteModel(
+            id=1,
+            name=model_name,
+            fields=[],
+            templates=[],
+            css="",
+        )
 
     async def create(
         self,
@@ -60,6 +73,12 @@ class RecordingModelService:
 
     async def update_styling(self, model_name: str, css: str) -> None:
         self.updated_css = css
+
+    async def add_field(self, model_name: str, field_name: str) -> None:
+        self.added_fields.append(field_name)
+
+    async def ensure_fields(self, model_name: str, field_names: list[str]) -> None:
+        self.ensured_fields = field_names
 
 
 class DummyDeckService:
@@ -169,6 +188,7 @@ def test_convert_to_note_type_renders_expected_html():
     assert "睡过头" in note["phrases"]
     assert "I often oversleep on weekends." in note["phrases"]
     assert note["user_notes"] == ""
+    assert note["target_language"] == "English"
 
 
 def test_convert_to_note_type_renders_ruby_for_japanese():
@@ -191,6 +211,7 @@ def test_convert_to_note_type_renders_ruby_for_japanese():
 
     assert "<ruby>今<rt>こん</rt></ruby>" in note["target_sentence"]
     assert "<ruby>寝<rt>ね</rt></ruby>" in note["phrases"]
+    assert note["target_language"] == "Japanese"
 
 
 @pytest.mark.asyncio
@@ -209,14 +230,17 @@ async def test_ensure_note_type_exists_registers_v2_templates():
         "notes",
         "phrases",
         "user_notes",
+        "target_language",
     ]
     templates = cast(list[dict[str, str]], created["templates"])
     assert [template["Name"] for template in templates] == [
         "Production",
     ]
     assert "{{native_sentence}}" in templates[0]["Front"]
+    assert "{{target_language}}" in templates[0]["Front"]
     assert "{{target_sentence}}" in templates[0]["Back"]
     assert ".sentence-stage" in cast(str, created["css"])
+    assert ".translation-prompt" in cast(str, created["css"])
 
 
 @pytest.mark.asyncio
@@ -227,5 +251,14 @@ async def test_ensure_note_type_exists_updates_existing_model():
     await collection._ensure_note_type_exists()
 
     assert models.created is None
+    assert models.ensured_fields == [
+        "target_sentence",
+        "native_sentence",
+        "pron_audio",
+        "notes",
+        "phrases",
+        "user_notes",
+        "target_language",
+    ]
     assert len(models.updated_templates) == 1
     assert models.updated_css is not None

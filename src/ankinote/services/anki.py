@@ -107,6 +107,10 @@ class AnkiModelService(Protocol):
         """Return whether a model exists."""
         ...
 
+    async def get(self, model_name: str) -> NoteModel | None:
+        """Return note model details if it exists."""
+        ...
+
     async def create(
         self,
         model_name: str,
@@ -126,6 +130,14 @@ class AnkiModelService(Protocol):
 
     async def update_styling(self, model_name: str, css: str) -> None:
         """Update note model CSS."""
+        ...
+
+    async def add_field(self, model_name: str, field_name: str) -> None:
+        """Add a new field to an existing note model."""
+        ...
+
+    async def ensure_fields(self, model_name: str, field_names: list[str]) -> None:
+        """Ensure note model contains all listed fields, adding missing ones."""
         ...
 
 
@@ -476,6 +488,31 @@ class ModelClient:
                 }
             },
         )
+
+    async def add_field(self, model_name: str, field_name: str) -> None:
+        """Add a new field to an existing note model.
+
+        Args:
+            model_name: The name of the note model
+            field_name: The field name to add
+        """
+        await self._client._invoke(
+            "modelFieldAdd",
+            params={
+                "modelName": model_name,
+                "fieldName": field_name,
+            },
+        )
+
+    async def ensure_fields(self, model_name: str, field_names: list[str]) -> None:
+        """Ensure note model contains all listed fields, adding missing ones."""
+        model = await self.get(model_name)
+        if model is None:
+            return
+        existing = {field.name for field in model.fields}
+        for field_name in field_names:
+            if field_name not in existing:
+                await self.add_field(model_name, field_name)
 
 
 class MediaClient:

@@ -41,3 +41,4 @@ class SentenceNoteType:
     notes: str
     phrases: str
     user_notes: str
+    target_language: str
