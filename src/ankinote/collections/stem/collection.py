@@ -10,7 +10,7 @@ from ankinote.services.anki import AnkiCollectionClient
 from ankinote.services.ai import ImageGenerationService, TextGenerationService
 
 from .generator import StemGenerator
-from .models import StemNoteType
+from .models import StemModel, StemNoteType
 from .templates import load_card_style, load_template
 
 
@@ -173,14 +173,37 @@ class StemCollection:
 
     def _build_note_data(
         self,
-        stem_model,
+        stem_model: StemModel,
         image_filename: str | None,
     ) -> dict[str, str]:
         """Convert StemModel and optional image to Anki note fields.
 
-        If an image was generated, it is appended to back_detail as an <img> tag.
+        Structured fields (latex, variables, steps) are rendered into the
+        stored back_detail HTML so the note type stays all-string and old
+        notes remain valid. If an image was generated, it is appended to
+        back_detail as an <img> tag.
         """
-        back_detail = stem_model.back_detail
+        parts: list[str] = []
+
+        if stem_model.latex:
+            parts.append(f"<div class='formula-block'>\\[{stem_model.latex}\\]</div>")
+
+        if stem_model.variables:
+            rows = "".join(
+                "<tr>"
+                f"<td class='symbol-cell'>\\({v.symbol}\\)</td>"
+                f"<td>{v.description}</td>"
+                "</tr>"
+                for v in stem_model.variables
+            )
+            parts.append(f"<table class='symbol-table'>{rows}</table>")
+
+        if stem_model.steps:
+            items = "".join(f"<li>{step}</li>" for step in stem_model.steps)
+            parts.append(f"<ol class='step-list'>{items}</ol>")
+
+        parts.append(stem_model.back_detail)
+        back_detail = "\n".join(parts)
 
         if image_filename:
             back_detail += f"\n<div class='diagram-container'><img src='{image_filename}' class='diagram'></div>"

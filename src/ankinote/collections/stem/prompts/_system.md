@@ -55,6 +55,10 @@ After JSON parsing, the double backslashes become single backslashes, which is w
 
 Return **only** a valid JSON object. No markdown, no code fences, no comments, no extra keys or text.
 
+The base schema below applies to every card. Type-specific prompts may require
+additional structured keys (`latex`, `variables`, `steps`) or mark some base
+fields optional — follow the type-specific prompt when present.
+
 ```json
 {
   "card_type": "concept",

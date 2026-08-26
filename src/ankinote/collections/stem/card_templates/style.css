@@ -167,6 +167,57 @@ hr {
   overflow-x: auto;
 }
 
+/* Structured formula rendering */
+.formula-block {
+  background: var(--paper-strong);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+  margin: 0 0 0.95rem;
+  text-align: center;
+  font-size: 1.15em;
+  overflow-x: auto;
+}
+
+.symbol-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 0.95rem;
+  font-size: 0.92rem;
+}
+
+.symbol-table td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.symbol-table tr:last-child td {
+  border-bottom: none;
+}
+
+.symbol-table .symbol-cell {
+  width: 5.5em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Structured procedure steps */
+.step-list {
+  margin: 0 0 0.95rem;
+  padding-left: 1.4rem;
+}
+
+.step-list li {
+  margin-bottom: 0.45rem;
+  line-height: 1.5;
+}
+
+.step-list li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 /* Diagram */
 .diagram-container {
   margin-top: 1rem;

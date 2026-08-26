@@ -12,6 +12,13 @@ class CardType(StrEnum):
     PROCEDURE = "procedure"
 
 
+class Variable(BaseModel):
+    """A single symbol definition for formula cards."""
+
+    symbol: str
+    description: str
+
+
 class StemModel(BaseModel):
     """Structured STEM card model for AI generation.
 
@@ -21,6 +28,14 @@ class StemModel(BaseModel):
     back_brief is a concise answer (<=2 sentences, no derivation).
     back_detail is the full explanation, derivation, or worked steps.
     Supports LaTeX in all text fields via MathJax.
+
+    Structured fields are optional and rendered into the stored back_detail
+    HTML by the collection:
+    - latex: the core formula expression, shown as a centered block
+      (formula cards).
+    - variables: symbol definitions, shown as a table (formula cards).
+    - steps: ordered procedure steps, shown as a numbered list (procedure
+      cards).
 
     If the AI determines that a diagram would aid understanding (e.g. graphs,
     geometry, flowcharts), it should set image_description. The system will
@@ -33,6 +48,9 @@ class StemModel(BaseModel):
     back_detail: str
     tags: list[str]
     image_description: str | None = None
+    latex: str | None = None
+    variables: list[Variable] | None = None
+    steps: list[str] | None = None
 
 
 @dataclass

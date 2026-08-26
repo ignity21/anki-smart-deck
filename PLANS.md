@@ -181,3 +181,150 @@ registered in the CLI but still in the tree. Decide whether to keep or remove.
 - Project is already structured with pyproject.toml, CLI entrypoint, version
 - Public release means maintaining backward compatibility
 - Consider a `--dry-run` mode that generates cards without pushing to Anki
+## 4. STEM card expansion
+
+Goal: raise STEM card quality with structured schemas, one new high-value card
+type (comparison), type-aware rendering, and progressive disclosure — all while
+keeping the established visual language (paper cards, amber accent, serif
+typography, badge system) untouched. Existing notes must keep rendering
+correctly throughout.
+
+### Design constraints
+
+- Anki note-type fields stay all-string (`StemNoteType` unchanged). Structured
+  AI output is rendered to HTML in `_build_note_data()` before storage, so no
+  note-type migration is needed and old notes remain valid.
+- New visual elements only extend the existing token set in
+  `stem/card_templates/style.css` (`--badge-<type>-*`, `--accent*`, `--paper*`).
+  No new fonts, layouts, or themes.
+- All new prompts follow the current contract: JSON-only output, same-language
+  rule, escaped LaTeX in JSON, English Title Case tags.
+
+### Phase S1 — Structured schema foundation ✅ *(completed 2026-08-26)*
+
+1. Extend `StemModel` with optional structured fields:
+   - `latex: str | None` — the core formula expression (formula cards).
+   - `variables: list[Variable] | None` with `symbol` + `description`
+     (formula cards).
+   - `steps: list[str] | None` (procedure cards).
+2. Update `prompts/formula.md` and `prompts/procedure.md` to emit the new keys;
+   keep every new key optional so old outputs still validate.
+3. In `_build_note_data()`, render the structured fields into the stored
+   `back_detail` HTML: a centered formula block, a symbol-definition table,
+   and an ordered step list — styled via new CSS classes that reuse existing
+   color variables.
+4. Focused tests: model validation with/without new keys,
+   `_build_note_data()` HTML rendering, and an end-to-end mocked generation.
+
+**Done when:** existing notes render unchanged, new generations emit structured
+fields, and all focused tests pass.
+
+> 2026-08-26 Done. Landed: `Variable` model + optional `latex` / `variables` /
+> `steps` on `StemModel`; `_build_note_data()` renders them into stored
+> `back_detail` HTML (`.formula-block`, `.symbol-table`, `.step-list` CSS
+> classes reusing existing tokens); `formula.md` / `procedure.md` emit the new
+> keys; `_system.md` notes that type-specific prompts may extend the base
+> schema. New `tests/collections/test_stem_collection.py` (6 cases). All 84
+> tests pass, ruff clean; basedpyright error count unchanged at 45 (all
+> pre-existing, see section 5). Note-type fields untouched — no migration.
+> Unlocks S2/S3/S4/S6.
+
+### Phase S2 — Comparison card type *(fresh session OK, after S1)*
+
+The highest-value missing type: contrast pairs (L1 vs L2 regularization,
+bias vs variance, TCP vs UDP).
+
+1. Add `CardType.COMPARISON` plus structured fields:
+   `items: list[CompareItem]` (`name`, `definition`) and
+   `aspects: list[CompareAspect]` (`aspect`, `per_item: dict[name, str]`) so
+   the back renders as a true aspect-by-aspect table.
+2. Add `prompts/comparison.md`; include the new type in the generator's
+   auto-detection instruction.
+3. Render as a responsive table (stacks vertically on narrow screens); add a
+   `--badge-comparison-*` token pair following the existing badge pattern.
+4. Focused tests mirroring S1 coverage.
+
+**Done when:** a "difference between X and Y" topic produces a comparison card
+whose table renders consistently in light/dark mode.
+
+### Phase S3 — Progressive disclosure and rendering polish *(fresh session OK,
+after S1; independent of S2)*
+
+1. Wrap the `Detail` section of `back.html` in `<details>/<summary>` so recall
+   practice sees only the brief answer first; style the summary as a subtle
+   disclosure row consistent with `.section-title`.
+2. Verify `<details>` behaviour on Anki desktop and AnkiDroid before committing
+   to it; fall back to always-visible detail on unsupported clients.
+3. Add shared MathJax macro configuration for common notation.
+4. Manual smoke test: one card per existing type, light/dark, desktop + mobile.
+
+**Done when:** review flow shows brief-first with expandable detail on all
+target clients and no visual regressions.
+
+### Phase S4 — Worked-example card type *(fresh session OK, after S1;
+independent of S2/S3)*
+
+The only type that trains production instead of recognition.
+
+1. Add `CardType.EXAMPLE`: `front` = problem statement, `back_brief` = final
+   answer, `back_detail` = fully worked steps; reuse `steps` from S1.
+2. Add `prompts/example.md` (problem difficulty matched to the topic, no
+   trivial restatements) and register the type in auto-detection.
+3. Badge token pair + template branch consistent with other types.
+4. Focused tests.
+
+**Done when:** a problem-style topic yields an example card with answer-first,
+steps-expandable layout.
+
+### Phase S5 — Misconception callout *(optional, small; fold into S2 or S3
+session)*
+
+Rather than a new card type, add an optional `common_mistakes: list[str]`
+field rendered as a small warning-styled callout at the bottom of the detail
+section, using `--error`/muted tones already defined. Update
+`_system.md` guidance on when to populate it.
+
+### Phase S6 — Remove legacy math collection *(fully independent; fresh
+session OK anytime)*
+
+Resolve the dead-code item already tracked in "CLI Review": delete
+`src/ankinote/collections/math/` and `src/ankinote/cli/math.py` after grepping
+for references (CLI registration, tests, docs), then tick off the TODO item.
+STEM supersedes it.
+
+### Delivery order and dependencies
+
+```
+S1 structured schema foundation          S6 legacy math cleanup
+        │                                (independent, any time)
+        ├────────► S2 comparison type
+        ├────────► S3 disclosure polish
+        └────────► S4 example type
+                    │
+                    └─► S5 misconception callout (optional)
+```
+
+After S1 merges, S2, S3, S4, and S6 are mutually independent and each sized for
+a single focused session.
+
+## 5. Pre-existing issues snapshot *(recorded 2026-08-26, before S2–S6)*
+
+These issues existed before the STEM card expansion started. New sessions must
+not mistake them for their own regressions, and must not silently fix or
+discard them:
+
+1. **45 basedpyright errors** (`make check`) spread over existing code,
+   e.g. `src/ankinote/ui/pages/notetypes.py` (`notify` literal-type argument)
+   and `src/ankinote/ui/pages/settings.py` (`ClickEventArguments` passed where
+   `str` is expected). Verified identical before and after S1; none are in
+   `src/ankinote/collections/stem/` or its tests. Fixing them is out of scope
+   for S2–S6 unless explicitly requested; when touching an affected file,
+   keep the error count from increasing.
+2. **Uncommitted working-tree changes unrelated to the STEM expansion**, seen
+   alongside the S1 diff in `git status`: `src/ankinote/ui/pages/settings.py`,
+   `src/ankinote/ui/config.py`, `src/ankinote/services/ai.py`,
+   `src/ankinote/services/tts.py`, `src/ankinote/collections/word/generator.py`,
+   `examples/anki/notes_with_media.py`.
+   Per `Agents.md`, do not discard unrelated working-tree changes; commit them
+   separately from STEM work once their owner confirms intent.
+
