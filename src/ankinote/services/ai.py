@@ -71,7 +71,9 @@ class ImageGenerationService(Protocol):
 class LiteLLMTextService:
     """LiteLLM-backed text generation service."""
 
-    def __init__(self, *, api_base: str | None = None, api_key: str | None = None) -> None:
+    def __init__(
+        self, *, api_base: str | None = None, api_key: str | None = None
+    ) -> None:
         self._api_base = api_base
         self._api_key = api_key
 

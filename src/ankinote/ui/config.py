@@ -56,7 +56,9 @@ _EXCLUDED_NAME_SUBSTRINGS = ("-audio-", "-search-", "/container")
 
 
 @functools.lru_cache(maxsize=None)
-def _discover_chat_models(litellm_provider: str, model_prefix: str | None) -> tuple[str, ...]:
+def _discover_chat_models(
+    litellm_provider: str, model_prefix: str | None
+) -> tuple[str, ...]:
     """Pull the current chat-capable model ids for a provider from litellm's catalog."""
     try:
         import litellm

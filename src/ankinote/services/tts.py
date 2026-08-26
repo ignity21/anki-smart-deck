@@ -33,6 +33,8 @@ class SpeechSynthesizer(Protocol):
     async def synthesize(self, text: str) -> bytes:
         """Generate speech audio for plain text."""
         ...
+
+
 class GoogleTTSService:
     def __init__(self, language_code: str = "en-US", model: str = "Neural2"):
         """
@@ -104,7 +106,7 @@ class GoogleTTSService:
     async def synthesize_with_random_voice(
         self,
         text: str,
-        audio_encoding = None,
+        audio_encoding=None,
         speaking_rate: float = 1.0,
         pitch: float = 0.0,
     ) -> bytes:

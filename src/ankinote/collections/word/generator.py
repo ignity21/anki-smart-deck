@@ -167,7 +167,9 @@ class WordGenerator:
                 image_tasks: dict[int, asyncio.Task[bytes]] = {}
                 if self._image_service is not None:
                     image_tasks = {
-                        idx: tg.create_task(self._generate_image(word_model.lemma, sense))
+                        idx: tg.create_task(
+                            self._generate_image(word_model.lemma, sense)
+                        )
                         for idx, sense in enumerate(senses)
                         if sense.is_visualizable
                     }

@@ -26,6 +26,7 @@ def settings_page() -> None:
     settings = ui.context.client.storage.get("settings")
     if settings is None:
         from ankinote.ui.config import load_settings
+
         settings = load_settings()
 
     custom_profile = settings.custom_providers.get(settings.provider)
@@ -40,7 +41,9 @@ def settings_page() -> None:
         NEW_CUSTOM_PROVIDER,
     }
     current_env_key = (
-        CUSTOM_API_KEY_STORAGE_KEY if is_custom else PROVIDERS[settings.provider]["env_key"]
+        CUSTOM_API_KEY_STORAGE_KEY
+        if is_custom
+        else PROVIDERS[settings.provider]["env_key"]
     )
 
     with ui.column().classes("w-full max-w-3xl mx-auto p-6 md:p-8 gap-7"):
@@ -58,7 +61,9 @@ def settings_page() -> None:
         with ui.element("div").classes("provider-route-ribbon"):
             ui.icon("bolt").classes("text-blue-600 text-xl")
             with ui.column().classes("gap-0 flex-1"):
-                route_name = ui.label(settings.provider).classes("font-semibold text-slate-900")
+                route_name = ui.label(settings.provider).classes(
+                    "font-semibold text-slate-900"
+                )
                 route_detail = ui.label("Active provider profile").classes(
                     "text-xs text-slate-500"
                 )
@@ -68,20 +73,36 @@ def settings_page() -> None:
 
         provider_select = ui.select(
             label="Provider profile",
-            options=[*PROVIDERS.keys(), *settings.custom_providers.keys(), NEW_CUSTOM_PROVIDER],
-            value=settings.provider if settings.provider in PROVIDERS or is_custom else "OpenAI",
+            options=[
+                *PROVIDERS.keys(),
+                *settings.custom_providers.keys(),
+                NEW_CUSTOM_PROVIDER,
+            ],
+            value=settings.provider
+            if settings.provider in PROVIDERS or is_custom
+            else "OpenAI",
         ).classes("w-full provider-picker")
 
-        model_select = ui.select(
-            label="Model for this route",
-            options=get_provider_models(settings.provider) if settings.provider in PROVIDERS else [],
-            value=settings.text_model if settings.provider in PROVIDERS else None,
-        ).classes("w-full provider-field").bind_visibility_from(
-            provider_select, "value", backward=lambda v: v in PROVIDERS
+        model_select = (
+            ui.select(
+                label="Model for this route",
+                options=get_provider_models(settings.provider)
+                if settings.provider in PROVIDERS
+                else [],
+                value=settings.text_model if settings.provider in PROVIDERS else None,
+            )
+            .classes("w-full provider-field")
+            .bind_visibility_from(
+                provider_select, "value", backward=lambda v: v in PROVIDERS
+            )
         )
 
-        with ui.column().classes("provider-custom-panel").bind_visibility_from(
-            provider_select, "value", backward=lambda v: v not in PROVIDERS
+        with (
+            ui.column()
+            .classes("provider-custom-panel")
+            .bind_visibility_from(
+                provider_select, "value", backward=lambda v: v not in PROVIDERS
+            )
         ):
             ui.label("OpenAI-compatible connection").classes("settings-eyebrow")
 
@@ -108,7 +129,9 @@ def settings_page() -> None:
             placeholder="sk-...",
             password=True,
             password_toggle_button=True,
-            value=custom_profile.api_key if custom_profile else settings.api_keys.get(current_env_key, ""),
+            value=custom_profile.api_key
+            if custom_profile
+            else settings.api_keys.get(current_env_key, ""),
         ).classes("w-full provider-field")
 
         def _on_provider_change() -> None:
@@ -182,14 +205,18 @@ def settings_page() -> None:
 
         gemini_env_key = PROVIDERS["Google"]["env_key"]
 
-        image_api_key_input = ui.input(
-            label=gemini_env_key,
-            placeholder="Required for image generation (Gemini)",
-            password=True,
-            password_toggle_button=True,
-            value=settings.api_keys.get(gemini_env_key, ""),
-        ).classes("w-full").bind_visibility_from(
-            provider_select, "value", backward=lambda v: v != "Google"
+        image_api_key_input = (
+            ui.input(
+                label=gemini_env_key,
+                placeholder="Required for image generation (Gemini)",
+                password=True,
+                password_toggle_button=True,
+                value=settings.api_keys.get(gemini_env_key, ""),
+            )
+            .classes("w-full")
+            .bind_visibility_from(
+                provider_select, "value", backward=lambda v: v != "Google"
+            )
         )
 
         ui.label(
@@ -253,7 +280,10 @@ def settings_page() -> None:
                     model=text_model,
                     api_key=api_key_input.value or "",
                 )
-                if provider not in {CUSTOM_PROVIDER, NEW_CUSTOM_PROVIDER} and provider != provider_name:
+                if (
+                    provider not in {CUSTOM_PROVIDER, NEW_CUSTOM_PROVIDER}
+                    and provider != provider_name
+                ):
                     custom_providers.pop(provider, None)
                 provider = provider_name
             else:
@@ -331,9 +361,9 @@ def settings_page() -> None:
                     )
             dialog.open()
 
-        ui.button("Save route", on_click=_save, icon="save").props("unelevated").classes(
-            "w-full provider-save-button"
-        )
+        ui.button("Save route", on_click=_save, icon="save").props(
+            "unelevated"
+        ).classes("w-full provider-save-button")
         ui.button(
             "Delete custom provider",
             on_click=_delete_current_provider,
