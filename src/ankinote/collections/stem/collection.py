@@ -6,7 +6,7 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.services.anki import AnkiCollectionClient
+from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
 from ankinote.services.ai import ImageGenerationService, TextGenerationService
 
 from .generator import StemGenerator
@@ -74,14 +74,13 @@ class StemCollection:
         await self._ensure_deck_exists()
 
     async def _ensure_note_type_exists(self) -> None:
-        """Ensure the note type exists in Anki, create it if it doesn't."""
+        """Ensure the note type exists in Anki, creating or updating it."""
+        fields = [field.name for field in dataclasses.fields(StemNoteType)]
+        front_template = load_template("front.html")
+        back_template = load_template("back.html")
+        style = load_card_style()
         exists = await self._anki_client.models.exists(self.notetype_name)
         if not exists:
-            fields = [f.name for f in dataclasses.fields(StemNoteType)]
-            front_template = load_template("front.html")
-            back_template = load_template("back.html")
-            style = load_card_style()
-
             await self._anki_client.models.create(
                 model_name=self.notetype_name,
                 fields=fields,
@@ -96,6 +95,21 @@ class StemCollection:
                 is_cloze=False,
             )
             logger.success(f"Created note type: {self.notetype_name}")
+            return
+
+        await self._anki_client.models.ensure_fields(self.notetype_name, fields)
+        await self._anki_client.models.update_templates(
+            self.notetype_name,
+            [
+                TemplateUpsert(
+                    name="Card 1",
+                    question_format=front_template,
+                    answer_format=back_template,
+                )
+            ],
+        )
+        await self._anki_client.models.update_styling(self.notetype_name, style)
+        logger.success(f"Updated note type: {self.notetype_name}")
 
     async def _ensure_deck_exists(self) -> int:
         """Ensure the deck exists in Anki, create it if it doesn't."""

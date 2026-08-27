@@ -26,6 +26,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Emacs
+.dir-locals.el
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -220,6 +223,3 @@ output/
 words.txt
 phrases.txt
 sentences.txt
-
-# AI tools
-/.claude

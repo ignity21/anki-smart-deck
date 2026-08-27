@@ -106,7 +106,23 @@ def _field_names(note_type) -> tuple[str, ...]:
 def _build_specs() -> list[NoteTypeSpec]:
     """Assemble the fixed set of note types managed by ankinote."""
 
-    def sync(clazz, notetype_name: str, deck_name: str):
+    def sync_word(notetype_name: str, deck_name: str):
+        async def _sync(client: AnkiCollectionClient) -> None:
+            collection = WordCollection(
+                client,
+                native_language=Language.CHINESE_S,
+                target_language=Language.ENGLISH,
+                notetype_name=notetype_name,
+                deck_name=deck_name,
+                text_model_id="",
+                text_service=LiteLLMTextService(),
+                image_service=None,
+            )
+            await collection.ensure_in_anki()
+
+        return _sync
+
+    def sync_language(clazz, notetype_name: str, deck_name: str):
         async def _sync(client: AnkiCollectionClient) -> None:
             collection = clazz(
                 client,
@@ -116,7 +132,6 @@ def _build_specs() -> list[NoteTypeSpec]:
                 deck_name=deck_name,
                 text_model_id="",
                 text_service=LiteLLMTextService(),
-                image_service=None,
             )
             await collection.ensure_in_anki()
 
@@ -153,7 +168,7 @@ def _build_specs() -> list[NoteTypeSpec]:
             fields=_field_names(WordNoteType),
             templates=("Recognition", "Recall", "Spelling"),
             css=_word_style(),
-            sync=sync(WordCollection, "AINote Word V2", "AINote::Words"),
+            sync=sync_word("AINote Word V2", "AINote::Words"),
         ),
         NoteTypeSpec(
             key="phrase",
@@ -165,7 +180,7 @@ def _build_specs() -> list[NoteTypeSpec]:
             fields=_field_names(PhraseNoteType),
             templates=("Recognition", "Recall"),
             css=_phrase_style(),
-            sync=sync(PhraseCollection, "AINote Phrase V2", "AINote::Phrases"),
+            sync=sync_language(PhraseCollection, "AINote Phrase V2", "AINote::Phrases"),
         ),
         NoteTypeSpec(
             key="sentence",
@@ -177,7 +192,9 @@ def _build_specs() -> list[NoteTypeSpec]:
             fields=_field_names(SentenceNoteType),
             templates=("Production",),
             css=_sentence_style(),
-            sync=sync(SentenceCollection, "AINote Sentence V2", "AINote::Sentences"),
+            sync=sync_language(
+                SentenceCollection, "AINote Sentence V2", "AINote::Sentences"
+            ),
         ),
         NoteTypeSpec(
             key="stem",
@@ -565,12 +582,12 @@ def _render_panel(status: TypeStatus, busy: bool, on_sync) -> None:
                     for template in spec.templates:
                         with ui.element("div").classes("nt-tpl"):
                             ui.label(template).classes("nt-tpl-name")
-                            ui.element("div").classes(
+                            ui.html("<b>front</b>&nbsp; question").classes(
                                 "nt-tpl-side nt-tpl-front"
-                            ).inner_html("<b>front</b>&nbsp; question")
-                            ui.element("div").classes(
+                            )
+                            ui.html("<b>back</b>&nbsp; answer").classes(
                                 "nt-tpl-side nt-tpl-back"
-                            ).inner_html("<b>back</b>&nbsp; answer")
+                            )
 
         # -- footer: drift / reassurance -------------------------------------
         with ui.element("div").classes("nt-foot"):
