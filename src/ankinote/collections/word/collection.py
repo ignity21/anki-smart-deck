@@ -12,7 +12,7 @@ from ankinote.collections.common import convert_to_html_ruby, strip_phonetic_ann
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.ai import ImageGenerationService, TextGenerationService
 from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
-from ankinote.services.tts import GoogleTTSService, TTS_LANG_CODES
+from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import WordGenerator, WordMediaFiles
 from .models import Example, Sense, WordModel, WordNoteType
