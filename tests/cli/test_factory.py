@@ -8,9 +8,7 @@ from pytest_mock import MockerFixture
 
 from ankinote.cli.factory import (
     LanguageCollectionOptions,
-    MathCollectionOptions,
     WordCollectionOptions,
-    build_math_collection,
     build_phrase_collection,
     build_sentence_collection,
     build_word_collection,
@@ -169,23 +167,6 @@ class TestCollectionBuilders:
         assert collection._native_language is Language.CHINESE_S
         assert collection._target_language is Language.ENGLISH
         assert collection._generator._text_model_id == "llm-x"
-
-    def test_build_math_collection(self):
-        client = FakeCollectionClient()
-        options = MathCollectionOptions(
-            llm_model_id="llm-x",
-            image_model_id="img-y",
-            image_size=512,
-        )
-
-        collection = build_math_collection(client, options)
-
-        assert collection._anki_client is client
-        assert collection._generator._text_model_id == "llm-x"
-        image_service = collection._generator._image_service
-        assert isinstance(image_service, LiteLLMGeminiImageService)
-        assert image_service._model_id == "img-y"
-        assert image_service._image_size == 512
 
 
 class TestCollectionContext:

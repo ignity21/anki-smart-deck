@@ -6,19 +6,18 @@ from dataclasses import dataclass
 from typing import Protocol, TypeVar
 
 from ankinote.app import Application
-from ankinote.collections.math import MathCollection
-from ankinote.collections.stem import StemCollection
 from ankinote.collections.phrase import PhraseCollection
 from ankinote.collections.sentence import SentenceCollection
+from ankinote.collections.stem import StemCollection
 from ankinote.collections.word import WordCollection
 from ankinote.consts import Language
-from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
 from ankinote.services.ai import (
-    AIServiceConfigOverrides,
     DEFAULT_AI_SERVICE_CONFIG,
+    AIServiceConfigOverrides,
     LiteLLMGeminiImageService,
     LiteLLMTextService,
 )
+from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
 
 TCollection = TypeVar("TCollection", covariant=True)
 TOptions = TypeVar("TOptions")
@@ -56,15 +55,6 @@ class WordCollectionOptions(LanguageCollectionOptions):
 @dataclass(frozen=True, slots=True)
 class StemCollectionOptions:
     """CLI options for the STEM collection."""
-
-    llm_model_id: str | None = None
-    image_model_id: str | None = None
-    image_size: int | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class MathCollectionOptions:
-    """CLI options for the math collection."""
 
     llm_model_id: str | None = None
     image_model_id: str | None = None
@@ -149,27 +139,6 @@ def build_stem_collection(
         text_model_id=config.text_model_id,
         text_service=LiteLLMTextService(),
         image_service=image_service,
-    )
-
-
-def build_math_collection(
-    client: AnkiCollectionClient,
-    options: MathCollectionOptions,
-) -> MathCollection:
-    """Build a math collection from typed CLI options."""
-    config = AIServiceConfigOverrides(
-        text_model_id=options.llm_model_id,
-        image_model_id=options.image_model_id,
-        image_size=options.image_size,
-    ).resolve(DEFAULT_AI_SERVICE_CONFIG)
-    return MathCollection(
-        client,
-        text_model_id=config.text_model_id,
-        text_service=LiteLLMTextService(),
-        image_service=LiteLLMGeminiImageService(
-            model_id=config.image_model_id,
-            image_size=config.image_size,
-        ),
     )
 
 

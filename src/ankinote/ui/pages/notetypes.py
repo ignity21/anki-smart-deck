@@ -20,11 +20,6 @@ from dataclasses import dataclass
 from nicegui import ui
 
 from ankinote.app import Application
-from ankinote.collections.math import MathCollection
-from ankinote.collections.math.models import MathNoteType
-from ankinote.collections.math.templates import (
-    load_card_style as _math_style,
-)
 from ankinote.collections.phrase import PhraseCollection
 from ankinote.collections.phrase.models import PhraseNoteType
 from ankinote.collections.phrase.templates import (
@@ -46,7 +41,7 @@ from ankinote.collections.word.templates import (
     load_card_style as _word_style,
 )
 from ankinote.consts import Language
-from ankinote.services.ai import LiteLLMGeminiImageService, LiteLLMTextService
+from ankinote.services.ai import LiteLLMTextService
 from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
 from ankinote.ui.pages.word import format_error
 
@@ -139,20 +134,14 @@ def _build_specs() -> list[NoteTypeSpec]:
 
     def sync_simple(clazz, notetype_name: str, deck_name: str):
         async def _sync(client: AnkiCollectionClient) -> None:
-            kwargs: dict = {
-                "notetype_name": notetype_name,
-                "deck_name": deck_name,
-                "text_model_id": "",
-                "text_service": LiteLLMTextService(),
-            }
-            if clazz is MathCollection:
-                kwargs["image_service"] = LiteLLMGeminiImageService(
-                    model_id="gemini/gemini-3.1-flash-lite-image",
-                    image_size=512,
-                )
-            else:
-                kwargs["image_service"] = None
-            collection = clazz(client, **kwargs)  # type: ignore[arg-type]
+            collection = clazz(
+                client,
+                notetype_name=notetype_name,
+                deck_name=deck_name,
+                text_model_id="",
+                text_service=LiteLLMTextService(),
+                image_service=None,
+            )
             await collection.ensure_in_anki()
 
         return _sync
@@ -207,18 +196,6 @@ def _build_specs() -> list[NoteTypeSpec]:
             templates=("Card 1",),
             css=_stem_style(),
             sync=sync_simple(StemCollection, "AINote STEM", "AINote::STEM"),
-        ),
-        NoteTypeSpec(
-            key="math",
-            icon="calculate",
-            accent="#d97706",
-            title="Math & science cards",
-            notetype_name="AINote Math",
-            deck_name="AINote::Math",
-            fields=_field_names(MathNoteType),
-            templates=("Card 1",),
-            css=_math_style(),
-            sync=sync_simple(MathCollection, "AINote Math", "AINote::Math"),
         ),
     ]
 

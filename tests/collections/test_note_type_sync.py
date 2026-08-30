@@ -1,15 +1,13 @@
-"""Tests for updating existing STEM and Math note types."""
+"""Tests for updating an existing STEM note type."""
 
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
 
-from ankinote.collections.math import MathCollection
-from ankinote.collections.math.models import MathNoteType
 from ankinote.collections.stem import StemCollection
 from ankinote.collections.stem.models import StemNoteType
-from ankinote.services.ai import ImageGenerationService, TextGenerationService
+from ankinote.services.ai import TextGenerationService
 from ankinote.services.anki import (
     AnkiCollectionClient,
     AnkiDeckService,
@@ -71,26 +69,6 @@ async def test_stem_sync_updates_an_existing_note_type() -> None:
 
     assert models.ensured_fields == [
         field.name for field in StemNoteType.__dataclass_fields__.values()
-    ]
-    assert models.updated_templates is not None
-    assert models.updated_templates[0].name == "Card 1"
-    assert models.updated_css is not None
-
-
-@pytest.mark.asyncio
-async def test_math_sync_updates_an_existing_note_type() -> None:
-    models = RecordingModelService()
-    collection = MathCollection(
-        _build_client(models),
-        text_model_id="test-model",
-        text_service=cast(TextGenerationService, object()),
-        image_service=cast(ImageGenerationService, object()),
-    )
-
-    await collection.ensure_in_anki()
-
-    assert models.ensured_fields == [
-        field.name for field in MathNoteType.__dataclass_fields__.values()
     ]
     assert models.updated_templates is not None
     assert models.updated_templates[0].name == "Card 1"

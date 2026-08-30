@@ -4,9 +4,6 @@ from collections.abc import Sequence
 
 import pytest
 
-from ankinote.collections.math.generator import MathGenerator
-from ankinote.collections.math.models import Example as MathExample
-from ankinote.collections.math.models import MathModel
 from ankinote.collections.phrase.generator import PhraseGenerator
 from ankinote.collections.sentence.generator import SentenceGenerator
 from ankinote.collections.stem.generator import StemGenerator
@@ -220,56 +217,6 @@ async def test_sentence_generator_uses_unified_text_service():
         "Target sentence: This is a test."
         in text_service.calls[0]["messages"][1]["content"]
     )
-
-
-@pytest.mark.asyncio
-async def test_math_generator_uses_unified_services():
-    text_service = FakeTextService(
-        [
-            """
-            {
-              "front": "What is a derivative?",
-              "explanation": "A derivative measures rate of change.",
-              "key_points": ["rate of change"],
-              "examples": [{"problem": "f(x)=x^2", "solution": "f'(x)=2x", "is_visualizable": true}],
-              "related_concepts": ["limits"],
-              "difficulty": "intermediate",
-              "tags": ["calculus"]
-            }
-            """
-        ]
-    )
-    image_service = FakeImageService()
-    generator = MathGenerator(
-        text_service=text_service,
-        image_service=image_service,
-        text_model_id="math-model",
-    )
-
-    model = await generator.generate_math_data("What is a derivative?")
-    media = await generator.generate_media(
-        MathModel(
-            front=model.front,
-            explanation="Use a graph to visualize the tangent line.",
-            key_points=model.key_points,
-            examples=[
-                MathExample(
-                    problem="f(x)=x^2",
-                    solution="Plot the parabola and tangent.",
-                    is_visualizable=True,
-                )
-            ],
-            related_concepts=model.related_concepts,
-            difficulty=model.difficulty,
-            tags=model.tags,
-        )
-    )
-
-    assert model.front == "What is a derivative?"
-    assert text_service.calls[0]["model_id"] == "math-model"
-    assert media.explanation_images == [b"image-bytes"]
-    assert media.example_images == {0: b"image-bytes"}
-    assert len(image_service.calls) == 2
 
 
 @pytest.mark.asyncio
