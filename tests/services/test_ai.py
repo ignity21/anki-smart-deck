@@ -7,7 +7,11 @@ import pytest
 from PIL import Image
 from pytest_mock import MockerFixture
 
-from ankinote.services.ai import LiteLLMGeminiImageService, LiteLLMTextService
+from ankinote.services.ai import (
+    DISABLE_REASONING,
+    LiteLLMGeminiImageService,
+    LiteLLMTextService,
+)
 
 
 @pytest.mark.asyncio
@@ -42,6 +46,78 @@ async def test_litellm_text_service_forwards_completion_args(
         timeout=60,
         num_retries=0,
     )
+
+
+@pytest.mark.asyncio
+async def test_litellm_text_service_disables_deepseek_thinking(
+    mocker: MockerFixture,
+):
+    completion = mocker.patch(
+        "ankinote.services.ai.acompletion",
+        return_value=SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+        ),
+    )
+
+    service = LiteLLMTextService()
+    await service.generate_text(
+        model_id="deepseek/deepseek-v4-flash",
+        messages=[{"role": "user", "content": "hello"}],
+        temperature=0.2,
+        reasoning_effort=DISABLE_REASONING,
+    )
+
+    kwargs = completion.await_args.kwargs
+    # DeepSeek discards ``reasoning_effort``; the OpenAI-format ``thinking``
+    # field in ``extra_body`` is what turns its default-on thinking off.
+    assert "reasoning_effort" not in kwargs
+    assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
+
+
+@pytest.mark.asyncio
+async def test_litellm_text_service_forwards_named_reasoning_effort(
+    mocker: MockerFixture,
+):
+    completion = mocker.patch(
+        "ankinote.services.ai.acompletion",
+        return_value=SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+        ),
+    )
+
+    service = LiteLLMTextService()
+    await service.generate_text(
+        model_id="deepseek/deepseek-v4-flash",
+        messages=[{"role": "user", "content": "hello"}],
+        temperature=0.2,
+        reasoning_effort="high",
+    )
+
+    kwargs = completion.await_args.kwargs
+    assert kwargs["reasoning_effort"] == "high"
+    assert "extra_body" not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_litellm_text_service_omits_reasoning_effort_when_unset(
+    mocker: MockerFixture,
+):
+    completion = mocker.patch(
+        "ankinote.services.ai.acompletion",
+        return_value=SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+        ),
+    )
+
+    service = LiteLLMTextService()
+    await service.generate_text(
+        model_id="deepseek/deepseek-v4-flash",
+        messages=[{"role": "user", "content": "hello"}],
+        temperature=0.2,
+    )
+
+    assert "reasoning_effort" not in completion.await_args.kwargs
+    assert "extra_body" not in completion.await_args.kwargs
 
 
 @pytest.mark.asyncio

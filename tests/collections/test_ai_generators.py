@@ -9,7 +9,7 @@ from ankinote.collections.sentence.generator import SentenceGenerator
 from ankinote.collections.stem.generator import StemGenerator
 from ankinote.collections.word.generator import WordGenerator
 from ankinote.consts import Language
-from ankinote.services.ai import TextMessage
+from ankinote.services.ai import DISABLE_REASONING, TextMessage
 
 
 class FakeTextService:
@@ -25,12 +25,14 @@ class FakeTextService:
         model_id: str,
         messages: Sequence[TextMessage],
         temperature: float,
+        reasoning_effort: str | None = None,
     ) -> str:
         self.calls.append(
             {
                 "model_id": model_id,
                 "messages": messages,
                 "temperature": temperature,
+                "reasoning_effort": reasoning_effort,
             }
         )
         return self._responses.pop(0)
@@ -97,6 +99,7 @@ async def test_word_generator_uses_unified_text_service():
 
     assert models[0].lemma == "test"
     assert text_service.calls[0]["model_id"] == "word-model"
+    assert text_service.calls[0]["reasoning_effort"] == DISABLE_REASONING
     messages = text_service.calls[0]["messages"]
     assert isinstance(messages, list)
     assert (
@@ -150,6 +153,49 @@ async def test_word_generator_accepts_fenced_json():
 
 
 @pytest.mark.asyncio
+async def test_word_generator_accepts_single_object_response():
+    """The model sometimes returns a bare record instead of an array."""
+    text_service = FakeTextService(
+        [
+            """
+            {
+              "lemma": "heat",
+              "part_of_speech": "noun",
+              "pronunciation": null,
+              "difficulty": "A2",
+              "morphology": null,
+              "core_meaning": {
+                "target_text": "the quality of being hot",
+                "native_text": "热",
+                "is_visualizable": false
+              },
+              "supporting_meanings": [],
+              "examples": [{"sentence": "The heat was intense.", "translation": "热浪很强。", "highlights": ["heat"]}],
+              "collocations": ["intense heat", "summer heat"],
+              "confusions": [],
+              "etymology_or_memory": null,
+              "production_hint": "opposite of cold"
+            }
+            """
+        ]
+    )
+    generator = WordGenerator(
+        tts_service=FakeSpeechSynthesizer(),
+        text_service=text_service,
+        image_service=FakeImageService(),
+        text_model_id="word-model",
+    )
+
+    models = await generator.generate_word_data(
+        "heat",
+        Language.ENGLISH,
+        Language.CHINESE_S,
+    )
+
+    assert [m.lemma for m in models] == ["heat"]
+
+
+@pytest.mark.asyncio
 async def test_phrase_generator_uses_unified_text_service():
     text_service = FakeTextService(
         [
@@ -183,6 +229,7 @@ async def test_phrase_generator_uses_unified_text_service():
 
     assert model.phrase == "take off"
     assert text_service.calls[0]["model_id"] == "phrase-model"
+    assert text_service.calls[0]["reasoning_effort"] == DISABLE_REASONING
 
 
 @pytest.mark.asyncio
@@ -213,6 +260,7 @@ async def test_sentence_generator_uses_unified_text_service():
 
     assert model.target_sentence == "This is a test."
     assert text_service.calls[0]["model_id"] == "sentence-model"
+    assert text_service.calls[0]["reasoning_effort"] == DISABLE_REASONING
     assert (
         "Target sentence: This is a test."
         in text_service.calls[0]["messages"][1]["content"]
@@ -246,3 +294,5 @@ async def test_stem_generator_uses_unified_text_service():
     assert model.tags == ["Math", "Linear Algebra"]
     assert model.image_description is None
     assert text_service.calls[0]["model_id"] == "stem-model"
+    # STEM keeps extended thinking: multi-step derivations benefit from it.
+    assert text_service.calls[0]["reasoning_effort"] is None

@@ -8,7 +8,7 @@ from loguru import logger
 
 from ankinote.collections.common import create_prompt_loader, strip_phonetic_annotations
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.ai import TextGenerationService
+from ankinote.services.ai import DISABLE_REASONING, TextGenerationService
 from ankinote.services.tts import SpeechSynthesizer
 
 from .models import PhraseModel
@@ -59,6 +59,7 @@ async def generate_phrase_data(
     text_service: TextGenerationService,
     model_id: str,
     temperature: float = 0.3,
+    reasoning_effort: str | None = DISABLE_REASONING,
 ) -> PhraseModel:
     """Generate phrase card data via LLM.
 
@@ -68,6 +69,8 @@ async def generate_phrase_data(
         native_language: The user's native language.
         model_id: The LLM model ID to use.
         temperature: Sampling temperature for generation.
+        reasoning_effort: Forwarded to the provider; defaults to disabling the
+            model's extended thinking pass, which adds little for this prompt.
 
     Returns:
         A PhraseModel object describing the phrase.
@@ -97,6 +100,7 @@ async def generate_phrase_data(
                 {"role": "user", "content": user_message},
             ],
             temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
         content = cast(str, content)
 
@@ -138,6 +142,7 @@ class PhraseGenerator:
         target_lang: Language,
         native_lang: Language,
         temperature: float = 0.3,
+        reasoning_effort: str | None = DISABLE_REASONING,
     ) -> PhraseModel:
         """Generate structured phrase data via LLM."""
         return await generate_phrase_data(
@@ -147,6 +152,7 @@ class PhraseGenerator:
             text_service=self._text_service,
             model_id=self._text_model_id,
             temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
 
     async def generate_media(

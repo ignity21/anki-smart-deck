@@ -8,7 +8,7 @@ from loguru import logger
 
 from ankinote.collections.common import create_prompt_loader, strip_phonetic_annotations
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.ai import TextGenerationService
+from ankinote.services.ai import DISABLE_REASONING, TextGenerationService
 from ankinote.services.tts import SpeechSynthesizer
 
 from .models import SentenceModel
@@ -56,11 +56,15 @@ async def generate_sentence_data(
     text_service: TextGenerationService,
     model_id: str,
     temperature: float = 0.3,
+    reasoning_effort: str | None = DISABLE_REASONING,
 ) -> SentenceModel:
     """Generate sentence card data via LLM.
 
     The *target_sentence* is provided in the language being learned; the model
     generates its native-language translation and useful learning notes.
+
+    Extended model "thinking" is disabled by default to save tokens; the prompt
+    is tightly specified and the output is short.
     """
 
     system_prompt = _load_prompt_template(target_language)
@@ -83,6 +87,7 @@ async def generate_sentence_data(
                 {"role": "user", "content": user_message},
             ],
             temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
         content = cast(str, content)
 
@@ -124,6 +129,7 @@ class SentenceGenerator:
         target_lang: Language,
         native_lang: Language,
         temperature: float = 0.3,
+        reasoning_effort: str | None = DISABLE_REASONING,
     ) -> SentenceModel:
         """Generate structured sentence data via LLM."""
         return await generate_sentence_data(
@@ -133,6 +139,7 @@ class SentenceGenerator:
             text_service=self._text_service,
             model_id=self._text_model_id,
             temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
 
     async def generate_media(

@@ -1,7 +1,7 @@
 """Shared AI configuration and provider-backed generation services."""
 
-import base64
 import asyncio
+import base64
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Protocol, cast
@@ -12,6 +12,15 @@ from ankinote.utils.img import resize_to_max_edge
 
 TextMessage = dict[str, str]
 REQUEST_TIMEOUT_SECONDS = 60
+
+# Sentinel ``reasoning_effort`` value that turns a model's extended "thinking"
+# pass off.  Language card types produce short, tightly-specified JSON where
+# that pass adds little but costs tokens and latency (and DeepSeek, our default
+# provider, silently ignores ``temperature`` while it is on).  DeepSeek enables
+# thinking by default; it is disabled through the OpenAI-format ``thinking``
+# field rather than ``reasoning_effort``, which LiteLLM's DeepSeek routing drops.
+# https://api-docs.deepseek.com/guides/thinking_mode
+DISABLE_REASONING = "none"
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,8 +64,13 @@ class TextGenerationService(Protocol):
         model_id: str,
         messages: Sequence[TextMessage],
         temperature: float,
+        reasoning_effort: str | None = None,
     ) -> str:
-        """Generate a text response from chat messages."""
+        """Generate a text response from chat messages.
+
+        ``reasoning_effort`` is forwarded to the provider when set; use
+        :data:`DISABLE_REASONING` to turn extended thinking off.
+        """
         ...
 
 
@@ -96,6 +110,7 @@ class LiteLLMTextService:
         model_id: str,
         messages: Sequence[TextMessage],
         temperature: float,
+        reasoning_effort: str | None = None,
     ) -> str:
         """Generate text content using LiteLLM chat completion."""
         completion_kwargs: dict[str, object] = {
@@ -107,6 +122,13 @@ class LiteLLMTextService:
             "timeout": REQUEST_TIMEOUT_SECONDS,
             "num_retries": 0,
         }
+        if reasoning_effort == DISABLE_REASONING:
+            # DeepSeek honours the OpenAI-format ``thinking`` field, not
+            # ``reasoning_effort`` (which its LiteLLM routing discards).  Other
+            # OpenAI-compatible servers ignore the unknown field.
+            completion_kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+        elif reasoning_effort is not None:
+            completion_kwargs["reasoning_effort"] = reasoning_effort
         if self._api_base is not None:
             completion_kwargs["api_base"] = self._api_base
         if self._api_key is not None:
@@ -161,9 +183,10 @@ class LiteLLMGeminiImageService:
 
 
 __all__ = [
+    "DEFAULT_AI_SERVICE_CONFIG",
+    "DISABLE_REASONING",
     "AIServiceConfig",
     "AIServiceConfigOverrides",
-    "DEFAULT_AI_SERVICE_CONFIG",
     "ImageGenerationService",
     "LiteLLMGeminiImageService",
     "LiteLLMTextService",

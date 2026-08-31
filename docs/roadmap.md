@@ -85,6 +85,33 @@ sized for one focused session. Progressive disclosure is independent of both.
 The misconception callout folds into whichever session touches the templates
 last.
 
+## Thinking control (shipped; follow-ups)
+
+`TextGenerationService.generate_text` now takes `reasoning_effort`. The language
+generators (`word`, `phrase`, `sentence`) pass `DISABLE_REASONING`, which the
+service turns into DeepSeek's OpenAI-format `extra_body={"thinking": {"type":
+"disabled"}}` (DeepSeek enables thinking by default and its LiteLLM routing
+discards a plain `reasoning_effort`). `stem` keeps thinking on.
+
+Open items:
+
+- CLI flag to override the per-collection default for a single run.
+- UI control for the `stem` thinking level: expose it on the STEM generation
+  page (NiceGUI) so a user can dial reasoning up or down per run, rather than
+  relying on the built-in default. Wire the selected value through
+  `StemGenerator.generate_stem_data` to `reasoning_effort`.
+- DeepSeek ignores `temperature` while thinking is on, so `stem`'s
+  `temperature=0.3` is currently a no-op. Decide whether `stem` should also
+  disable thinking (regaining temperature control) or drop the unused argument.
+- The `extra_body` thinking field is DeepSeek-specific. If another text
+  provider is adopted, translate `DISABLE_REASONING` per provider instead.
+- Disabling thinking made the model less consistent about the output contract
+  (`word` occasionally returns a bare record instead of a JSON array; now
+  tolerated in `generate_word_data`). Watch for similar contract slips in the
+  other language generators and tighten prompts or parsing as needed.
+
+Status: minor follow-ups; not scheduled.
+
 ## Future major version: deployable web service
 
 Explore evolving ankinote from a local CLI/NiceGUI application into a web

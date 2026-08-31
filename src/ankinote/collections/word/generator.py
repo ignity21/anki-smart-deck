@@ -10,7 +10,11 @@ from loguru import logger
 
 from ankinote.collections.common import create_prompt_loader, strip_phonetic_annotations
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.ai import ImageGenerationService, TextGenerationService
+from ankinote.services.ai import (
+    DISABLE_REASONING,
+    ImageGenerationService,
+    TextGenerationService,
+)
 from ankinote.services.tts import SpeechSynthesizer
 
 from .models import Sense, WordModel
@@ -64,8 +68,13 @@ async def generate_word_data(
     text_service: TextGenerationService,
     model_id: str,
     temperature: float = 0.3,
+    reasoning_effort: str | None = DISABLE_REASONING,
 ) -> list[WordModel]:
-    """Generate vocabulary card data for a word using AI."""
+    """Generate vocabulary card data for a word using AI.
+
+    Extended model "thinking" is disabled by default: the prompt is tightly
+    specified and the output is short, so it adds little but costs tokens.
+    """
     system_prompt = _load_prompt_template(target_language)
     user_message = (
         f"Word: {word}\n"
@@ -87,6 +96,7 @@ async def generate_word_data(
                 {"role": "user", "content": user_message},
             ],
             temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
         content = cast(str, content)
 
@@ -95,11 +105,16 @@ async def generate_word_data(
 
         try:
             loaded = json.loads(_extract_json_payload(content))
-            data = cast(list[object], loaded)
         except json.JSONDecodeError as exc:
             logger.exception("Failed to parse JSON response")
             logger.debug(f"Response content: {content[:500]}...")
             raise RuntimeError(f"AI returned invalid JSON: {exc}") from exc
+
+        # The prompt asks for a JSON array, but the model occasionally returns a
+        # single record object; accept both rather than failing the run.
+        if isinstance(loaded, dict):
+            loaded = [loaded]
+        data = cast(list[object], loaded)
 
         word_models = [WordModel.model_validate(item) for item in data]
 
@@ -134,6 +149,7 @@ class WordGenerator:
         target_lang: Language,
         native_lang: Language,
         temperature: float = 0.3,
+        reasoning_effort: str | None = DISABLE_REASONING,
     ) -> list[WordModel]:
         """Generate structured word data via LLM."""
         return await generate_word_data(
@@ -143,6 +159,7 @@ class WordGenerator:
             text_service=self._text_service,
             model_id=self._text_model_id,
             temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
 
     async def generate_media(
