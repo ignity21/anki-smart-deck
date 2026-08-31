@@ -9,9 +9,11 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from ankinote.cli.factory import (
+    THINKING_CHOICES,
     StemCollectionOptions,
     build_stem_collection,
     collection_context,
+    resolve_thinking,
 )
 from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
 
@@ -39,6 +41,15 @@ def collection_options(f):
         type=int,
         help="Image size in pixels (square)",
     )(f)
+    f = click.option(
+        "--thinking",
+        default=None,
+        type=click.Choice(THINKING_CHOICES),
+        help=(
+            "Override the model's extended-thinking level for this run "
+            "(default: provider default, thinking on for STEM cards)."
+        ),
+    )(f)
     return f
 
 
@@ -46,12 +57,14 @@ def build_options(
     llm: str | None,
     image_model: str | None,
     image_size: int | None,
+    thinking: str | None = None,
 ) -> StemCollectionOptions:
     """Convert CLI parameters to typed collection options."""
     return StemCollectionOptions(
         llm_model_id=llm,
         image_model_id=image_model,
         image_size=image_size,
+        reasoning_effort=resolve_thinking(thinking, unset=None),
     )
 
 
@@ -62,11 +75,11 @@ def stem():
 
 @stem.command("init")
 @collection_options
-def init(llm, image_model, image_size):
+def init(llm, image_model, image_size, thinking):
     """Create note type and deck in Anki."""
 
     async def _run():
-        options = build_options(llm, image_model, image_size)
+        options = build_options(llm, image_model, image_size, thinking)
         async with collection_context(build_stem_collection, options) as collection:
             console.print(
                 f"[green]\u2713[/green] Initialized STEM collection: {collection.deck_name}"
@@ -78,7 +91,7 @@ def init(llm, image_model, image_size):
 @stem.command("add")
 @click.argument("topic")
 @collection_options
-def add(topic, llm, image_model, image_size):
+def add(topic, llm, image_model, image_size, thinking):
     """Generate and push a single STEM card.
 
     TOPIC is any question or concept (e.g. "What is a derivative?",
@@ -86,7 +99,7 @@ def add(topic, llm, image_model, image_size):
     """
 
     async def _run():
-        options = build_options(llm, image_model, image_size)
+        options = build_options(llm, image_model, image_size, thinking)
         async with collection_context(build_stem_collection, options) as collection:
             with Progress(
                 SpinnerColumn(),
@@ -118,7 +131,7 @@ def add(topic, llm, image_model, image_size):
     type=int,
     help="Requests per minute limit",
 )
-def batch(topics, file, llm, image_model, image_size, rpm):
+def batch(topics, file, llm, image_model, image_size, rpm, thinking):
     """Generate and push multiple STEM cards.
 
     Topics can be passed as arguments, read from a file (one per line),
@@ -147,7 +160,7 @@ def batch(topics, file, llm, image_model, image_size, rpm):
 
     async def _run():
         nonlocal success
-        options = build_options(llm, image_model, image_size)
+        options = build_options(llm, image_model, image_size, thinking)
 
         async with collection_context(build_stem_collection, options) as collection:
             delay = 60.0 / rpm if rpm > 0 else 0

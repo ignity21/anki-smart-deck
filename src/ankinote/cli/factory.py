@@ -13,11 +13,34 @@ from ankinote.collections.word import WordCollection
 from ankinote.consts import Language
 from ankinote.services.ai import (
     DEFAULT_AI_SERVICE_CONFIG,
+    DISABLE_REASONING,
     AIServiceConfigOverrides,
     LiteLLMGeminiImageService,
     LiteLLMTextService,
 )
 from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
+
+# Values accepted by the ``--thinking`` CLI option.  ``off`` disables the
+# model's extended-thinking pass, ``default`` uses the provider default, and
+# the named levels are forwarded as ``reasoning_effort``.
+THINKING_CHOICES = ("off", "low", "medium", "high", "default")
+
+
+def resolve_thinking(choice: str | None, *, unset: str | None) -> str | None:
+    """Map a ``--thinking`` choice to a ``reasoning_effort`` value.
+
+    ``choice is None`` means the flag was omitted; the collection's built-in
+    default (*unset*) applies. ``"off"`` disables extended thinking, ``"default"``
+    requests the provider default, and any other value passes straight through.
+    """
+    if choice is None:
+        return unset
+    if choice == "off":
+        return DISABLE_REASONING
+    if choice == "default":
+        return None
+    return choice
+
 
 TCollection = TypeVar("TCollection", covariant=True)
 TOptions = TypeVar("TOptions")
@@ -42,6 +65,7 @@ class LanguageCollectionOptions:
     native_language: Language
     target_language: Language
     llm_model_id: str | None = None
+    reasoning_effort: str | None = DISABLE_REASONING
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +83,7 @@ class StemCollectionOptions:
     llm_model_id: str | None = None
     image_model_id: str | None = None
     image_size: int | None = None
+    reasoning_effort: str | None = None
 
 
 def build_word_collection(
@@ -81,6 +106,7 @@ def build_word_collection(
             model_id=config.image_model_id,
             image_size=config.image_size,
         ),
+        reasoning_effort=options.reasoning_effort,
     )
 
 
@@ -98,6 +124,7 @@ def build_phrase_collection(
         target_language=options.target_language,
         text_model_id=config.text_model_id,
         text_service=LiteLLMTextService(),
+        reasoning_effort=options.reasoning_effort,
     )
 
 
@@ -115,6 +142,7 @@ def build_sentence_collection(
         target_language=options.target_language,
         text_model_id=config.text_model_id,
         text_service=LiteLLMTextService(),
+        reasoning_effort=options.reasoning_effort,
     )
 
 
@@ -139,6 +167,7 @@ def build_stem_collection(
         text_model_id=config.text_model_id,
         text_service=LiteLLMTextService(),
         image_service=image_service,
+        reasoning_effort=options.reasoning_effort,
     )
 
 

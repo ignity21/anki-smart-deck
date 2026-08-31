@@ -8,14 +8,21 @@ from pytest_mock import MockerFixture
 
 from ankinote.cli.factory import (
     LanguageCollectionOptions,
+    StemCollectionOptions,
     WordCollectionOptions,
     build_phrase_collection,
     build_sentence_collection,
+    build_stem_collection,
     build_word_collection,
     collection_context,
+    resolve_thinking,
 )
 from ankinote.consts import Language
-from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG, LiteLLMGeminiImageService
+from ankinote.services.ai import (
+    DEFAULT_AI_SERVICE_CONFIG,
+    DISABLE_REASONING,
+    LiteLLMGeminiImageService,
+)
 from ankinote.services.anki import NoteModel
 
 
@@ -167,6 +174,54 @@ class TestCollectionBuilders:
         assert collection._native_language is Language.CHINESE_S
         assert collection._target_language is Language.ENGLISH
         assert collection._generator._text_model_id == "llm-x"
+
+
+class TestResolveThinking:
+    """--thinking choice -> reasoning_effort mapping."""
+
+    def test_omitted_flag_uses_collection_default(self):
+        assert resolve_thinking(None, unset=DISABLE_REASONING) == DISABLE_REASONING
+        assert resolve_thinking(None, unset=None) is None
+
+    def test_off_disables_thinking(self):
+        assert resolve_thinking("off", unset=None) == DISABLE_REASONING
+
+    def test_default_requests_provider_default(self):
+        assert resolve_thinking("default", unset=DISABLE_REASONING) is None
+
+    def test_named_levels_pass_through(self):
+        assert resolve_thinking("high", unset=DISABLE_REASONING) == "high"
+
+
+class TestReasoningEffortPlumbing:
+    """Collections forward the resolved reasoning_effort to their generator."""
+
+    def test_word_collection_defaults_to_disabled(self):
+        collection = build_word_collection(
+            FakeCollectionClient(),
+            WordCollectionOptions(
+                native_language=Language.CHINESE_S,
+                target_language=Language.ENGLISH,
+            ),
+        )
+        assert collection._reasoning_effort == DISABLE_REASONING
+
+    def test_word_collection_honours_override(self):
+        collection = build_word_collection(
+            FakeCollectionClient(),
+            WordCollectionOptions(
+                native_language=Language.CHINESE_S,
+                target_language=Language.ENGLISH,
+                reasoning_effort="high",
+            ),
+        )
+        assert collection._reasoning_effort == "high"
+
+    def test_stem_collection_defaults_to_provider_default(self):
+        collection = build_stem_collection(
+            FakeCollectionClient(), StemCollectionOptions()
+        )
+        assert collection._reasoning_effort is None
 
 
 class TestCollectionContext:

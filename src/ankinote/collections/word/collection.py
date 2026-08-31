@@ -10,7 +10,11 @@ from loguru import logger
 
 from ankinote.collections.common import convert_to_html_ruby, strip_phonetic_annotations
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.ai import ImageGenerationService, TextGenerationService
+from ankinote.services.ai import (
+    DISABLE_REASONING,
+    ImageGenerationService,
+    TextGenerationService,
+)
 from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
@@ -50,12 +54,14 @@ class WordCollection:
         text_model_id: str,
         text_service: TextGenerationService,
         image_service: ImageGenerationService | None,
+        reasoning_effort: str | None = DISABLE_REASONING,
     ) -> None:
         self.notetype_name = notetype_name
         self.deck_name = deck_name
         self._native_language = native_language
         self._target_language = target_language
         self._anki_client = anki_client
+        self._reasoning_effort = reasoning_effort
         self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
         self._generator = WordGenerator(
             tts_service=self._tts_service,
@@ -172,6 +178,7 @@ class WordCollection:
             word=word,
             target_lang=self._target_language,
             native_lang=self._native_language,
+            reasoning_effort=self._reasoning_effort,
         )
 
     async def _add_or_update_note(

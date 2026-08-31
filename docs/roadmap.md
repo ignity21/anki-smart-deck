@@ -93,13 +93,17 @@ service turns into DeepSeek's OpenAI-format `extra_body={"thinking": {"type":
 "disabled"}}` (DeepSeek enables thinking by default and its LiteLLM routing
 discards a plain `reasoning_effort`). `stem` keeps thinking on.
 
+All CLI commands now take `--thinking [off|low|medium|high|default]` to override
+the per-collection default for a single run (`cli/factory.resolve_thinking`
+threads the choice through the typed options and each collection constructor's
+`reasoning_effort`).
+
 Open items:
 
-- CLI flag to override the per-collection default for a single run.
 - UI control for the `stem` thinking level: expose it on the STEM generation
   page (NiceGUI) so a user can dial reasoning up or down per run, rather than
-  relying on the built-in default. Wire the selected value through
-  `StemGenerator.generate_stem_data` to `reasoning_effort`.
+  relying on the built-in default. `StemCollection` already accepts
+  `reasoning_effort`; the page just needs to pass it.
 - DeepSeek ignores `temperature` while thinking is on, so `stem`'s
   `temperature=0.3` is currently a no-op. Decide whether `stem` should also
   disable thinking (regaining temperature control) or drop the unused argument.

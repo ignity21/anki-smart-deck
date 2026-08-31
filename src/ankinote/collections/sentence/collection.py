@@ -9,7 +9,7 @@ from loguru import logger
 
 from ankinote.collections.common import convert_to_html_ruby
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.ai import TextGenerationService
+from ankinote.services.ai import DISABLE_REASONING, TextGenerationService
 from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
@@ -46,6 +46,7 @@ class SentenceCollection:
         deck_name: str = "AINote::Sentences",
         text_model_id: str,
         text_service: TextGenerationService,
+        reasoning_effort: str | None = DISABLE_REASONING,
     ) -> None:
         """Initialize SentenceCollection."""
         self.notetype_name = notetype_name
@@ -53,6 +54,7 @@ class SentenceCollection:
         self._native_language = native_language
         self._target_language = target_language
         self._anki_client = anki_client
+        self._reasoning_effort = reasoning_effort
         self._tts_service = GoogleTTSService(TTS_LANG_CODES[target_language])
         self._generator = SentenceGenerator(
             tts_service=self._tts_service,
@@ -147,6 +149,7 @@ class SentenceCollection:
             target_sentence=target_sentence,
             target_lang=self._target_language,
             native_lang=self._native_language,
+            reasoning_effort=self._reasoning_effort,
         )
 
         media = await self._generator.generate_media(

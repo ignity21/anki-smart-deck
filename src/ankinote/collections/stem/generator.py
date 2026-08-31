@@ -59,6 +59,7 @@ async def generate_stem_data(
     text_service: TextGenerationService,
     model_id: str,
     temperature: float = 0.3,
+    reasoning_effort: str | None = None,
 ) -> StemModel:
     """Generate STEM card data via LLM.
 
@@ -83,6 +84,7 @@ async def generate_stem_data(
                 {"role": "user", "content": user_message},
             ],
             temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
         content = cast(str, content)
         content = _strip_json_fences(content)
@@ -123,17 +125,20 @@ class StemGenerator:
         self,
         topic: str,
         temperature: float = 0.3,
+        reasoning_effort: str | None = None,
     ) -> StemModel:
         """Generate structured STEM card data via LLM.
 
         The AI automatically determines the card type and decides
-        whether a diagram is needed.
+        whether a diagram is needed. ``reasoning_effort`` is forwarded to the
+        provider; ``None`` keeps the provider default (extended thinking on).
         """
         return await generate_stem_data(
             topic=topic,
             text_service=self._text_service,
             model_id=self._text_model_id,
             temperature=temperature,
+            reasoning_effort=reasoning_effort,
         )
 
     async def generate_image(self, description: str) -> bytes:

@@ -47,6 +47,12 @@ Language-aware collections (`word`, `phrase`, `sentence`) accept `--native` and 
 
 Defaults: `--native Chinese(Simplified) --target English`.
 
+All collections accept `--thinking [off|low|medium|high|default]` to override the
+model's extended-thinking level for that run. Omitted, `word`/`phrase`/`sentence`
+disable thinking and `stem` uses the provider default. `off` disables it,
+`default` forces the provider default, and the named levels are passed through as
+`reasoning_effort` (the current DeepSeek routing only distinguishes on/off).
+
 ### `add` — Single card
 
 ```

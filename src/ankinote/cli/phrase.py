@@ -5,12 +5,14 @@ import click
 from asynciolimiter import StrictLimiter
 
 from ankinote.cli.factory import (
+    THINKING_CHOICES,
     LanguageCollectionOptions,
     build_phrase_collection,
     collection_context,
+    resolve_thinking,
 )
 from ankinote.consts import Language
-from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
+from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG, DISABLE_REASONING
 
 MAX_CONCURRENCY = 10
 
@@ -34,6 +36,15 @@ COLLECTION_OPTIONS = [
         default=None,
         show_default=DEFAULT_AI_SERVICE_CONFIG.text_model_id,
     ),
+    click.option(
+        "--thinking",
+        default=None,
+        type=click.Choice(THINKING_CHOICES),
+        help=(
+            "Override the model's extended-thinking level for this run "
+            "(default: off for phrase cards)."
+        ),
+    ),
 ]
 
 
@@ -47,12 +58,14 @@ def build_options(
     native: str,
     target: str,
     llm: str | None,
+    thinking: str | None = None,
 ) -> LanguageCollectionOptions:
     """Convert CLI parameters to typed collection options."""
     return LanguageCollectionOptions(
         native_language=Language(native),
         target_language=Language(target),
         llm_model_id=llm,
+        reasoning_effort=resolve_thinking(thinking, unset=DISABLE_REASONING),
     )
 
 
@@ -69,11 +82,11 @@ def phrase():
 
 @phrase.command("init")
 @collection_options
-def init(native, target, llm):
+def init(native, target, llm, thinking):
     """Create phrase note type and deck in Anki."""
 
     async def _run():
-        options = build_options(native, target, llm)
+        options = build_options(native, target, llm, thinking)
         async with collection_context(build_phrase_collection, options):
             pass
 
@@ -87,11 +100,11 @@ def init(native, target, llm):
 @phrase.command("add")
 @click.argument("phrase")
 @collection_options
-def add(phrase, native, target, llm):
+def add(phrase, native, target, llm, thinking):
     """Generate and push a single phrase card."""
 
     async def _run():
-        options = build_options(native, target, llm)
+        options = build_options(native, target, llm, thinking)
         async with collection_context(build_phrase_collection, options) as collection:
             await collection.generate_and_add_note(phrase)
 
@@ -114,7 +127,7 @@ def add(phrase, native, target, llm):
     help="Max requests per minute (match your AI provider's limit).",
 )
 @collection_options
-def batch(phrases, file, native, target, llm, rpm):
+def batch(phrases, file, native, target, llm, rpm, thinking):
     """Generate and push multiple phrase cards.
 
     \b
@@ -147,7 +160,7 @@ def batch(phrases, file, native, target, llm, rpm):
 
         sem = asyncio.Semaphore(MAX_CONCURRENCY)
         limiter = StrictLimiter(rpm / 60)
-        options = build_options(native, target, llm)
+        options = build_options(native, target, llm, thinking)
 
         async def _process(p: str):
             nonlocal success

@@ -31,6 +31,7 @@ class StemCollection:
         text_model_id: str,
         text_service: TextGenerationService,
         image_service: ImageGenerationService | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         """Initialize StemCollection.
 
@@ -41,10 +42,13 @@ class StemCollection:
             text_model_id: Model ID for the LLM used to generate content
             text_service: Shared text generation service
             image_service: Optional image generation service for diagrams
+            reasoning_effort: Extended-thinking level forwarded to the provider;
+                ``None`` keeps the provider default (thinking on)
         """
         self.notetype_name = notetype_name
         self.deck_name = deck_name
         self._anki_client = anki_client
+        self._reasoning_effort = reasoning_effort
         self._generator = StemGenerator(
             text_service=text_service,
             text_model_id=text_model_id,
@@ -138,7 +142,9 @@ class StemCollection:
         logger.info(f"Starting generation for STEM card: {topic[:50]}...")
 
         # Step 1: Generate text data using LLM
-        stem_model = await self._generator.generate(topic)
+        stem_model = await self._generator.generate(
+            topic, reasoning_effort=self._reasoning_effort
+        )
 
         # Step 2: Optionally generate an image
         image_filename: str | None = None

@@ -5,13 +5,15 @@ import click
 from asynciolimiter import StrictLimiter
 
 from ankinote.cli.factory import (
+    THINKING_CHOICES,
     WordCollectionOptions,
     build_word_collection,
     collection_context,
+    resolve_thinking,
 )
 from ankinote.cli.phrase import MAX_CONCURRENCY
 from ankinote.consts import Language
-from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
+from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG, DISABLE_REASONING
 
 # -- Shared options -----------------------------------------------------------
 
@@ -44,6 +46,15 @@ COLLECTION_OPTIONS = [
         show_default=DEFAULT_AI_SERVICE_CONFIG.image_size,
         type=int,
     ),
+    click.option(
+        "--thinking",
+        default=None,
+        type=click.Choice(THINKING_CHOICES),
+        help=(
+            "Override the model's extended-thinking level for this run "
+            "(default: off for word cards)."
+        ),
+    ),
 ]
 
 
@@ -59,6 +70,7 @@ def build_options(
     llm: str | None,
     image_model: str | None,
     image_size: int | None,
+    thinking: str | None = None,
 ) -> WordCollectionOptions:
     """Convert CLI parameters to typed collection options."""
     return WordCollectionOptions(
@@ -67,6 +79,7 @@ def build_options(
         llm_model_id=llm,
         image_model_id=image_model,
         image_size=image_size,
+        reasoning_effort=resolve_thinking(thinking, unset=DISABLE_REASONING),
     )
 
 
@@ -83,11 +96,11 @@ def word():
 
 @word.command("init")
 @collection_options
-def init(native, target, llm, image_model, image_size):
+def init(native, target, llm, image_model, image_size, thinking):
     """Create note type and deck in Anki."""
 
     async def _run():
-        options = build_options(native, target, llm, image_model, image_size)
+        options = build_options(native, target, llm, image_model, image_size, thinking)
         async with collection_context(build_word_collection, options):
             pass
 
@@ -101,11 +114,11 @@ def init(native, target, llm, image_model, image_size):
 @word.command("add")
 @click.argument("word")
 @collection_options
-def add(word, native, target, llm, image_model, image_size):
+def add(word, native, target, llm, image_model, image_size, thinking):
     """Generate and push a single word card."""
 
     async def _run():
-        options = build_options(native, target, llm, image_model, image_size)
+        options = build_options(native, target, llm, image_model, image_size, thinking)
         async with collection_context(build_word_collection, options) as collection:
             await collection.generate_and_add_note(word)
 
@@ -128,7 +141,7 @@ def add(word, native, target, llm, image_model, image_size):
     help="Max requests per minute (match your AI provider's limit).",
 )
 @collection_options
-def batch(words, file, native, target, llm, image_model, image_size, rpm):
+def batch(words, file, native, target, llm, image_model, image_size, rpm, thinking):
     """Generate and push multiple word cards.
 
     Words can be passed as arguments, read from a file (whitespace-separated),
@@ -153,7 +166,7 @@ def batch(words, file, native, target, llm, image_model, image_size, rpm):
 
         sem = asyncio.Semaphore(MAX_CONCURRENCY)
         limiter = StrictLimiter(rpm / 60)
-        options = build_options(native, target, llm, image_model, image_size)
+        options = build_options(native, target, llm, image_model, image_size, thinking)
 
         async def _process(w: str):
             nonlocal success
