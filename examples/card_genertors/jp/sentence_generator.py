@@ -35,22 +35,21 @@ async def main() -> None:
         )
     )
 
-    async with Application():
-        async with GoogleTTSService(
-            language_code=TTS_LANG_CODES[target_lang]
-        ) as tts_service:
-            gen = SentenceGenerator(
-                tts_service=tts_service,
-                llm_model_id="gemini/gemini-3.1-flash-lite-preview",
-            )
-            # Step 1: generate text data
-            console.print("\n[bold]Step 1:[/bold] Generating word data via LLM…")
-            sentence_model = await gen.generate_sentence_data(
-                target_sentence=sentence,
-                target_lang=target_lang,
-                native_lang=native_lang,
-            )
-            rprint("\n[bold]Generated Sentence Model:[/bold]", sentence_model)
+    async with Application(), GoogleTTSService(
+        language_code=TTS_LANG_CODES[target_lang]
+    ) as tts_service:
+        gen = SentenceGenerator(
+            tts_service=tts_service,
+            llm_model_id="gemini/gemini-3.1-flash-lite-preview",
+        )
+        # Step 1: generate text data
+        console.print("\n[bold]Step 1:[/bold] Generating word data via LLM…")
+        sentence_model = await gen.generate_sentence_data(
+            target_sentence=sentence,
+            target_lang=target_lang,
+            native_lang=native_lang,
+        )
+        rprint("\n[bold]Generated Sentence Model:[/bold]", sentence_model)
 
     console.print(
         Panel.fit(

@@ -4,12 +4,12 @@ from pathlib import Path
 import click
 from asynciolimiter import StrictLimiter
 
-from ankinote.cli.phrase import MAX_CONCURRENCY
 from ankinote.cli.factory import (
     WordCollectionOptions,
     build_word_collection,
     collection_context,
 )
+from ankinote.cli.phrase import MAX_CONCURRENCY
 from ankinote.consts import Language
 from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
 
@@ -76,7 +76,6 @@ def build_options(
 @click.group("word")
 def word():
     """Word card commands"""
-    pass
 
 
 # -- init: create note type and deck ------------------------------------------

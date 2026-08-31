@@ -4,9 +4,9 @@
 import asyncio
 from pathlib import Path
 
+from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
-from rich import print as rprint
 
 from ankinote.app import Application
 from ankinote.collections.phrase import PhraseGenerator
@@ -34,23 +34,22 @@ async def main() -> None:
         )
     )
 
-    async with Application():
-        async with GoogleTTSService(
-            language_code=TTS_LANG_CODES[target_lang]
-        ) as tts_service:
-            gen = PhraseGenerator(
-                tts_service=tts_service,
-                llm_model_id="gemini/gemini-3.1-flash-lite-preview",
-            )
+    async with Application(), GoogleTTSService(
+        language_code=TTS_LANG_CODES[target_lang]
+    ) as tts_service:
+        gen = PhraseGenerator(
+            tts_service=tts_service,
+            llm_model_id="gemini/gemini-3.1-flash-lite-preview",
+        )
 
-            console.print("\n[bold]Step 1:[/bold] Generating phrase data via LLM…")
-            phrase_model = await gen.generate_phrase_data(
-                phrase=phrase,
-                target_lang=target_lang,
-                native_lang=native_lang,
-            )
+        console.print("\n[bold]Step 1:[/bold] Generating phrase data via LLM…")
+        phrase_model = await gen.generate_phrase_data(
+            phrase=phrase,
+            target_lang=target_lang,
+            native_lang=native_lang,
+        )
 
-            rprint("\n[bold]Generated Phrase Model:[/bold]", phrase_model)
+        rprint("\n[bold]Generated Phrase Model:[/bold]", phrase_model)
 
     console.print(
         Panel.fit(

@@ -1,9 +1,9 @@
-from .word import WordCollection
 from .phrase import PhraseCollection
 from .sentence import SentenceCollection
+from .word import WordCollection
 
 __all__ = [
-    "WordCollection",
     "PhraseCollection",
     "SentenceCollection",
+    "WordCollection",
 ]

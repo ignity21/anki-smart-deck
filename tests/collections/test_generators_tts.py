@@ -9,8 +9,7 @@ from ankinote.collections.sentence.generator import SentenceGenerator
 from ankinote.collections.sentence.models import SentenceModel
 from ankinote.collections.word.generator import WordGenerator
 from ankinote.collections.word.models import Example as WordExample
-from ankinote.collections.word.models import Sense
-from ankinote.collections.word.models import WordModel
+from ankinote.collections.word.models import Sense, WordModel
 from ankinote.consts import Language
 
 

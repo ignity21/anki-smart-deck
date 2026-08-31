@@ -118,26 +118,25 @@ async def main() -> None:
         )
     )
 
-    async with Application():
-        async with GoogleTTSService(
-            language_code=TTS_LANG_CODES[target_lang]
-        ) as tts_service:
-            gen = WordGenerator(
-                tts_service=tts_service,
-                llm_model_id="gemini/gemini-3.1-flash-lite-preview",
-                image_model_id="gemini/gemini-2.5-flash-image",
-                image_size=256,
-            )
-            # Step 1: generate text data
-            console.print("\n[bold]Step 1:[/bold] Generating word data via LLM…")
-            word_models = await gen.generate_word_data(
-                word=word,
-                target_lang=target_lang,
-                native_lang=native_lang,
-            )
+    async with Application(), GoogleTTSService(
+        language_code=TTS_LANG_CODES[target_lang]
+    ) as tts_service:
+        gen = WordGenerator(
+            tts_service=tts_service,
+            llm_model_id="gemini/gemini-3.1-flash-lite-preview",
+            image_model_id="gemini/gemini-2.5-flash-image",
+            image_size=256,
+        )
+        # Step 1: generate text data
+        console.print("\n[bold]Step 1:[/bold] Generating word data via LLM…")
+        word_models = await gen.generate_word_data(
+            word=word,
+            target_lang=target_lang,
+            native_lang=native_lang,
+        )
 
-            for word_model in word_models:
-                display_word_model(word_model)
+        for word_model in word_models:
+            display_word_model(word_model)
 
                 # # Step 2: generate media
                 # console.print(

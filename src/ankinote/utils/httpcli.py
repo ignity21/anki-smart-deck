@@ -114,10 +114,10 @@ async def post(url: str, **kwargs) -> httpx.Response:
 
 
 __all__ = [
-    "init_session",
-    "get_session",
     "close_session",
-    "request",
     "get",
+    "get_session",
+    "init_session",
     "post",
+    "request",
 ]

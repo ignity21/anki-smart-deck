@@ -62,7 +62,6 @@ def build_options(
 @click.group("phrase")
 def phrase():
     """Phrase / sentence card commands."""
-    pass
 
 
 # -- init: create note type and deck ------------------------------------------

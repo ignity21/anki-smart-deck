@@ -3,7 +3,7 @@
 import functools
 import json
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 # Built-in LLM provider definitions.
@@ -55,7 +55,7 @@ NEW_CUSTOM_PROVIDER = "＋ Add custom provider"
 _EXCLUDED_NAME_SUBSTRINGS = ("-audio-", "-search-", "/container")
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _discover_chat_models(
     litellm_provider: str, model_prefix: str | None
 ) -> tuple[str, ...]:

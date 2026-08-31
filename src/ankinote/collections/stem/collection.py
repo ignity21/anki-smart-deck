@@ -6,8 +6,8 @@ from typing import Self
 
 from loguru import logger
 
-from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
 from ankinote.services.ai import ImageGenerationService, TextGenerationService
+from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
 
 from .generator import StemGenerator
 from .models import StemModel, StemNoteType
@@ -59,7 +59,6 @@ class StemCollection:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
-        pass
 
     async def ensure_in_anki(self) -> None:
         """Create or update this note type and its deck in Anki.

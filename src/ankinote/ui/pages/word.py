@@ -9,7 +9,7 @@ from nicegui import ui
 from ankinote.app import Application
 from ankinote.collections.word import WordCollection
 from ankinote.consts import Language
-from ankinote.services.ai import LiteLLMTextService, LiteLLMGeminiImageService
+from ankinote.services.ai import LiteLLMGeminiImageService, LiteLLMTextService
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.ui.config import (
     CUSTOM_API_KEY_STORAGE_KEY,
@@ -18,7 +18,6 @@ from ankinote.ui.config import (
     apply_env,
     load_settings,
 )
-
 
 _ERROR_MESSAGE_RE = re.compile(r'"message"\s*:\s*"([^"]+)"')
 

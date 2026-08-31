@@ -62,7 +62,6 @@ def build_options(
 @click.group("sentence")
 def sentence():
     """Sentence card commands (V2 - production cards)."""
-    pass
 
 
 # -- init: create note type and deck ------------------------------------------

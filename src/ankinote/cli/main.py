@@ -4,11 +4,11 @@ import click
 from loguru import logger
 
 from ankinote import __version__
-from .stem import stem
+
 from .phrase import phrase
 from .sentence import sentence
+from .stem import stem
 from .word import word
-
 
 _VERSION_BANNER = f"""╔══════════════════════════════════════════════╗
 ║               ankinote v{__version__}                ║
@@ -23,7 +23,6 @@ _VERSION_BANNER = f"""╔══════════════════�
 )
 def cli():
     """AI-powered Anki card generator — vocabulary, phrases, sentences, STEM concepts."""
-    pass
 
 
 cli.add_command(word)

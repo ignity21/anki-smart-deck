@@ -3,8 +3,8 @@ import asyncio
 
 from rich import print as rprint
 
-from ankinote.services.anki import AnkiConnectClient, ModelTemplate
 from ankinote.app import Application
+from ankinote.services.anki import AnkiConnectClient, ModelTemplate
 
 
 async def main():

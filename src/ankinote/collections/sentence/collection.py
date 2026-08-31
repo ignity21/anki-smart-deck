@@ -9,8 +9,8 @@ from loguru import logger
 
 from ankinote.collections.common import convert_to_html_ruby
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
-from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
 from ankinote.services.ai import TextGenerationService
+from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import SentenceGenerator, SentenceMediaFiles

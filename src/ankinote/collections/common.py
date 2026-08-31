@@ -1,10 +1,10 @@
 """Common utilities for collection modules."""
 
+import re
 from collections.abc import Callable
 from importlib.resources import files
 from typing import TypeVar
 
-import re
 from pydantic import BaseModel
 
 from ankinote.consts import Language

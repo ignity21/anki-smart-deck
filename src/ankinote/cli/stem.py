@@ -58,7 +58,6 @@ def build_options(
 @click.group("stem")
 def stem():
     """STEM knowledge cards (Math, CS, Finance, ML, ...)."""
-    pass
 
 
 @stem.command("init")
