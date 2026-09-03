@@ -31,7 +31,7 @@ async def test_litellm_text_service_forwards_completion_args(
 
     service = LiteLLMTextService()
     result = await service.generate_text(
-        model_id="deepseek/deepseek-v4-flash",
+        model="deepseek/deepseek-v4-flash",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
     )
@@ -61,7 +61,7 @@ async def test_litellm_text_service_disables_deepseek_thinking(
 
     service = LiteLLMTextService()
     await service.generate_text(
-        model_id="deepseek/deepseek-v4-flash",
+        model="deepseek/deepseek-v4-flash",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
         reasoning_effort=DISABLE_REASONING,
@@ -87,7 +87,7 @@ async def test_litellm_text_service_forwards_named_reasoning_effort(
 
     service = LiteLLMTextService()
     await service.generate_text(
-        model_id="deepseek/deepseek-v4-flash",
+        model="deepseek/deepseek-v4-flash",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
         reasoning_effort="high",
@@ -111,7 +111,7 @@ async def test_litellm_text_service_omits_reasoning_effort_when_unset(
 
     service = LiteLLMTextService()
     await service.generate_text(
-        model_id="deepseek/deepseek-v4-flash",
+        model="deepseek/deepseek-v4-flash",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
     )
@@ -136,7 +136,7 @@ async def test_litellm_text_service_routes_custom_endpoint_through_openai(
         api_key="test-key",
     )
     await service.generate_text(
-        model_id="Qwen/Qwen3-8B",
+        model="Qwen/Qwen3-8B",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
     )
@@ -167,7 +167,7 @@ async def test_litellm_text_service_keeps_explicit_openai_prefix(
 
     service = LiteLLMTextService(api_base="http://localhost:8000/v1")
     await service.generate_text(
-        model_id="openai/my-model",
+        model="openai/my-model",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
     )
@@ -190,7 +190,7 @@ async def test_litellm_text_service_rejects_non_string_content(
 
     with pytest.raises(RuntimeError, match="non-string"):
         await service.generate_text(
-            model_id="deepseek/deepseek-v4-flash",
+            model="deepseek/deepseek-v4-flash",
             messages=[{"role": "user", "content": "hello"}],
             temperature=0.2,
         )
@@ -211,9 +211,7 @@ async def test_litellm_image_service_decodes_and_resizes(
         ),
     )
 
-    service = LiteLLMImageService(
-        model_id="gemini/gemini-2.5-flash-image", image_size=128
-    )
+    service = LiteLLMImageService(model="gemini/gemini-2.5-flash-image", image_size=128)
     mocker.patch(
         "ankinote.services.ai.base64.b64decode", return_value=buffer.getvalue()
     )

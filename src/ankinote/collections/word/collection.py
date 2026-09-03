@@ -51,7 +51,7 @@ class WordCollection:
         target_language: Language,
         notetype_name: str = "AINote Word V2",
         deck_name: str = "AINote::Words",
-        text_model_id: str,
+        text_model: str,
         text_service: TextGenerationService,
         image_service: ImageGenerationService | None,
         reasoning_effort: str | None = DISABLE_REASONING,
@@ -67,7 +67,7 @@ class WordCollection:
             tts_service=self._tts_service,
             text_service=text_service,
             image_service=image_service,
-            text_model_id=text_model_id,
+            text_model=text_model,
         )
         if target_language in RUBY_ANNOTATION_LANGUAGES:
             self._convert_target_lang_text = convert_to_html_ruby

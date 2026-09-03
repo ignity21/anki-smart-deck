@@ -64,7 +64,7 @@ class LanguageCollectionOptions:
 
     native_language: Language
     target_language: Language
-    llm_model_id: str | None = None
+    llm_model: str | None = None
     reasoning_effort: str | None = DISABLE_REASONING
 
 
@@ -72,7 +72,7 @@ class LanguageCollectionOptions:
 class WordCollectionOptions(LanguageCollectionOptions):
     """CLI options for the word collection."""
 
-    image_model_id: str | None = None
+    image_model: str | None = None
     image_size: int | None = None
 
 
@@ -80,8 +80,8 @@ class WordCollectionOptions(LanguageCollectionOptions):
 class StemCollectionOptions:
     """CLI options for the STEM collection."""
 
-    llm_model_id: str | None = None
-    image_model_id: str | None = None
+    llm_model: str | None = None
+    image_model: str | None = None
     image_size: int | None = None
     reasoning_effort: str | None = None
 
@@ -92,18 +92,18 @@ def build_word_collection(
 ) -> WordCollection:
     """Build a word collection from typed CLI options."""
     config = AIServiceConfigOverrides(
-        text_model_id=options.llm_model_id,
-        image_model_id=options.image_model_id,
+        text_model=options.llm_model,
+        image_model=options.image_model,
         image_size=options.image_size,
     ).resolve(DEFAULT_AI_SERVICE_CONFIG)
     return WordCollection(
         client,
         native_language=options.native_language,
         target_language=options.target_language,
-        text_model_id=config.text_model_id,
+        text_model=config.text_model,
         text_service=LiteLLMTextService(),
         image_service=LiteLLMImageService(
-            model_id=config.image_model_id,
+            model=config.image_model,
             image_size=config.image_size,
         ),
         reasoning_effort=options.reasoning_effort,
@@ -116,13 +116,13 @@ def build_phrase_collection(
 ) -> PhraseCollection:
     """Build a phrase collection from typed CLI options."""
     config = AIServiceConfigOverrides(
-        text_model_id=options.llm_model_id,
+        text_model=options.llm_model,
     ).resolve(DEFAULT_AI_SERVICE_CONFIG)
     return PhraseCollection(
         client,
         native_language=options.native_language,
         target_language=options.target_language,
-        text_model_id=config.text_model_id,
+        text_model=config.text_model,
         text_service=LiteLLMTextService(),
         reasoning_effort=options.reasoning_effort,
     )
@@ -134,13 +134,13 @@ def build_sentence_collection(
 ) -> SentenceCollection:
     """Build a sentence collection from typed CLI options."""
     config = AIServiceConfigOverrides(
-        text_model_id=options.llm_model_id,
+        text_model=options.llm_model,
     ).resolve(DEFAULT_AI_SERVICE_CONFIG)
     return SentenceCollection(
         client,
         native_language=options.native_language,
         target_language=options.target_language,
-        text_model_id=config.text_model_id,
+        text_model=config.text_model,
         text_service=LiteLLMTextService(),
         reasoning_effort=options.reasoning_effort,
     )
@@ -152,19 +152,19 @@ def build_stem_collection(
 ) -> StemCollection:
     """Build a STEM collection from typed CLI options."""
     config = AIServiceConfigOverrides(
-        text_model_id=options.llm_model_id,
-        image_model_id=options.image_model_id,
+        text_model=options.llm_model,
+        image_model=options.image_model,
         image_size=options.image_size,
     ).resolve(DEFAULT_AI_SERVICE_CONFIG)
     image_service = None
-    if config.image_model_id:
+    if config.image_model:
         image_service = LiteLLMImageService(
-            model_id=config.image_model_id,
+            model=config.image_model,
             image_size=config.image_size,
         )
     return StemCollection(
         client,
-        text_model_id=config.text_model_id,
+        text_model=config.text_model,
         text_service=LiteLLMTextService(),
         image_service=image_service,
         reasoning_effort=options.reasoning_effort,

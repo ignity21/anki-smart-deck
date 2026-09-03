@@ -27,8 +27,8 @@ DISABLE_REASONING = "none"
 class AIServiceConfig:
     """Centralized default AI configuration."""
 
-    text_model_id: str = "deepseek/deepseek-v4-flash"
-    image_model_id: str = "gemini/gemini-3.1-flash-lite-image"
+    text_model: str = "deepseek/deepseek-v4-flash"
+    image_model: str = "gemini/gemini-3.1-flash-lite-image"
     image_size: int = 512
 
 
@@ -36,17 +36,17 @@ class AIServiceConfig:
 class AIServiceConfigOverrides:
     """Optional AI configuration overrides from the CLI layer."""
 
-    text_model_id: str | None = None
-    image_model_id: str | None = None
+    text_model: str | None = None
+    image_model: str | None = None
     image_size: int | None = None
 
     def resolve(self, defaults: AIServiceConfig) -> AIServiceConfig:
         """Merge overrides onto the provided defaults."""
         config = defaults
-        if self.text_model_id is not None:
-            config = replace(config, text_model_id=self.text_model_id)
-        if self.image_model_id is not None:
-            config = replace(config, image_model_id=self.image_model_id)
+        if self.text_model is not None:
+            config = replace(config, text_model=self.text_model)
+        if self.image_model is not None:
+            config = replace(config, image_model=self.image_model)
         if self.image_size is not None:
             config = replace(config, image_size=self.image_size)
         return config
@@ -61,7 +61,7 @@ class TextGenerationService(Protocol):
     async def generate_text(
         self,
         *,
-        model_id: str,
+        model: str,
         messages: Sequence[TextMessage],
         temperature: float,
         reasoning_effort: str | None = None,
@@ -91,7 +91,7 @@ class LiteLLMTextService:
         self._api_base = api_base
         self._api_key = api_key
 
-    def _resolve_model_id(self, model_id: str) -> str:
+    def _resolve_model(self, model: str) -> str:
         """Tell LiteLLM which provider owns models on a custom endpoint.
 
         LiteLLM infers a provider from an unqualified model id.  For model
@@ -100,21 +100,21 @@ class LiteLLMTextService:
         ``openai/`` prefix makes the intended routing explicit.  An existing
         ``openai/`` prefix is left unchanged.
         """
-        if self._api_base is not None and not model_id.startswith("openai/"):
-            return f"openai/{model_id}"
-        return model_id
+        if self._api_base is not None and not model.startswith("openai/"):
+            return f"openai/{model}"
+        return model
 
     async def generate_text(
         self,
         *,
-        model_id: str,
+        model: str,
         messages: Sequence[TextMessage],
         temperature: float,
         reasoning_effort: str | None = None,
     ) -> str:
         """Generate text content using LiteLLM chat completion."""
         completion_kwargs: dict[str, object] = {
-            "model": self._resolve_model_id(model_id),
+            "model": self._resolve_model(model),
             "messages": list(messages),
             "stream": False,
             "temperature": temperature,
@@ -152,20 +152,20 @@ class LiteLLMImageService:
 
     Works with any provider LiteLLM routes through its OpenAI-compatible
     ``image_generation`` surface (Gemini, OpenAI, xAI, Vertex, Bedrock, …);
-    the provider is selected by ``model_id``.
+    the provider is selected by ``model``.
     """
 
     def __init__(
-        self, *, model_id: str, image_size: int, api_key: str | None = None
+        self, *, model: str, image_size: int, api_key: str | None = None
     ) -> None:
-        self._model_id = model_id
+        self._model = model
         self._image_size = image_size
         self._api_key = api_key
 
     async def generate_image(self, *, prompt: str) -> bytes:
         """Generate resized image bytes from a prompt."""
         image_kwargs: dict[str, object] = {
-            "model": self._model_id,
+            "model": self._model,
             "prompt": prompt,
             "timeout": REQUEST_TIMEOUT_SECONDS,
             "num_retries": 0,

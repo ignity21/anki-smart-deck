@@ -143,7 +143,7 @@ def _build_collection(
         client,
         native_language=Language.CHINESE_S,
         target_language=target_language,
-        text_model_id="sentence-model",
+        text_model="sentence-model",
         text_service=cast(TextGenerationService, DummyTextService()),
     )
     return collection, models

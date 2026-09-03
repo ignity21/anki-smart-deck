@@ -57,7 +57,7 @@ def _strip_json_fences(content: str) -> str:
 async def generate_stem_data(
     topic: str,
     text_service: TextGenerationService,
-    model_id: str,
+    model: str,
     temperature: float = 0.3,
     reasoning_effort: str | None = None,
 ) -> StemModel:
@@ -78,7 +78,7 @@ async def generate_stem_data(
 
     try:
         content = await text_service.generate_text(
-            model_id=model_id,
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
@@ -114,11 +114,11 @@ class StemGenerator:
     def __init__(
         self,
         text_service: TextGenerationService,
-        text_model_id: str,
+        text_model: str,
         image_service: ImageGenerationService | None = None,
     ) -> None:
         self._text_service = text_service
-        self._text_model_id = text_model_id
+        self._text_model = text_model
         self._image_service = image_service
 
     async def generate(
@@ -136,7 +136,7 @@ class StemGenerator:
         return await generate_stem_data(
             topic=topic,
             text_service=self._text_service,
-            model_id=self._text_model_id,
+            model=self._text_model,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )

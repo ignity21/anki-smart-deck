@@ -46,7 +46,7 @@ class PhraseCollection:
         target_language: Language,
         notetype_name: str = "AINote Phrase V2",
         deck_name: str = "AINote::Phrases",
-        text_model_id: str,
+        text_model: str,
         text_service: TextGenerationService,
         reasoning_effort: str | None = DISABLE_REASONING,
     ) -> None:
@@ -61,7 +61,7 @@ class PhraseCollection:
         self._generator = PhraseGenerator(
             self._tts_service,
             text_service=text_service,
-            text_model_id=text_model_id,
+            text_model=text_model,
         )
         if target_language in RUBY_ANNOTATION_LANGUAGES:
             self._convert_target_lang_text = convert_to_html_ruby

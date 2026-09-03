@@ -44,7 +44,7 @@ class SentenceCollection:
         target_language: Language,
         notetype_name: str = "AINote Sentence V2",
         deck_name: str = "AINote::Sentences",
-        text_model_id: str,
+        text_model: str,
         text_service: TextGenerationService,
         reasoning_effort: str | None = DISABLE_REASONING,
     ) -> None:
@@ -59,7 +59,7 @@ class SentenceCollection:
         self._generator = SentenceGenerator(
             tts_service=self._tts_service,
             text_service=text_service,
-            text_model_id=text_model_id,
+            text_model=text_model,
         )
 
         if target_language in RUBY_ANNOTATION_LANGUAGES:

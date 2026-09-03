@@ -111,8 +111,8 @@ class TestCollectionBuilders:
         options = WordCollectionOptions(
             native_language=Language.CHINESE_S,
             target_language=Language.ENGLISH,
-            llm_model_id="llm-x",
-            image_model_id="img-y",
+            llm_model="llm-x",
+            image_model="img-y",
             image_size=256,
         )
 
@@ -121,10 +121,10 @@ class TestCollectionBuilders:
         assert collection._anki_client is client
         assert collection._native_language is Language.CHINESE_S
         assert collection._target_language is Language.ENGLISH
-        assert collection._generator._text_model_id == "llm-x"
+        assert collection._generator._text_model == "llm-x"
         image_service = collection._generator._image_service
         assert isinstance(image_service, LiteLLMImageService)
-        assert image_service._model_id == "img-y"
+        assert image_service._model == "img-y"
         assert image_service._image_size == 256
 
     def test_build_word_collection_uses_default_ai_config(self):
@@ -136,13 +136,10 @@ class TestCollectionBuilders:
 
         collection = build_word_collection(client, options)
 
-        assert (
-            collection._generator._text_model_id
-            == DEFAULT_AI_SERVICE_CONFIG.text_model_id
-        )
+        assert collection._generator._text_model == DEFAULT_AI_SERVICE_CONFIG.text_model
         image_service = collection._generator._image_service
         assert isinstance(image_service, LiteLLMImageService)
-        assert image_service._model_id == DEFAULT_AI_SERVICE_CONFIG.image_model_id
+        assert image_service._model == DEFAULT_AI_SERVICE_CONFIG.image_model
         assert image_service._image_size == DEFAULT_AI_SERVICE_CONFIG.image_size
 
     def test_build_phrase_collection(self):
@@ -150,7 +147,7 @@ class TestCollectionBuilders:
         options = LanguageCollectionOptions(
             native_language=Language.CHINESE_S,
             target_language=Language.ENGLISH,
-            llm_model_id="llm-x",
+            llm_model="llm-x",
         )
 
         collection = build_phrase_collection(client, options)
@@ -158,14 +155,14 @@ class TestCollectionBuilders:
         assert collection._anki_client is client
         assert collection._native_language is Language.CHINESE_S
         assert collection._target_language is Language.ENGLISH
-        assert collection._generator._text_model_id == "llm-x"
+        assert collection._generator._text_model == "llm-x"
 
     def test_build_sentence_collection(self):
         client = FakeCollectionClient()
         options = LanguageCollectionOptions(
             native_language=Language.CHINESE_S,
             target_language=Language.ENGLISH,
-            llm_model_id="llm-x",
+            llm_model="llm-x",
         )
 
         collection = build_sentence_collection(client, options)
@@ -173,7 +170,7 @@ class TestCollectionBuilders:
         assert collection._anki_client is client
         assert collection._native_language is Language.CHINESE_S
         assert collection._target_language is Language.ENGLISH
-        assert collection._generator._text_model_id == "llm-x"
+        assert collection._generator._text_model == "llm-x"
 
 
 class TestResolveThinking:

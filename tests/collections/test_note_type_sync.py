@@ -61,7 +61,7 @@ async def test_stem_sync_updates_an_existing_note_type() -> None:
     models = RecordingModelService()
     collection = StemCollection(
         _build_client(models),
-        text_model_id="test-model",
+        text_model="test-model",
         text_service=cast(TextGenerationService, object()),
     )
 

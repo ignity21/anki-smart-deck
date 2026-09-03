@@ -57,7 +57,7 @@ async def generate_phrase_data(
     target_language: Language,
     native_language: Language,
     text_service: TextGenerationService,
-    model_id: str,
+    model: str,
     temperature: float = 0.3,
     reasoning_effort: str | None = DISABLE_REASONING,
 ) -> PhraseModel:
@@ -67,7 +67,7 @@ async def generate_phrase_data(
         phrase: The phrase to generate data for.
         target_language: The language being learned.
         native_language: The user's native language.
-        model_id: The LLM model ID to use.
+        model: The LLM model to use.
         temperature: Sampling temperature for generation.
         reasoning_effort: Forwarded to the provider; defaults to disabling the
             model's extended thinking pass, which adds little for this prompt.
@@ -94,7 +94,7 @@ async def generate_phrase_data(
 
     try:
         content = await text_service.generate_text(
-            model_id=model_id,
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
@@ -130,10 +130,10 @@ class PhraseGenerator:
         self,
         tts_service: SpeechSynthesizer,
         text_service: TextGenerationService,
-        text_model_id: str,
+        text_model: str,
     ) -> None:
         self._text_service = text_service
-        self._text_model_id = text_model_id
+        self._text_model = text_model
         self._tts_service = tts_service
 
     async def generate_phrase_data(
@@ -150,7 +150,7 @@ class PhraseGenerator:
             target_language=target_lang,
             native_language=native_lang,
             text_service=self._text_service,
-            model_id=self._text_model_id,
+            model=self._text_model,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )

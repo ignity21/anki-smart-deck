@@ -25,13 +25,13 @@ def collection_options(f):
     f = click.option(
         "--llm",
         default=None,
-        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model_id,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model,
         help="LLM model ID for content generation",
     )(f)
     f = click.option(
         "--image-model",
         default=None,
-        show_default=DEFAULT_AI_SERVICE_CONFIG.image_model_id,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.image_model,
         help="Image model ID for diagram generation",
     )(f)
     f = click.option(
@@ -61,8 +61,8 @@ def build_options(
 ) -> StemCollectionOptions:
     """Convert CLI parameters to typed collection options."""
     return StemCollectionOptions(
-        llm_model_id=llm,
-        image_model_id=image_model,
+        llm_model=llm,
+        image_model=image_model,
         image_size=image_size,
         reasoning_effort=resolve_thinking(thinking, unset=None),
     )

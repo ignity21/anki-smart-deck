@@ -20,7 +20,7 @@ def _make_collection() -> StemCollection:
 
     return StemCollection(
         cast(AnkiCollectionClient, FakeAnkiClient()),
-        text_model_id="stem-model",
+        text_model="stem-model",
         text_service=cast(TextGenerationService, object()),
     )
 
@@ -158,7 +158,7 @@ async def test_generator_parses_structured_fields_from_ai_response():
 
     generator = StemGenerator(
         text_service=cast(TextGenerationService, FakeTextService()),
-        text_model_id="stem-model",
+        text_model="stem-model",
     )
     model = await generator.generate("quadratic formula")
 

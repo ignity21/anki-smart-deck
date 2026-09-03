@@ -28,7 +28,7 @@ class StemCollection:
         *,
         notetype_name: str = "AINote STEM",
         deck_name: str = "AINote::STEM",
-        text_model_id: str,
+        text_model: str,
         text_service: TextGenerationService,
         image_service: ImageGenerationService | None = None,
         reasoning_effort: str | None = None,
@@ -39,7 +39,7 @@ class StemCollection:
             anki_client: AnkiConnect client instance
             notetype_name: Name of the Anki note type to use
             deck_name: Name of the Anki deck to add notes to
-            text_model_id: Model ID for the LLM used to generate content
+            text_model: The LLM model used to generate content
             text_service: Shared text generation service
             image_service: Optional image generation service for diagrams
             reasoning_effort: Extended-thinking level forwarded to the provider;
@@ -51,7 +51,7 @@ class StemCollection:
         self._reasoning_effort = reasoning_effort
         self._generator = StemGenerator(
             text_service=text_service,
-            text_model_id=text_model_id,
+            text_model=text_model,
             image_service=image_service,
         )
 

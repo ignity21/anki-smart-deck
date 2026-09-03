@@ -162,7 +162,7 @@ def sentence_page() -> None:
                         anki_client,
                         native_language=Language(native),
                         target_language=Language(target),
-                        text_model_id=settings.text_model,
+                        text_model=settings.text_model,
                         text_service=text_service,
                     ) as collection:
                         semaphore = asyncio.Semaphore(parallelism)

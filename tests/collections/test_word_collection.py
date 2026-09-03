@@ -131,7 +131,7 @@ def _build_collection(
         client,
         native_language=Language.CHINESE_S,
         target_language=target_language,
-        text_model_id="word-model",
+        text_model="word-model",
         text_service=cast(TextGenerationService, DummyTextService()),
         image_service=cast(ImageGenerationService, DummyImageService()),
     )

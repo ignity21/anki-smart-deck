@@ -22,14 +22,14 @@ class FakeTextService:
     async def generate_text(
         self,
         *,
-        model_id: str,
+        model: str,
         messages: Sequence[TextMessage],
         temperature: float,
         reasoning_effort: str | None = None,
     ) -> str:
         self.calls.append(
             {
-                "model_id": model_id,
+                "model": model,
                 "messages": messages,
                 "temperature": temperature,
                 "reasoning_effort": reasoning_effort,
@@ -88,7 +88,7 @@ async def test_word_generator_uses_unified_text_service():
         tts_service=FakeSpeechSynthesizer(),
         text_service=text_service,
         image_service=FakeImageService(),
-        text_model_id="word-model",
+        text_model="word-model",
     )
 
     models = await generator.generate_word_data(
@@ -98,7 +98,7 @@ async def test_word_generator_uses_unified_text_service():
     )
 
     assert models[0].lemma == "test"
-    assert text_service.calls[0]["model_id"] == "word-model"
+    assert text_service.calls[0]["model"] == "word-model"
     assert text_service.calls[0]["reasoning_effort"] == DISABLE_REASONING
     messages = text_service.calls[0]["messages"]
     assert isinstance(messages, list)
@@ -140,7 +140,7 @@ async def test_word_generator_accepts_fenced_json():
         tts_service=FakeSpeechSynthesizer(),
         text_service=text_service,
         image_service=FakeImageService(),
-        text_model_id="word-model",
+        text_model="word-model",
     )
 
     models = await generator.generate_word_data(
@@ -183,7 +183,7 @@ async def test_word_generator_accepts_single_object_response():
         tts_service=FakeSpeechSynthesizer(),
         text_service=text_service,
         image_service=FakeImageService(),
-        text_model_id="word-model",
+        text_model="word-model",
     )
 
     models = await generator.generate_word_data(
@@ -218,7 +218,7 @@ async def test_phrase_generator_uses_unified_text_service():
     generator = PhraseGenerator(
         tts_service=FakeSpeechSynthesizer(),
         text_service=text_service,
-        text_model_id="phrase-model",
+        text_model="phrase-model",
     )
 
     model = await generator.generate_phrase_data(
@@ -228,7 +228,7 @@ async def test_phrase_generator_uses_unified_text_service():
     )
 
     assert model.phrase == "take off"
-    assert text_service.calls[0]["model_id"] == "phrase-model"
+    assert text_service.calls[0]["model"] == "phrase-model"
     assert text_service.calls[0]["reasoning_effort"] == DISABLE_REASONING
 
 
@@ -249,7 +249,7 @@ async def test_sentence_generator_uses_unified_text_service():
     generator = SentenceGenerator(
         tts_service=FakeSpeechSynthesizer(),
         text_service=text_service,
-        text_model_id="sentence-model",
+        text_model="sentence-model",
     )
 
     model = await generator.generate_sentence_data(
@@ -259,7 +259,7 @@ async def test_sentence_generator_uses_unified_text_service():
     )
 
     assert model.target_sentence == "This is a test."
-    assert text_service.calls[0]["model_id"] == "sentence-model"
+    assert text_service.calls[0]["model"] == "sentence-model"
     assert text_service.calls[0]["reasoning_effort"] == DISABLE_REASONING
     assert (
         "Target sentence: This is a test."
@@ -285,7 +285,7 @@ async def test_stem_generator_uses_unified_text_service():
     )
     generator = StemGenerator(
         text_service=text_service,
-        text_model_id="stem-model",
+        text_model="stem-model",
     )
 
     model = await generator.generate("vector space")
@@ -293,6 +293,6 @@ async def test_stem_generator_uses_unified_text_service():
     assert model.card_type.value == "concept"
     assert model.tags == ["Math", "Linear Algebra"]
     assert model.image_description is None
-    assert text_service.calls[0]["model_id"] == "stem-model"
+    assert text_service.calls[0]["model"] == "stem-model"
     # STEM keeps extended thinking: multi-step derivations benefit from it.
     assert text_service.calls[0]["reasoning_effort"] is None

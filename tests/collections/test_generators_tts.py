@@ -52,7 +52,7 @@ class TestWordGenerator:
             tts_service=synth,
             text_service=FakeTextService(),
             image_service=FakeImageService(),
-            text_model_id="text-model",
+            text_model="text-model",
         )
         word_model = WordModel(
             lemma="test",
@@ -95,7 +95,7 @@ class TestPhraseGenerator:
         generator = PhraseGenerator(
             tts_service=synth,
             text_service=FakeTextService(),
-            text_model_id="text-model",
+            text_model="text-model",
         )
         phrase_model = PhraseModel(
             phrase="take off",
@@ -132,7 +132,7 @@ class TestSentenceGenerator:
         generator = SentenceGenerator(
             tts_service=synth,
             text_service=FakeTextService(),
-            text_model_id="text-model",
+            text_model="text-model",
         )
         sentence_model = SentenceModel(
             target_sentence="This is a test.",

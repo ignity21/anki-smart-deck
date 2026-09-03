@@ -109,7 +109,7 @@ def _build_specs() -> list[NoteTypeSpec]:
                 target_language=Language.ENGLISH,
                 notetype_name=notetype_name,
                 deck_name=deck_name,
-                text_model_id="",
+                text_model="",
                 text_service=LiteLLMTextService(),
                 image_service=None,
             )
@@ -125,7 +125,7 @@ def _build_specs() -> list[NoteTypeSpec]:
                 target_language=Language.ENGLISH,
                 notetype_name=notetype_name,
                 deck_name=deck_name,
-                text_model_id="",
+                text_model="",
                 text_service=LiteLLMTextService(),
             )
             await collection.ensure_in_anki()
@@ -138,7 +138,7 @@ def _build_specs() -> list[NoteTypeSpec]:
                 client,
                 notetype_name=notetype_name,
                 deck_name=deck_name,
-                text_model_id="",
+                text_model="",
                 text_service=LiteLLMTextService(),
                 image_service=None,
             )
