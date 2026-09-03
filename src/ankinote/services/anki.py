@@ -148,6 +148,10 @@ class AnkiDeckService(Protocol):
         """Create a deck or return the existing deck id."""
         ...
 
+    async def exists(self, deck_name: str) -> bool:
+        """Check if a deck with the given name exists."""
+        ...
+
 
 class AnkiNoteService(Protocol):
     """Subset of note operations required by collections."""

@@ -35,9 +35,10 @@ async def main() -> None:
         )
     )
 
-    async with Application(), GoogleTTSService(
-        language_code=TTS_LANG_CODES[target_lang]
-    ) as tts_service:
+    async with (
+        Application(),
+        GoogleTTSService(language_code=TTS_LANG_CODES[target_lang]) as tts_service,
+    ):
         gen = SentenceGenerator(
             tts_service=tts_service,
             llm_model_id="gemini/gemini-3.1-flash-lite-preview",

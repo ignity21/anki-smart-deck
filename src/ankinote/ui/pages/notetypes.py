@@ -656,7 +656,7 @@ def notetypes_page() -> None:
 
     def _notify(message: str, kind: str) -> None:
         with client:
-            ui.notify(message, type=kind)
+            ui.notify(message, type=kind)  # type: ignore[arg-type]
 
     @ui.refreshable
     def _workspace() -> None:

@@ -158,7 +158,7 @@ class LiteLLMTextService:
 
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
-                response = await acompletion(**completion_kwargs)
+                response = await acompletion(**completion_kwargs)  # type: ignore[arg-type]
         except TimeoutError as exc:
             raise RuntimeError(
                 f"Text generation timed out after {REQUEST_TIMEOUT_SECONDS} seconds"
@@ -196,7 +196,7 @@ class LiteLLMImageService:
             image_kwargs["api_key"] = self._api_key
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
-                response = await aimage_generation(**image_kwargs)
+                response = await aimage_generation(**image_kwargs)  # type: ignore[arg-type]
         except TimeoutError as exc:
             raise RuntimeError(
                 f"Image generation timed out after {REQUEST_TIMEOUT_SECONDS} seconds"
