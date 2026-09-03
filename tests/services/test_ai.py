@@ -9,7 +9,7 @@ from pytest_mock import MockerFixture
 
 from ankinote.services.ai import (
     DISABLE_REASONING,
-    LiteLLMGeminiImageService,
+    LiteLLMImageService,
     LiteLLMTextService,
 )
 
@@ -197,7 +197,7 @@ async def test_litellm_text_service_rejects_non_string_content(
 
 
 @pytest.mark.asyncio
-async def test_litellm_gemini_image_service_decodes_and_resizes(
+async def test_litellm_image_service_decodes_and_resizes(
     mocker: MockerFixture,
 ):
     image = Image.new("RGB", (80, 40), color=(10, 20, 30))
@@ -211,7 +211,7 @@ async def test_litellm_gemini_image_service_decodes_and_resizes(
         ),
     )
 
-    service = LiteLLMGeminiImageService(
+    service = LiteLLMImageService(
         model_id="gemini/gemini-2.5-flash-image", image_size=128
     )
     mocker.patch(

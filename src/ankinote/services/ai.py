@@ -147,8 +147,13 @@ class LiteLLMTextService:
         return content
 
 
-class LiteLLMGeminiImageService:
-    """LiteLLM-backed Gemini image generation service."""
+class LiteLLMImageService:
+    """LiteLLM-backed image generation service.
+
+    Works with any provider LiteLLM routes through its OpenAI-compatible
+    ``image_generation`` surface (Gemini, OpenAI, xAI, Vertex, Bedrock, …);
+    the provider is selected by ``model_id``.
+    """
 
     def __init__(
         self, *, model_id: str, image_size: int, api_key: str | None = None
@@ -188,7 +193,7 @@ __all__ = [
     "AIServiceConfig",
     "AIServiceConfigOverrides",
     "ImageGenerationService",
-    "LiteLLMGeminiImageService",
+    "LiteLLMImageService",
     "LiteLLMTextService",
     "TextGenerationService",
     "TextMessage",

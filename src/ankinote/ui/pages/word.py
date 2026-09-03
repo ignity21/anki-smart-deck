@@ -9,7 +9,7 @@ from nicegui import ui
 from ankinote.app import Application
 from ankinote.collections.word import WordCollection
 from ankinote.consts import Language
-from ankinote.services.ai import LiteLLMGeminiImageService, LiteLLMTextService
+from ankinote.services.ai import LiteLLMImageService, LiteLLMTextService
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.ui.config import (
     CUSTOM_API_KEY_STORAGE_KEY,
@@ -153,7 +153,7 @@ def word_page() -> None:
 
             image_service = None
             if generate_image:
-                image_service = LiteLLMGeminiImageService(
+                image_service = LiteLLMImageService(
                     model_id=settings.image_model,
                     image_size=settings.image_size,
                     api_key=settings.api_keys.get("GEMINI_API_KEY") or None,

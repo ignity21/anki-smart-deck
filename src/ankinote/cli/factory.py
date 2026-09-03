@@ -15,7 +15,7 @@ from ankinote.services.ai import (
     DEFAULT_AI_SERVICE_CONFIG,
     DISABLE_REASONING,
     AIServiceConfigOverrides,
-    LiteLLMGeminiImageService,
+    LiteLLMImageService,
     LiteLLMTextService,
 )
 from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
@@ -102,7 +102,7 @@ def build_word_collection(
         target_language=options.target_language,
         text_model_id=config.text_model_id,
         text_service=LiteLLMTextService(),
-        image_service=LiteLLMGeminiImageService(
+        image_service=LiteLLMImageService(
             model_id=config.image_model_id,
             image_size=config.image_size,
         ),
@@ -158,7 +158,7 @@ def build_stem_collection(
     ).resolve(DEFAULT_AI_SERVICE_CONFIG)
     image_service = None
     if config.image_model_id:
-        image_service = LiteLLMGeminiImageService(
+        image_service = LiteLLMImageService(
             model_id=config.image_model_id,
             image_size=config.image_size,
         )

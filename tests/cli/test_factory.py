@@ -21,7 +21,7 @@ from ankinote.consts import Language
 from ankinote.services.ai import (
     DEFAULT_AI_SERVICE_CONFIG,
     DISABLE_REASONING,
-    LiteLLMGeminiImageService,
+    LiteLLMImageService,
 )
 from ankinote.services.anki import NoteModel
 
@@ -123,7 +123,7 @@ class TestCollectionBuilders:
         assert collection._target_language is Language.ENGLISH
         assert collection._generator._text_model_id == "llm-x"
         image_service = collection._generator._image_service
-        assert isinstance(image_service, LiteLLMGeminiImageService)
+        assert isinstance(image_service, LiteLLMImageService)
         assert image_service._model_id == "img-y"
         assert image_service._image_size == 256
 
@@ -141,7 +141,7 @@ class TestCollectionBuilders:
             == DEFAULT_AI_SERVICE_CONFIG.text_model_id
         )
         image_service = collection._generator._image_service
-        assert isinstance(image_service, LiteLLMGeminiImageService)
+        assert isinstance(image_service, LiteLLMImageService)
         assert image_service._model_id == DEFAULT_AI_SERVICE_CONFIG.image_model_id
         assert image_service._image_size == DEFAULT_AI_SERVICE_CONFIG.image_size
 
