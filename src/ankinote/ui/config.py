@@ -6,16 +6,20 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-# Built-in LLM provider definitions.
-# Model lists are discovered live from litellm's bundled model catalog
-# (see `get_provider_models`) — these are only used as a fallback if that
-# lookup fails or turns up empty.
+# Built-in LLM provider definitions — the ones the GUI manages directly (model
+# picker + a labelled key field). Anything else (DeepSeek, Qwen, a local server,
+# …) is reached through a "Custom endpoint" route instead.
+#
+# Model lists here are only a fallback: `get_provider_models` first pulls the
+# provider's chat models from litellm's bundled catalog and uses these curated
+# ids only when that lookup fails or turns up empty.
 PROVIDERS: dict[str, dict] = {
     "OpenAI": {
         "models": ["gpt-4o", "gpt-4o-mini", "o3-mini", "gpt-4.1"],
         "env_key": "OPENAI_API_KEY",
         "litellm_provider": "openai",
         "model_prefix": None,
+        "api_base": "https://api.openai.com/v1",
     },
     "Anthropic": {
         "models": [
@@ -25,6 +29,7 @@ PROVIDERS: dict[str, dict] = {
         "env_key": "ANTHROPIC_API_KEY",
         "litellm_provider": "anthropic",
         "model_prefix": None,
+        "api_base": "https://api.anthropic.com/v1",
     },
     "Google": {
         "models": [
@@ -34,12 +39,14 @@ PROVIDERS: dict[str, dict] = {
         "env_key": "GEMINI_API_KEY",
         "litellm_provider": "gemini",
         "model_prefix": "gemini/",
+        "api_base": "https://generativelanguage.googleapis.com/v1beta",
     },
-    "DeepSeek": {
-        "models": ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"],
-        "env_key": "DEEPSEEK_API_KEY",
-        "litellm_provider": "deepseek",
-        "model_prefix": "deepseek/",
+    "xAI": {
+        "models": ["xai/grok-4", "xai/grok-3"],
+        "env_key": "XAI_API_KEY",
+        "litellm_provider": "xai",
+        "model_prefix": "xai/",
+        "api_base": "https://api.x.ai/v1",
     },
 }
 
@@ -88,6 +95,57 @@ def get_provider_models(provider: str) -> list[str]:
     info = PROVIDERS[provider]
     models = list(_discover_chat_models(info["litellm_provider"], info["model_prefix"]))
     return models or list(info["models"])
+
+
+async def fetch_model_ids(
+    *,
+    litellm_provider: str,
+    api_base: str,
+    api_key: str,
+    model_prefix: str | None = None,
+) -> list[str]:
+    """Ask a provider's HTTP API for the model ids it currently serves.
+
+    Handles the OpenAI-compatible ``GET /models`` shape (OpenAI, xAI, DeepSeek,
+    vLLM, LM Studio, …), Anthropic's ``/v1/models``, and Gemini's
+    ``/v1beta/models``. Ids come back prefixed the way litellm expects them
+    (e.g. ``gemini/…``). Raises ``httpx`` errors when the request fails.
+    """
+    import httpx
+
+    url = f"{api_base.rstrip('/')}/models"
+    headers: dict[str, str] = {}
+    params: dict[str, str] = {}
+    if litellm_provider == "anthropic":
+        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+        params = {"limit": "1000"}
+    elif litellm_provider in {"gemini", "vertex_ai"}:
+        params = {"key": api_key, "pageSize": "1000"}
+    else:
+        headers = {"Authorization": f"Bearer {api_key}"}
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(url, headers=headers, params=params or None)
+        response.raise_for_status()
+        payload = response.json()
+
+    if litellm_provider in {"gemini", "vertex_ai"}:
+        names = [
+            entry.get("name", "").removeprefix("models/")
+            for entry in payload.get("models", [])
+            if "generateContent" in entry.get("supportedGenerationMethods", [])
+        ]
+    else:
+        names = [
+            entry["id"]
+            for entry in payload.get("data", [])
+            if isinstance(entry, dict) and entry.get("id")
+        ]
+
+    prefix = model_prefix or ""
+    return sorted(
+        {name if name.startswith(prefix) else prefix + name for name in names if name}
+    )
 
 
 DEFAULT_IMAGE_MODELS: list[str] = [
@@ -308,7 +366,7 @@ def load_settings() -> Settings:
             custom_providers=custom_providers,
             defaults=defaults,
         )
-    except (json.JSONDecodeError, KeyError, TypeError):
+    except json.JSONDecodeError, KeyError, TypeError:
         return Settings()
 
 

@@ -1,17 +1,91 @@
 """Tests for GUI configuration helpers."""
 
+import httpx
 import pytest
 
 from ankinote.ui.config import (
     DEFAULT_IMAGE_ENV_KEY,
     IMAGE_PROVIDERS,
     Settings,
+    fetch_model_ids,
     get_image_provider_models,
     image_env_key_for,
     image_provider_for,
     load_settings,
     save_settings,
 )
+
+
+async def test_fetch_model_ids_openai_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["auth"] = request.headers.get("authorization")
+        return httpx.Response(200, json={"data": [{"id": "gpt-4o"}, {"id": "o3"}]})
+
+    _patch_client(monkeypatch, handler)
+    ids = await fetch_model_ids(
+        litellm_provider="openai",
+        api_base="https://api.openai.com/v1",
+        api_key="sk-x",
+    )
+    assert ids == ["gpt-4o", "o3"]
+    assert seen["url"] == "https://api.openai.com/v1/models"
+    assert seen["auth"] == "Bearer sk-x"
+
+
+async def test_fetch_model_ids_gemini_shape_adds_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params.get("key") == "k"
+        return httpx.Response(
+            200,
+            json={
+                "models": [
+                    {
+                        "name": "models/gemini-2.5-pro",
+                        "supportedGenerationMethods": ["generateContent"],
+                    },
+                    {
+                        "name": "models/embedding-001",
+                        "supportedGenerationMethods": ["embedContent"],
+                    },
+                ]
+            },
+        )
+
+    _patch_client(monkeypatch, handler)
+    ids = await fetch_model_ids(
+        litellm_provider="gemini",
+        api_base="https://generativelanguage.googleapis.com/v1beta",
+        api_key="k",
+        model_prefix="gemini/",
+    )
+    assert ids == ["gemini/gemini-2.5-pro"]
+
+
+async def test_fetch_model_ids_raises_on_http_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_client(monkeypatch, lambda _: httpx.Response(401, json={"error": "nope"}))
+    with pytest.raises(httpx.HTTPStatusError):
+        await fetch_model_ids(
+            litellm_provider="openai",
+            api_base="https://api.openai.com/v1",
+            api_key="bad",
+        )
+
+
+def _patch_client(monkeypatch: pytest.MonkeyPatch, handler) -> None:
+    real_init = httpx.AsyncClient.__init__
+
+    def patched_init(self: httpx.AsyncClient, *args: object, **kwargs: object) -> None:
+        kwargs["transport"] = httpx.MockTransport(handler)
+        real_init(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
 
 
 @pytest.mark.parametrize(
