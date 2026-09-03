@@ -14,6 +14,7 @@ from ankinote.ui.config import (
     Settings,
     apply_env,
     get_provider_models,
+    image_env_key_for,
     save_settings,
 )
 
@@ -197,33 +198,34 @@ def settings_page() -> None:
         # -- Image Model ------------------------------------------------------------
         _section("Image Generation")
 
+        image_model_options = list(
+            dict.fromkeys(m for m in [*DEFAULT_IMAGE_MODELS, settings.image_model] if m)
+        )
         image_model_select = ui.select(
             label="Image Model",
-            options=DEFAULT_IMAGE_MODELS,
+            options=image_model_options,
             value=settings.image_model,
+            new_value_mode="add-unique",
         ).classes("w-full")
 
-        gemini_env_key = PROVIDERS["Google"]["env_key"]
+        def _image_env_key() -> str:
+            return image_env_key_for(image_model_select.value or settings.image_model)
 
-        image_api_key_input = (
-            ui.input(
-                label=gemini_env_key,
-                placeholder="Required for image generation (Gemini)",
-                password=True,
-                password_toggle_button=True,
-                value=settings.api_keys.get(gemini_env_key, ""),
-            )
-            .classes("w-full")
-            .bind_visibility_from(
-                provider_select, "value", backward=lambda v: v != "Google"
-            )
-        )
+        image_api_key_input = ui.input(
+            label=_image_env_key(),
+            placeholder="Leave blank to reuse a key from the LLM Provider section",
+            password=True,
+            password_toggle_button=True,
+            value=settings.api_keys.get(_image_env_key(), ""),
+        ).classes("w-full")
 
-        ui.label(
-            "Image generation reuses your Google LLM Provider API key above."
-        ).classes("text-xs text-gray-500").bind_visibility_from(
-            provider_select, "value", backward=lambda v: v == "Google"
-        )
+        def _sync_image_key_field() -> None:
+            key = _image_env_key()
+            image_api_key_input.label = key
+            image_api_key_input.value = settings.api_keys.get(key, "")
+            image_api_key_input.update()
+
+        image_model_select.on_value_change(lambda _: _sync_image_key_field())
 
         # -- TTS (Google Cloud) -----------------------------------------------------
         _section("Text-to-Speech (Google Cloud)")
@@ -296,8 +298,11 @@ def settings_page() -> None:
                 env_key: api_key_input.value or "",
                 "GOOGLE_TTS_KEY": tts_key_input.value or "",
             }
-            if provider != "Google":
-                api_keys[gemini_env_key] = image_api_key_input.value or ""
+            # Only overwrite the image provider's key when one was entered, so a
+            # blank field keeps a key already set in the LLM Provider section.
+            if image_api_key_input.value:
+                image_env_key = image_env_key_for(image_model_select.value or "")
+                api_keys[image_env_key] = image_api_key_input.value
 
             new_settings = Settings(
                 provider=provider,

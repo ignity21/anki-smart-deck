@@ -153,10 +153,11 @@ def word_page() -> None:
 
             image_service = None
             if generate_image:
+                # apply_env() has pushed every configured key into os.environ;
+                # litellm picks the right one from the model's provider prefix.
                 image_service = LiteLLMImageService(
-                    model_id=settings.image_model,
+                    model=settings.image_model,
                     image_size=settings.image_size,
-                    api_key=settings.api_keys.get("GEMINI_API_KEY") or None,
                 )
 
             custom_profile = settings.custom_providers.get(settings.provider)
@@ -184,7 +185,7 @@ def word_page() -> None:
                         client,
                         native_language=Language(native),
                         target_language=Language(target),
-                        text_model_id=settings.text_model,
+                        text_model=settings.text_model,
                         text_service=text_service,
                         image_service=image_service,
                     ) as collection:

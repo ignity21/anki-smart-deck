@@ -125,12 +125,21 @@ Batch commands also accept `--file` and `--rpm`. STEM commands accept
 `--llm`, and can additionally configure diagram generation with
 `--image-model` and `--image-size`.
 
+`--llm` and `--image-model` take any model id LiteLLM recognizes; the
+provider is inferred from the id and its key is read from the matching
+environment variable. Examples:
+
+- `--llm`: `deepseek/deepseek-v4-flash`, `gemini/gemini-2.5-pro`,
+  `gpt-4.1`, `claude-sonnet-4-20250514`
+- `--image-model`: `gemini/gemini-3.1-flash-lite-image`, `gpt-image-1`,
+  `xai/grok-2-image`
+
 For example:
 
 ```bash
 ankinote word add serendipity --native English --target 'Chinese(Simplified)'
 ankinote word batch --file words.txt --rpm 30
-ankinote stem add "State Bayes' theorem" --image-size 1024
+ankinote stem add "State Bayes' theorem" --image-model gpt-image-1 --image-size 1024
 ```
 
 ## Troubleshooting

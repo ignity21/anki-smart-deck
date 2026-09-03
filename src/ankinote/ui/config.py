@@ -93,7 +93,43 @@ def get_provider_models(provider: str) -> list[str]:
 DEFAULT_IMAGE_MODELS: list[str] = [
     "gemini/gemini-3.1-flash-lite-image",
     "gemini/gemini-2.0-flash-exp-image",
+    "gpt-image-1",
+    "xai/grok-2-image",
 ]
+
+# litellm image providers → the environment variable holding their API key.
+# Covers the chat providers in ``PROVIDERS`` plus image-only providers.
+_IMAGE_PROVIDER_ENV_KEYS: dict[str, str] = {
+    "gemini": "GEMINI_API_KEY",
+    "vertex_ai": "GEMINI_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "azure": "AZURE_API_KEY",
+    "xai": "XAI_API_KEY",
+    "recraft": "RECRAFT_API_KEY",
+}
+DEFAULT_IMAGE_ENV_KEY = "GEMINI_API_KEY"
+
+
+def image_env_key_for(model: str) -> str:
+    """Return the env var name holding the API key for an image model.
+
+    Args:
+        model: An image model id, e.g. ``"gemini/gemini-3.1-flash-lite-image"``
+            or ``"gpt-image-1"``.
+
+    Returns:
+        The environment variable litellm reads that provider's key from,
+        falling back to :data:`DEFAULT_IMAGE_ENV_KEY` for unknown providers.
+    """
+    try:
+        import litellm
+    except ImportError:
+        return DEFAULT_IMAGE_ENV_KEY
+    try:
+        _, provider, _, _ = litellm.get_llm_provider(model)
+    except litellm.exceptions.BadRequestError:
+        return DEFAULT_IMAGE_ENV_KEY
+    return _IMAGE_PROVIDER_ENV_KEYS.get(provider, DEFAULT_IMAGE_ENV_KEY)
 
 
 @dataclass
