@@ -6,6 +6,7 @@ from ankinote.ui.pages.notetypes import notetypes_page
 from ankinote.ui.pages.phrase import phrase_page
 from ankinote.ui.pages.sentence import sentence_page
 from ankinote.ui.pages.settings import settings_page
+from ankinote.ui.pages.stem import stem_page
 from ankinote.ui.pages.word import word_page
 
 
@@ -29,6 +30,9 @@ def _create_layout() -> None:
                 "w-full px-3 py-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
             )
             ui.link("💭  Sentence Cards", "/sentences").classes(
+                "w-full px-3 py-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+            )
+            ui.link("🔬  STEM Cards", "/stem").classes(
                 "w-full px-3 py-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
             )
             ui.link("🃏  Card Types", "/notetypes").classes(
@@ -68,6 +72,13 @@ def _sentence_page() -> None:
     """Sentence card generation page."""
     _create_layout()
     sentence_page()
+
+
+@ui.page("/stem")
+def _stem_page() -> None:
+    """STEM card generation page."""
+    _create_layout()
+    stem_page()
 
 
 @ui.page("/notetypes")

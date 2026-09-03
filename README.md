@@ -57,6 +57,7 @@ DEEPSEEK_API_KEY=your_deepseek_key
 # GEMINI_API_KEY=your_gemini_key
 # OPENAI_API_KEY=sk-...
 # ANTHROPIC_API_KEY=sk-ant-...
+# XAI_API_KEY=xai-...          # for xAI image models
 
 # Google Cloud TTS (for audio generation)
 GOOGLE_TTS_KEY=your_tts_api_key

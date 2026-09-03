@@ -6,15 +6,17 @@ from ankinote.consts import Language
 from ankinote.ui.config import (
     CUSTOM_API_KEY_STORAGE_KEY,
     CUSTOM_PROVIDER,
-    DEFAULT_IMAGE_MODELS,
+    IMAGE_PROVIDERS,
     NEW_CUSTOM_PROVIDER,
     PROVIDERS,
     CustomProvider,
     DefaultsConfig,
     Settings,
     apply_env,
+    get_image_provider_models,
     get_provider_models,
     image_env_key_for,
+    image_provider_for,
     save_settings,
 )
 
@@ -198,12 +200,27 @@ def settings_page() -> None:
         # -- Image Model ------------------------------------------------------------
         _section("Image Generation")
 
-        image_model_options = list(
-            dict.fromkeys(m for m in [*DEFAULT_IMAGE_MODELS, settings.image_model] if m)
+        image_provider = (
+            settings.image_provider
+            if settings.image_provider in IMAGE_PROVIDERS
+            else image_provider_for(settings.image_model)
         )
+
+        image_provider_select = ui.select(
+            label="Image Provider",
+            options=list(IMAGE_PROVIDERS.keys()),
+            value=image_provider,
+        ).classes("w-full")
+
+        def _image_model_options(provider: str) -> list[str]:
+            models = get_image_provider_models(provider)
+            if settings.image_model and settings.image_model not in models:
+                models = [*models, settings.image_model]
+            return models
+
         image_model_select = ui.select(
             label="Image Model",
-            options=image_model_options,
+            options=_image_model_options(image_provider),
             value=settings.image_model,
             new_value_mode="add-unique",
         ).classes("w-full")
@@ -225,6 +242,14 @@ def settings_page() -> None:
             image_api_key_input.value = settings.api_keys.get(key, "")
             image_api_key_input.update()
 
+        def _on_image_provider_change() -> None:
+            models = _image_model_options(image_provider_select.value)
+            current = image_model_select.value
+            image_model_select.set_options(models)
+            image_model_select.value = current if current in models else models[0]
+            _sync_image_key_field()
+
+        image_provider_select.on_value_change(lambda _: _on_image_provider_change())
         image_model_select.on_value_change(lambda _: _sync_image_key_field())
 
         # -- TTS (Google Cloud) -----------------------------------------------------
@@ -307,7 +332,10 @@ def settings_page() -> None:
             new_settings = Settings(
                 provider=provider,
                 text_model=text_model,
+                image_provider=image_provider_select.value
+                or image_provider_for(image_model_select.value or ""),
                 image_model=image_model_select.value or "",
+                image_size=settings.image_size,
                 custom_base_url=custom_base_url,
                 api_keys=api_keys,
                 custom_providers=custom_providers,
@@ -346,6 +374,7 @@ def settings_page() -> None:
                     new_settings = Settings(
                         provider="OpenAI",
                         text_model=Settings().text_model,
+                        image_provider=settings.image_provider,
                         image_model=settings.image_model,
                         image_size=settings.image_size,
                         api_keys=api_keys,

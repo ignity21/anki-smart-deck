@@ -94,16 +94,13 @@ service turns into DeepSeek's OpenAI-format `extra_body={"thinking": {"type":
 discards a plain `reasoning_effort`). `stem` keeps thinking on.
 
 All CLI commands now take `--thinking [off|low|medium|high|default]` to override
-the per-collection default for a single run (`cli/factory.resolve_thinking`
-threads the choice through the typed options and each collection constructor's
-`reasoning_effort`).
+the per-collection default for a single run. `services.ai.resolve_thinking`
+(with `THINKING_CHOICES`) maps the choice to a `reasoning_effort` value; it is
+shared by the CLI (`cli/factory` re-exports it) and the STEM generation page in
+the GUI, which exposes the same five levels as a dropdown.
 
 Open items:
 
-- UI control for the `stem` thinking level: expose it on the STEM generation
-  page (NiceGUI) so a user can dial reasoning up or down per run, rather than
-  relying on the built-in default. `StemCollection` already accepts
-  `reasoning_effort`; the page just needs to pass it.
 - DeepSeek ignores `temperature` while thinking is on, so `stem`'s
   `temperature=0.3` is currently a no-op. Decide whether `stem` should also
   disable thinking (regaining temperature control) or drop the unused argument.

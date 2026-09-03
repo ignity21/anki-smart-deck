@@ -1,6 +1,7 @@
 """Tests for the STEM collection: structured schema and note building."""
 
 import json
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -8,7 +9,10 @@ import pytest
 from ankinote.collections.stem.collection import StemCollection
 from ankinote.collections.stem.generator import StemGenerator
 from ankinote.collections.stem.models import StemModel, Variable
-from ankinote.services.ai import TextGenerationService
+from ankinote.services.ai import (
+    ImageGenerationService,
+    TextGenerationService,
+)
 from ankinote.services.anki import AnkiCollectionClient
 
 
@@ -165,3 +169,135 @@ async def test_generator_parses_structured_fields_from_ai_response():
     assert model.card_type.value == "formula"
     assert model.latex is not None and "frac" in model.latex
     assert model.variables is not None and len(model.variables) == 1
+
+
+# -- generate_model / add_note split ---------------------------------------------
+
+
+class _RecordingTextService:
+    def __init__(self, payload: str) -> None:
+        self._payload = payload
+        self.calls: list[dict[str, object]] = []
+
+    async def generate_text(self, **kwargs: object) -> str:
+        self.calls.append(kwargs)
+        return self._payload
+
+
+class _RecordingImageService:
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    async def generate_image(self, *, prompt: str) -> bytes:
+        self.prompts.append(prompt)
+        return b"generated-bytes"
+
+
+def _recording_anki_client() -> SimpleNamespace:
+    stored: list[tuple[str, bytes]] = []
+    added: list[dict[str, object]] = []
+
+    async def store_file(filename: str, data: bytes) -> str:
+        stored.append((filename, data))
+        return filename
+
+    async def find(*, deck_name: str, unique_fields: dict[str, str]) -> int | None:
+        return None
+
+    async def add(**kwargs: object) -> int:
+        added.append(kwargs)
+        return 42
+
+    return SimpleNamespace(
+        media=SimpleNamespace(store_file=store_file),
+        notes=SimpleNamespace(find=find, add=add),
+        _stored=stored,
+        _added=added,
+    )
+
+
+_CONCEPT_PAYLOAD = json.dumps(
+    {
+        "card_type": "concept",
+        "front": "What is entropy?",
+        "back_brief": "A measure of disorder.",
+        "back_detail": "Entropy quantifies uncertainty.",
+        "tags": ["Physics"],
+    }
+)
+
+
+@pytest.mark.asyncio
+async def test_generate_model_threads_reasoning_effort():
+    text_service = _RecordingTextService(_CONCEPT_PAYLOAD)
+    collection = StemCollection(
+        cast(AnkiCollectionClient, object()),
+        text_model="stem-model",
+        text_service=cast(TextGenerationService, text_service),
+        reasoning_effort="high",
+    )
+
+    model = await collection.generate_model("entropy")
+
+    assert model.card_type.value == "concept"
+    assert text_service.calls[0]["reasoning_effort"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_add_note_stores_supplied_image_without_calling_service():
+    anki = _recording_anki_client()
+    image_service = _RecordingImageService()
+    collection = StemCollection(
+        cast(AnkiCollectionClient, anki),
+        text_model="stem-model",
+        text_service=cast(TextGenerationService, object()),
+        image_service=cast(ImageGenerationService, image_service),
+    )
+    model = StemModel.model_validate(json.loads(_CONCEPT_PAYLOAD))
+
+    note_id = await collection.add_note(model, topic="entropy", image_bytes=b"png")
+
+    assert note_id == 42
+    assert len(anki._stored) == 1
+    name, data = anki._stored[0]
+    assert name.startswith("stem_") and name.endswith(".png") and data == b"png"
+    assert image_service.prompts == []
+    fields = anki._added[0]["fields"]
+    assert "<img src='" in fields["back_detail"]
+
+
+@pytest.mark.asyncio
+async def test_add_note_generates_image_from_description():
+    anki = _recording_anki_client()
+    image_service = _RecordingImageService()
+    collection = StemCollection(
+        cast(AnkiCollectionClient, anki),
+        text_model="stem-model",
+        text_service=cast(TextGenerationService, object()),
+        image_service=cast(ImageGenerationService, image_service),
+    )
+    model = StemModel.model_validate(
+        {**json.loads(_CONCEPT_PAYLOAD), "image_description": "a diagram"}
+    )
+
+    await collection.add_note(model, topic="entropy")
+
+    assert image_service.prompts and "a diagram" in image_service.prompts[0]
+    assert anki._stored and anki._stored[0][1] == b"generated-bytes"
+
+
+@pytest.mark.asyncio
+async def test_generate_and_add_note_composes_generate_and_add():
+    anki = _recording_anki_client()
+    text_service = _RecordingTextService(_CONCEPT_PAYLOAD)
+    collection = StemCollection(
+        cast(AnkiCollectionClient, anki),
+        text_model="stem-model",
+        text_service=cast(TextGenerationService, text_service),
+    )
+
+    note_id = await collection.generate_and_add_note("entropy", tags=["Extra"])
+
+    assert note_id == 42
+    assert "Extra" in anki._added[0]["tags"]
+    assert "AI-generated" in anki._added[0]["tags"]

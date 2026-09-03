@@ -140,35 +140,75 @@ class StemCollection:
             Note ID
         """
         logger.info(f"Starting generation for STEM card: {topic[:50]}...")
+        stem_model = await self.generate_model(topic)
+        return await self.add_note(stem_model, topic=topic, tags=tags)
 
-        # Step 1: Generate text data using LLM
-        stem_model = await self._generator.generate(
+    async def generate_model(self, topic: str) -> StemModel:
+        """Generate structured STEM card data via the LLM (no Anki write).
+
+        The card type (concept, formula, procedure) is auto-detected. Callers
+        that want a preview/edit step run this, let the user adjust the result,
+        then pass the model to :meth:`add_note`.
+        """
+        return await self._generator.generate(
             topic, reasoning_effort=self._reasoning_effort
         )
 
-        # Step 2: Optionally generate an image
+    async def generate_diagram(self, description: str) -> bytes:
+        """Generate a diagram image from a description.
+
+        Raises:
+            RuntimeError: if no image service was configured.
+        """
+        return await self._generator.generate_image(description)
+
+    async def add_note(
+        self,
+        stem_model: StemModel,
+        *,
+        topic: str | None = None,
+        image_bytes: bytes | None = None,
+        tags: list[str] | None = None,
+    ) -> int:
+        """Add or update an Anki note from a (possibly edited) ``StemModel``.
+
+        Args:
+            stem_model: The card data to store.
+            topic: Original prompt, used only to derive the image filename;
+                falls back to ``stem_model.front``.
+            image_bytes: A pre-generated diagram to store as-is. When omitted, a
+                diagram is generated from ``stem_model.image_description`` if that
+                is set and an image service is configured.
+            tags: Optional additional tags to apply.
+
+        Returns:
+            Note ID
+        """
+        image_key = topic or stem_model.front
+
+        # Store a diagram: use the caller's bytes, else generate from the model.
         image_filename: str | None = None
-        if stem_model.image_description and self._generator._image_service:
+        if image_bytes is None and (
+            stem_model.image_description and self._generator._image_service
+        ):
             try:
                 image_bytes = await self._generator.generate_image(
                     stem_model.image_description
                 )
-                card_hash = hashlib.md5(topic.encode()).hexdigest()[:12]
-                image_filename = f"stem_{card_hash}.png"
-                await self._anki_client.media.store_file(image_filename, image_bytes)
-                logger.info(f"Stored diagram: {image_filename}")
             except Exception as e:
                 logger.warning(f"Image generation failed: {e}")
+        if image_bytes is not None:
+            card_hash = hashlib.md5(image_key.encode()).hexdigest()[:12]
+            image_filename = f"stem_{card_hash}.png"
+            await self._anki_client.media.store_file(image_filename, image_bytes)
+            logger.info(f"Stored diagram: {image_filename}")
 
-        # Step 3: Build note data
         note_data = self._build_note_data(stem_model, image_filename)
 
-        # Step 4: Combine tags
         all_tags = list(tags or [])
         all_tags.extend(stem_model.tags)
         all_tags.append("AI-generated")
 
-        # Step 5: Add or update note
         note_id = await self._anki_client.notes.find(
             deck_name=self.deck_name,
             unique_fields={"front": stem_model.front},

@@ -97,6 +97,34 @@ DEFAULT_IMAGE_MODELS: list[str] = [
     "xai/grok-2-image",
 ]
 
+# Built-in image provider definitions, mirroring ``PROVIDERS``. Model lists are
+# discovered live from litellm's catalog (see ``get_image_provider_models``);
+# these are only the fallback when that lookup fails or turns up empty.
+IMAGE_PROVIDERS: dict[str, dict] = {
+    "OpenAI": {
+        "models": ["gpt-image-1", "dall-e-3"],
+        "env_key": "OPENAI_API_KEY",
+        "litellm_provider": "openai",
+        "model_prefix": None,
+    },
+    "Google": {
+        "models": [
+            "gemini/gemini-3.1-flash-lite-image",
+            "gemini/gemini-2.5-flash-image",
+            "gemini/imagen-3.0-generate-002",
+        ],
+        "env_key": "GEMINI_API_KEY",
+        "litellm_provider": "gemini",
+        "model_prefix": "gemini/",
+    },
+    "xAI": {
+        "models": ["xai/grok-2-image"],
+        "env_key": "XAI_API_KEY",
+        "litellm_provider": "xai",
+        "model_prefix": "xai/",
+    },
+}
+
 # litellm image providers → the environment variable holding their API key.
 # Covers the chat providers in ``PROVIDERS`` plus image-only providers.
 _IMAGE_PROVIDER_ENV_KEYS: dict[str, str] = {
@@ -108,6 +136,71 @@ _IMAGE_PROVIDER_ENV_KEYS: dict[str, str] = {
     "recraft": "RECRAFT_API_KEY",
 }
 DEFAULT_IMAGE_ENV_KEY = "GEMINI_API_KEY"
+DEFAULT_IMAGE_PROVIDER = "Google"
+
+
+@functools.cache
+def _discover_image_models(
+    litellm_provider: str, model_prefix: str | None
+) -> tuple[str, ...]:
+    """Pull the current image-generation model ids for a provider from litellm."""
+    try:
+        import litellm
+    except ImportError:
+        return ()
+
+    prefix = model_prefix or ""
+    models: list[str] = []
+    for name, info in litellm.model_cost.items():
+        if not isinstance(info, dict):
+            continue
+        if info.get("litellm_provider") != litellm_provider:
+            continue
+        if info.get("mode") != "image_generation":
+            continue
+        if model_prefix is not None and not name.startswith(model_prefix):
+            continue
+        # Drop litellm's size-/step-prefixed catalog variants
+        # (e.g. "1024-x-1024/dall-e-2", "fal-ai/.../text-to-image").
+        if "/" in name.removeprefix(prefix):
+            continue
+        models.append(name)
+    return tuple(sorted(models))
+
+
+def get_image_provider_models(provider: str) -> list[str]:
+    """Return the selectable image model ids for a provider.
+
+    Curated defaults come first (they stay valid even if litellm's catalog
+    lags), followed by any additional ids discovered in the catalog.
+    """
+    info = IMAGE_PROVIDERS[provider]
+    discovered = _discover_image_models(info["litellm_provider"], info["model_prefix"])
+    return list(dict.fromkeys([*info["models"], *discovered]))
+
+
+def image_provider_for(model: str) -> str:
+    """Return the :data:`IMAGE_PROVIDERS` key that owns an image model id.
+
+    Matches by ``model_prefix`` first, then falls back to litellm's provider
+    lookup, and finally to :data:`DEFAULT_IMAGE_PROVIDER` for unknown ids.
+    """
+    for name, info in IMAGE_PROVIDERS.items():
+        prefix = info["model_prefix"]
+        if prefix and model.startswith(prefix):
+            return name
+    try:
+        import litellm
+    except ImportError:
+        return DEFAULT_IMAGE_PROVIDER
+    try:
+        _, provider, _, _ = litellm.get_llm_provider(model)
+    except litellm.exceptions.BadRequestError:
+        return DEFAULT_IMAGE_PROVIDER
+    for name, info in IMAGE_PROVIDERS.items():
+        if info["litellm_provider"] == provider:
+            return name
+    return DEFAULT_IMAGE_PROVIDER
 
 
 def image_env_key_for(model: str) -> str:
@@ -152,6 +245,7 @@ class CustomProvider:
 class Settings:
     provider: str = "OpenAI"
     text_model: str = "gpt-4o"
+    image_provider: str = "Google"
     image_model: str = "gemini/gemini-3.1-flash-lite-image"
     image_size: int = 512
     custom_base_url: str = ""
@@ -202,10 +296,12 @@ def load_settings() -> Settings:
                 api_key=data.get("api_keys", {}).get(CUSTOM_API_KEY_STORAGE_KEY, ""),
             )
 
+        image_model = data.get("image_model", "gemini/gemini-3.1-flash-lite-image")
         return Settings(
             provider=data.get("provider", "OpenAI"),
             text_model=data.get("text_model", "gpt-4o"),
-            image_model=data.get("image_model", "gemini/gemini-3.1-flash-lite-image"),
+            image_provider=data.get("image_provider", image_provider_for(image_model)),
+            image_model=image_model,
             image_size=data.get("image_size", 512),
             custom_base_url=data.get("custom_base_url", ""),
             api_keys=data.get("api_keys", {}),
@@ -223,6 +319,7 @@ def save_settings(settings: Settings) -> None:
     data = {
         "provider": settings.provider,
         "text_model": settings.text_model,
+        "image_provider": settings.image_provider,
         "image_model": settings.image_model,
         "image_size": settings.image_size,
         "custom_base_url": settings.custom_base_url,
