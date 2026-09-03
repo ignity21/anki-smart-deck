@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class Sense(BaseModel):
@@ -30,28 +30,10 @@ class WordModel(BaseModel):
     difficulty: str
     morphology: str | None = None
     core_meaning: Sense
-    supporting_meanings: list[Sense] = Field(default_factory=list, max_length=2)
     examples: list[Example] = Field(default_factory=list, min_length=1, max_length=2)
     collocations: list[str] = Field(default_factory=list, max_length=4)
     confusions: list[str] = Field(default_factory=list, max_length=2)
     etymology_or_memory: str | None = None
-    production_hint: str
-
-    @model_validator(mode="after")
-    def validate_content(self) -> "WordModel":
-        """Ensure the core sense is not duplicated in supporting meanings."""
-        normalized_core = (
-            self.core_meaning.target_text.strip(),
-            self.core_meaning.native_text.strip(),
-        )
-        supporting_pairs = {
-            (sense.target_text.strip(), sense.native_text.strip())
-            for sense in self.supporting_meanings
-        }
-        if normalized_core in supporting_pairs:
-            msg = "supporting_meanings must not duplicate core_meaning"
-            raise ValueError(msg)
-        return self
 
 
 @dataclass
@@ -65,13 +47,10 @@ class WordNoteType:
     difficulty: str
     morphology: str
     core_meaning: str
-    sense_notes: str
-    translations: str
     examples: str
     example_audio_refs: str
     collocations: str
     confusions: str
     etymology_or_memory: str
     image_refs: str
-    production_hint: str
     user_notes: str

@@ -65,7 +65,6 @@ class TestWordGenerator:
                 native_text="测试",
                 is_visualizable=False,
             ),
-            supporting_meanings=[],
             examples=[
                 WordExample(
                     sentence="a test example",
@@ -76,7 +75,6 @@ class TestWordGenerator:
             collocations=["take a test"],
             confusions=[],
             etymology_or_memory=None,
-            production_hint="school check",
         )
 
         media = await generator.generate_media(word_model, Language.ENGLISH)

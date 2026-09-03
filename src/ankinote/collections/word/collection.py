@@ -3,6 +3,7 @@
 import dataclasses
 import hashlib
 import html
+import re
 from dataclasses import dataclass
 from typing import Self
 
@@ -252,7 +253,7 @@ class WordCollection:
         word_model: WordModel,
         media_refs: MediaReferences,
     ) -> dict[str, str]:
-        senses = [word_model.core_meaning, *word_model.supporting_meanings]
+        senses = [word_model.core_meaning]
         return {
             "lemma": word_model.lemma,
             "part_of_speech": word_model.part_of_speech,
@@ -261,8 +262,6 @@ class WordCollection:
             "difficulty": word_model.difficulty,
             "morphology": self._format_text_block(word_model.morphology),
             "core_meaning": self._format_core_meaning(word_model.core_meaning),
-            "sense_notes": self._format_sense_notes(word_model.supporting_meanings),
-            "translations": self._format_translations(senses),
             "examples": self._format_examples(
                 word_model.examples,
                 media_refs.example_audios,
@@ -279,46 +278,29 @@ class WordCollection:
                 word_model.etymology_or_memory
             ),
             "image_refs": self._format_image_refs(senses, media_refs.images),
-            "production_hint": self._format_text_block(word_model.production_hint),
             "user_notes": "",
         }
 
     def _format_core_meaning(self, sense: Sense) -> str:
-        meaning = self._render_target_text(sense.target_text)
-        native = html.escape(sense.native_text)
-        return (
-            "<div class='meaning-anchor'>"
-            f"<div class='meaning-target'>{meaning}</div>"
-            f"<div class='meaning-native'>{native}</div>"
+        targets = self._split_senses(sense.target_text)
+        natives = self._split_senses(sense.native_text)
+        if len(targets) > 1 and len(targets) == len(natives):
+            pairs = list(zip(targets, natives, strict=True))
+        else:
+            pairs = [(sense.target_text, sense.native_text)]
+        rows = "".join(
+            "<div class='meaning-row'>"
+            f"<div class='meaning-target'>{self._render_target_text(target)}</div>"
+            f"<div class='meaning-native'>{html.escape(native)}</div>"
             "</div>"
+            for target, native in pairs
         )
+        return f"<div class='meaning-anchor'>{rows}</div>"
 
-    def _format_sense_notes(self, senses: list[Sense]) -> str:
-        if not senses:
-            return ""
-        items = []
-        for sense in senses:
-            target = self._render_target_text(sense.target_text)
-            native = html.escape(sense.native_text)
-            items.append(
-                "<div class='sense-note'>"
-                f"<span class='sense-target'>{target}</span>"
-                f"<span class='sense-native'>{native}</span>"
-                "</div>"
-            )
-        return "".join(items)
-
-    def _format_translations(self, senses: list[Sense]) -> str:
-        supporting_senses = senses[1:] or senses[:1]
-        entries = [
-            html.escape(sense.native_text)
-            for sense in supporting_senses
-            if sense.native_text
-        ]
-        if not entries:
-            return ""
-        unique_entries = list(dict.fromkeys(entries))
-        return " / ".join(unique_entries)
+    @staticmethod
+    def _split_senses(value: str) -> list[str]:
+        parts = [part.strip() for part in re.split(r"[;；]", value)]
+        return [part for part in parts if part]
 
     def _format_examples(
         self,

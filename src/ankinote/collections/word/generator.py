@@ -173,7 +173,7 @@ class WordGenerator:
         )
 
         headword_audio = await self._generate_audio(word_model.lemma, target_lang)
-        senses = [word_model.core_meaning, *word_model.supporting_meanings]
+        senses = [word_model.core_meaning]
 
         try:
             async with asyncio.TaskGroup() as tg:
@@ -227,6 +227,8 @@ class WordGenerator:
         return await self._tts_service.synthesize(text)
 
     async def _generate_image(self, lemma: str, sense: Sense) -> bytes:
+        if self._image_service is None:
+            raise RuntimeError("Image service not available")
         system_prompt = (
             files("ankinote.collections.word.prompts")
             .joinpath("image.md")

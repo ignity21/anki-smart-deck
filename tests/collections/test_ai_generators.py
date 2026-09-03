@@ -73,12 +73,10 @@ async def test_word_generator_uses_unified_text_service():
                   "native_text": "测试",
                   "is_visualizable": false
                 },
-                "supporting_meanings": [],
                 "examples": [{"sentence": "The test starts now.", "translation": "测试现在开始。", "highlights": ["test"]}],
                 "collocations": ["take a test", "pass a test"],
                 "confusions": [],
-                "etymology_or_memory": null,
-                "production_hint": "school check"
+                "etymology_or_memory": null
               }
             ]
             """
@@ -125,12 +123,10 @@ async def test_word_generator_accepts_fenced_json():
                   "native_text": "收获季节",
                   "is_visualizable": true
                 },
-                "supporting_meanings": [],
                 "examples": [{"sentence": "The harvest was early this year.", "translation": "今年收成很早。", "highlights": ["harvest"]}],
                 "collocations": ["good harvest", "rice harvest"],
                 "confusions": [],
-                "etymology_or_memory": null,
-                "production_hint": "time when farmers gather crops"
+                "etymology_or_memory": null
               }
             ]
             ```"""
@@ -169,12 +165,10 @@ async def test_word_generator_accepts_single_object_response():
                 "native_text": "热",
                 "is_visualizable": false
               },
-              "supporting_meanings": [],
               "examples": [{"sentence": "The heat was intense.", "translation": "热浪很强。", "highlights": ["heat"]}],
               "collocations": ["intense heat", "summer heat"],
               "confusions": [],
-              "etymology_or_memory": null,
-              "production_hint": "opposite of cold"
+              "etymology_or_memory": null
             }
             """
         ]
