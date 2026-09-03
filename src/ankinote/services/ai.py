@@ -22,6 +22,28 @@ REQUEST_TIMEOUT_SECONDS = 60
 # https://api-docs.deepseek.com/guides/thinking_mode
 DISABLE_REASONING = "none"
 
+# Values accepted by callers that expose a "thinking" choice (the ``--thinking``
+# CLI option and the STEM generation page).  ``off`` disables the model's
+# extended-thinking pass, ``default`` uses the provider default, and the named
+# levels are forwarded as ``reasoning_effort``.
+THINKING_CHOICES = ("off", "low", "medium", "high", "default")
+
+
+def resolve_thinking(choice: str | None, *, unset: str | None) -> str | None:
+    """Map a "thinking" choice to a ``reasoning_effort`` value.
+
+    ``choice is None`` means no choice was made; the caller's built-in default
+    (*unset*) applies. ``"off"`` disables extended thinking, ``"default"``
+    requests the provider default, and any other value passes straight through.
+    """
+    if choice is None:
+        return unset
+    if choice == "off":
+        return DISABLE_REASONING
+    if choice == "default":
+        return None
+    return choice
+
 
 @dataclass(frozen=True, slots=True)
 class AIServiceConfig:
@@ -190,6 +212,7 @@ class LiteLLMImageService:
 __all__ = [
     "DEFAULT_AI_SERVICE_CONFIG",
     "DISABLE_REASONING",
+    "THINKING_CHOICES",
     "AIServiceConfig",
     "AIServiceConfigOverrides",
     "ImageGenerationService",
@@ -197,4 +220,5 @@ __all__ = [
     "LiteLLMTextService",
     "TextGenerationService",
     "TextMessage",
+    "resolve_thinking",
 ]

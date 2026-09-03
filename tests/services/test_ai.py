@@ -9,9 +9,20 @@ from pytest_mock import MockerFixture
 
 from ankinote.services.ai import (
     DISABLE_REASONING,
+    THINKING_CHOICES,
     LiteLLMImageService,
     LiteLLMTextService,
+    resolve_thinking,
 )
+
+
+def test_resolve_thinking_maps_choices() -> None:
+    assert resolve_thinking(None, unset=DISABLE_REASONING) == DISABLE_REASONING
+    assert resolve_thinking(None, unset=None) is None
+    assert resolve_thinking("off", unset=None) == DISABLE_REASONING
+    assert resolve_thinking("default", unset=DISABLE_REASONING) is None
+    assert resolve_thinking("high", unset=None) == "high"
+    assert set(THINKING_CHOICES) == {"off", "low", "medium", "high", "default"}
 
 
 @pytest.mark.asyncio

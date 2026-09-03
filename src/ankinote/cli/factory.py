@@ -14,32 +14,17 @@ from ankinote.consts import Language
 from ankinote.services.ai import (
     DEFAULT_AI_SERVICE_CONFIG,
     DISABLE_REASONING,
+    THINKING_CHOICES,
     AIServiceConfigOverrides,
     LiteLLMImageService,
     LiteLLMTextService,
+    resolve_thinking,
 )
 from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
 
-# Values accepted by the ``--thinking`` CLI option.  ``off`` disables the
-# model's extended-thinking pass, ``default`` uses the provider default, and
-# the named levels are forwarded as ``reasoning_effort``.
-THINKING_CHOICES = ("off", "low", "medium", "high", "default")
-
-
-def resolve_thinking(choice: str | None, *, unset: str | None) -> str | None:
-    """Map a ``--thinking`` choice to a ``reasoning_effort`` value.
-
-    ``choice is None`` means the flag was omitted; the collection's built-in
-    default (*unset*) applies. ``"off"`` disables extended thinking, ``"default"``
-    requests the provider default, and any other value passes straight through.
-    """
-    if choice is None:
-        return unset
-    if choice == "off":
-        return DISABLE_REASONING
-    if choice == "default":
-        return None
-    return choice
+# ``THINKING_CHOICES`` / ``resolve_thinking`` moved to ``ankinote.services.ai``
+# (shared with the GUI); re-exported here for the CLI modules that import them.
+__all__ = ["THINKING_CHOICES", "resolve_thinking"]
 
 
 TCollection = TypeVar("TCollection", covariant=True)
