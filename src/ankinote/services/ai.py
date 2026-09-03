@@ -165,7 +165,7 @@ class LiteLLMTextService:
             ) from exc
         content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
         if not isinstance(content, str):
-            raise RuntimeError("AI returned non-string content")
+            raise RuntimeError("AI returned non-string content")  # noqa: TRY004
         return content
 
 
@@ -204,7 +204,9 @@ class LiteLLMImageService:
         data = cast(object, response.data[0])  # pyright: ignore[reportOptionalSubscript]
         b64 = getattr(data, "b64_json", None)
         if not isinstance(b64, str):
-            raise RuntimeError("Image generation returned no base64 payload")
+            raise RuntimeError(  # noqa: TRY004
+                "Image generation returned no base64 payload"
+            )
         raw = base64.b64decode(b64)
         return resize_to_max_edge(raw, self._image_size)
 

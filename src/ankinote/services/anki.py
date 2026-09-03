@@ -601,7 +601,7 @@ class DeckClient:
                 "deck": deck_name,
             },
         )
-        return True if resp is not False else False
+        return resp is not False
 
 
 class NoteClient:
@@ -639,20 +639,14 @@ class NoteClient:
             query_parts.append(f'{field_}:"{value}"')
         query_str = " ".join(query_parts)
 
-        try:
-            note_ids = await self._client._invoke(
-                "findNotes", params={"query": query_str}
+        note_ids = await self._client._invoke("findNotes", params={"query": query_str})
+        if not note_ids:
+            return None
+        if len(note_ids) > 1:
+            raise KeyError(
+                f"Expected exactly one note matching {unique_fields} in deck '{deck_name}', but found {len(note_ids)}"
             )
-        except RuntimeError:
-            raise
-        else:
-            if not note_ids:
-                return None
-            if len(note_ids) > 1:
-                raise KeyError(
-                    f"Expected exactly one note matching {unique_fields} in deck '{deck_name}', but found {len(note_ids)}"
-                )
-            return note_ids[0]
+        return note_ids[0]
 
     async def add(
         self,

@@ -2,7 +2,7 @@
 
 import json
 from types import SimpleNamespace
-from typing import cast
+from typing import ClassVar, cast
 
 import pytest
 
@@ -154,7 +154,7 @@ async def test_generator_parses_structured_fields_from_ai_response():
     )
 
     class FakeTextService:
-        calls: list[dict[str, object]] = []
+        calls: ClassVar[list[dict[str, object]]] = []
 
         async def generate_text(self, **kwargs):
             type(self).calls.append(kwargs)
