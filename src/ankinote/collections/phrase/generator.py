@@ -2,7 +2,6 @@
 
 import json
 from dataclasses import dataclass, field
-from typing import cast
 
 from loguru import logger
 
@@ -102,7 +101,6 @@ async def generate_phrase_data(
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )
-        content = cast(str, content)
 
         logger.debug(content)
         logger.info(f"Raw AI response length: {len(content)} characters")

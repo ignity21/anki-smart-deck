@@ -2,7 +2,6 @@
 
 import json
 from importlib.resources import files
-from typing import cast
 
 from loguru import logger
 
@@ -86,7 +85,6 @@ async def generate_stem_data(
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )
-        content = cast(str, content)
         content = _strip_json_fences(content)
 
         logger.debug(content)

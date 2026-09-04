@@ -29,7 +29,7 @@ ankinote is an automated Anki flashcard generator that uses litellm to support a
 
 ### Prerequisites
 
-- Python 3.13+
+- Python 3.14+
 - [uv](https://github.com/astral-sh/uv) package manager
 - Anki with [AnkiConnect](https://ankiweb.net/shared/info/2055492159) plugin installed
 - An API key for at least one AI provider (see Configuration below)
@@ -175,7 +175,7 @@ ankinote word batch --help
 
 ## 📦 Tech Stack
 
-- **Language**: Python 3.13+
+- **Language**: Python 3.14+
 - **Package Manager**: uv
 - **AI/ML**: litellm (Gemini, GPT, Claude, DeepSeek, etc.)
 - **TTS**: Google Cloud Text-to-Speech API

@@ -16,6 +16,7 @@ upserts Anki note-type/deck definitions through the collections' public
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Literal
 
 from nicegui import ui
 
@@ -654,7 +655,10 @@ def notetypes_page() -> None:
     state: dict = {"statuses": None, "error": None, "busy": set()}
     client = ui.context.client
 
-    def _notify(message: str, kind: str) -> None:
+    def _notify(
+        message: str,
+        kind: Literal["positive", "negative", "warning", "info", "ongoing"],
+    ) -> None:
         with client:
             ui.notify(message, type=kind)
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import base64
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -148,6 +150,10 @@ class AnkiDeckService(Protocol):
         """Create a deck or return the existing deck id."""
         ...
 
+    async def exists(self, deck_name: str) -> bool:
+        """Check whether a deck with the given name exists."""
+        ...
+
 
 class AnkiNoteService(Protocol):
     """Subset of note operations required by collections."""
@@ -219,7 +225,7 @@ class ModelClient:
         """
         self._client = client
 
-    async def list(self) -> list[str]:
+    async def list_names(self) -> list[str]:
         """List all note types (models) in Anki.
 
         Returns:

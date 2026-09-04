@@ -98,7 +98,6 @@ async def generate_word_data(
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )
-        content = cast(str, content)
 
         logger.debug(content)
         logger.info(f"Raw AI response length: {len(content)} characters")
