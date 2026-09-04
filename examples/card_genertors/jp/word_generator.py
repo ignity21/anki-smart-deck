@@ -118,9 +118,10 @@ async def main() -> None:
         )
     )
 
-    async with Application(), GoogleTTSService(
-        language_code=TTS_LANG_CODES[target_lang]
-    ) as tts_service:
+    async with (
+        Application(),
+        GoogleTTSService(language_code=TTS_LANG_CODES[target_lang]) as tts_service,
+    ):
         gen = WordGenerator(
             tts_service=tts_service,
             llm_model_id="gemini/gemini-3.1-flash-lite-preview",
@@ -138,19 +139,19 @@ async def main() -> None:
         for word_model in word_models:
             display_word_model(word_model)
 
-                # # Step 2: generate media
-                # console.print(
-                #     f"\n[bold]Step 2:[/bold] Generating media for "
-                #     f"'{word_model.word}' ({word_model.part_of_speech})…"
-                # )
-                # media = await gen.generate_media(
-                #     word_model=word_model,
-                #     target_lang=target_lang,
-                # )
+            # # Step 2: generate media
+            # console.print(
+            #     f"\n[bold]Step 2:[/bold] Generating media for "
+            #     f"'{word_model.word}' ({word_model.part_of_speech})…"
+            # )
+            # media = await gen.generate_media(
+            #     word_model=word_model,
+            #     target_lang=target_lang,
+            # )
 
-                # # Step 3: save to disk
-                # console.print("\n[bold]Step 3:[/bold] Saving media files…")
-                # save_media(word_model.word, word_model.part_of_speech, media)
+            # # Step 3: save to disk
+            # console.print("\n[bold]Step 3:[/bold] Saving media files…")
+            # save_media(word_model.word, word_model.part_of_speech, media)
 
     console.print(
         Panel.fit(

@@ -78,9 +78,6 @@ def load_prompt_template(
 # Type variable for Pydantic model types
 T = TypeVar("T", bound=BaseModel)
 
-# Type variable for prompt loader key types
-KT = TypeVar("KT")
-
 
 def create_template_loader(
     package: str,
@@ -106,7 +103,7 @@ def create_template_loader(
     return _load_card_style, _load_template
 
 
-def create_prompt_loader(
+def create_prompt_loader[KT](
     package: str,
     key_to_filename: dict[KT, str],
 ) -> Callable[[KT], str]:

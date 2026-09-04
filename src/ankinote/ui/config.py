@@ -366,7 +366,7 @@ def load_settings() -> Settings:
             custom_providers=custom_providers,
             defaults=defaults,
         )
-    except json.JSONDecodeError, KeyError, TypeError:
+    except (json.JSONDecodeError, KeyError, TypeError):
         return Settings()
 
 

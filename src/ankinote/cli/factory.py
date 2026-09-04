@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Protocol, TypeVar
+from typing import Protocol
 
 from ankinote.app import Application
 from ankinote.collections.phrase import PhraseCollection
@@ -27,11 +27,7 @@ from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
 __all__ = ["THINKING_CHOICES", "resolve_thinking"]
 
 
-TCollection = TypeVar("TCollection", covariant=True)
-TOptions = TypeVar("TOptions")
-
-
-class AsyncContextManagerLike(Protocol[TCollection]):
+class AsyncContextManagerLike[TCollection](Protocol):
     """Structural type for async context managers."""
 
     async def __aenter__(self) -> TCollection:
@@ -157,7 +153,7 @@ def build_stem_collection(
 
 
 @asynccontextmanager
-async def collection_context(
+async def collection_context[TOptions, TCollection](
     builder: Callable[
         [AnkiCollectionClient, TOptions], AsyncContextManagerLike[TCollection]
     ],

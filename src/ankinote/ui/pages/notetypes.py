@@ -660,7 +660,7 @@ def notetypes_page() -> None:
         kind: Literal["positive", "negative", "warning", "info", "ongoing"],
     ) -> None:
         with client:
-            ui.notify(message, type=kind)
+            ui.notify(message, type=kind)  # type: ignore[arg-type]
 
     @ui.refreshable
     def _workspace() -> None:
@@ -701,22 +701,24 @@ def notetypes_page() -> None:
                     )
 
     def _render_error(message: str, on_retry) -> None:
-        with ui.element("div").classes("nt-error w-full"):
-            with ui.row().classes("items-start gap-3 w-full"):
-                ui.icon("wifi_off").classes("text-2xl text-rose-500")
-                with ui.column().classes("gap-1 flex-1"):
-                    ui.label("Can't reach Anki").classes(
-                        "text-base font-bold text-slate-900"
-                    )
-                    ui.label(message).classes("text-sm text-slate-500")
-                    ui.label(
-                        "Open Anki with the AnkiConnect add-on running, then rescan."
-                    ).classes("text-sm text-slate-500")
-                ui.button(
-                    "Retry",
-                    on_click=lambda: asyncio.ensure_future(on_retry()),
-                    icon="refresh",
-                ).props("outline no-caps").classes("nt-btn nt-btn-ghost")
+        with (
+            ui.element("div").classes("nt-error w-full"),
+            ui.row().classes("items-start gap-3 w-full"),
+        ):
+            ui.icon("wifi_off").classes("text-2xl text-rose-500")
+            with ui.column().classes("gap-1 flex-1"):
+                ui.label("Can't reach Anki").classes(
+                    "text-base font-bold text-slate-900"
+                )
+                ui.label(message).classes("text-sm text-slate-500")
+                ui.label(
+                    "Open Anki with the AnkiConnect add-on running, then rescan."
+                ).classes("text-sm text-slate-500")
+            ui.button(
+                "Retry",
+                on_click=lambda: asyncio.ensure_future(on_retry()),
+                icon="refresh",
+            ).props("outline no-caps").classes("nt-btn nt-btn-ghost")
 
     async def _load() -> None:
         state["error"] = None
