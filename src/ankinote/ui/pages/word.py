@@ -12,9 +12,8 @@ from ankinote.consts import Language
 from ankinote.services.ai import LiteLLMImageService, LiteLLMTextService
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.ui.config import (
-    CUSTOM_API_KEY_STORAGE_KEY,
-    CUSTOM_PROVIDER,
-    CustomProvider,
+    CUSTOM_VENDOR,
+    ProviderProfile,
     apply_env,
     load_settings,
 )
@@ -153,27 +152,27 @@ def word_page() -> None:
 
             image_service = None
             if generate_image:
-                # apply_env() has pushed every configured key into os.environ;
-                # litellm picks the right one from the model's provider prefix.
+                image_profile = (
+                    settings.image_providers.get(settings.active_image_provider)
+                    or ProviderProfile()
+                )
                 image_service = LiteLLMImageService(
-                    model=settings.image_model,
+                    model=image_profile.model,
                     image_size=settings.image_size,
+                    api_key=image_profile.api_key or None,
+                    api_base=image_profile.base_url or None,
+                    force_openai_route=image_profile.vendor == CUSTOM_VENDOR,
                 )
 
-            custom_profile = settings.custom_providers.get(settings.provider)
-            if settings.provider == CUSTOM_PROVIDER and custom_profile is None:
-                custom_profile = CustomProvider(
-                    base_url=settings.custom_base_url,
-                    model=settings.text_model,
-                    api_key=settings.api_keys.get(CUSTOM_API_KEY_STORAGE_KEY, ""),
-                )
-            if custom_profile is not None:
-                text_service = LiteLLMTextService(
-                    api_base=custom_profile.base_url or None,
-                    api_key=custom_profile.api_key or None,
-                )
-            else:
-                text_service = LiteLLMTextService()
+            text_profile = (
+                settings.text_providers.get(settings.active_text_provider)
+                or ProviderProfile()
+            )
+            text_service = LiteLLMTextService(
+                api_base=text_profile.base_url or None,
+                api_key=text_profile.api_key or None,
+                force_openai_route=text_profile.vendor == CUSTOM_VENDOR,
+            )
 
             success_count = 0
             fail_count = 0
@@ -185,7 +184,7 @@ def word_page() -> None:
                         client,
                         native_language=Language(native),
                         target_language=Language(target),
-                        text_model=settings.text_model,
+                        text_model=text_profile.model,
                         text_service=text_service,
                         image_service=image_service,
                     ) as collection:

@@ -1,18 +1,21 @@
 """Tests for GUI configuration helpers."""
 
+import json
+
 import httpx
 import pytest
 
 from ankinote.ui.config import (
-    DEFAULT_IMAGE_ENV_KEY,
+    CUSTOM_VENDOR,
     IMAGE_PROVIDERS,
+    ProviderProfile,
     Settings,
     fetch_model_ids,
     get_image_provider_models,
-    image_env_key_for,
     image_provider_for,
     load_settings,
     save_settings,
+    unique_name,
 )
 
 
@@ -91,30 +94,10 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, handler) -> None:
 @pytest.mark.parametrize(
     ("model", "expected"),
     [
-        ("gemini/gemini-3.1-flash-lite-image", "GEMINI_API_KEY"),
-        ("vertex_ai/imagen-3.0", "GEMINI_API_KEY"),
-        ("gpt-image-1", "OPENAI_API_KEY"),
-        ("dall-e-3", "OPENAI_API_KEY"),
-        ("xai/grok-2-image", "XAI_API_KEY"),
-    ],
-)
-def test_image_env_key_for_maps_known_providers(model: str, expected: str) -> None:
-    assert image_env_key_for(model) == expected
-
-
-def test_image_env_key_for_falls_back_for_unknown_model() -> None:
-    assert image_env_key_for("no-such-provider/whatever") == DEFAULT_IMAGE_ENV_KEY
-    assert image_env_key_for("") == DEFAULT_IMAGE_ENV_KEY
-
-
-@pytest.mark.parametrize(
-    ("model", "expected"),
-    [
-        ("gemini/gemini-3.1-flash-lite-image", "Google"),
+        ("gemini/gemini-3.1-flash-lite-image", "Gemini"),
         ("gpt-image-1", "OpenAI"),
         ("dall-e-3", "OpenAI"),
-        ("xai/grok-2-image", "xAI"),
-        ("no-such-provider/whatever", "Google"),
+        ("no-such-provider/whatever", "Gemini"),
     ],
 )
 def test_image_provider_for(model: str, expected: str) -> None:
@@ -135,20 +118,159 @@ def test_openai_image_models_include_gpt_image_1() -> None:
     assert "gpt-image-1" in get_image_provider_models("OpenAI")
 
 
-def test_settings_round_trip_preserves_image_provider(tmp_path, monkeypatch) -> None:
+def test_unique_name_dedupes_against_taken_set() -> None:
+    assert unique_name("OpenAI", set()) == "OpenAI"
+    assert unique_name("OpenAI", {"OpenAI"}) == "OpenAI (2)"
+    assert unique_name("OpenAI", {"OpenAI", "OpenAI (2)"}) == "OpenAI (3)"
+
+
+def test_settings_round_trip_preserves_profiles(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    original = Settings(image_provider="xAI", image_model="xai/grok-2-image")
+    original = Settings(
+        text_providers={
+            "OpenAI (work)": ProviderProfile(
+                vendor="OpenAI",
+                model="gpt-4o",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-work",
+            ),
+            "OpenAI (personal)": ProviderProfile(
+                vendor="OpenAI",
+                model="gpt-4o-mini",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-personal",
+            ),
+        },
+        active_text_provider="OpenAI (work)",
+        image_providers={
+            "My xAI account": ProviderProfile(
+                vendor=CUSTOM_VENDOR,
+                model="xai/grok-2-image",
+                base_url="https://api.x.ai/v1",
+                api_key="sk-x",
+            ),
+        },
+        active_image_provider="My xAI account",
+    )
     save_settings(original)
     loaded = load_settings()
-    assert loaded.image_provider == "xAI"
-    assert loaded.image_model == "xai/grok-2-image"
+    assert loaded.active_text_provider == "OpenAI (work)"
+    assert set(loaded.text_providers) == {"OpenAI (work)", "OpenAI (personal)"}
+    assert loaded.text_providers["OpenAI (personal)"].api_key == "sk-personal"
+    assert loaded.active_image_provider == "My xAI account"
+    assert loaded.image_providers["My xAI account"].model == "xai/grok-2-image"
 
 
-def test_load_settings_migrates_missing_image_provider(tmp_path, monkeypatch) -> None:
+def test_save_settings_writes_only_the_current_shape(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    save_settings(Settings())
+    data = json.loads((tmp_path / "ankinote" / "settings.json").read_text())
+    assert "text_providers" in data
+    assert "active_text_provider" in data
+    assert "image_providers" in data
+    assert "active_image_provider" in data
+    for legacy_key in (
+        "provider",
+        "text_model",
+        "image_provider",
+        "image_model",
+        "custom_base_url",
+        "custom_providers",
+    ):
+        assert legacy_key not in data
+
+
+def test_load_settings_migrates_legacy_builtin_provider(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     config_dir = tmp_path / "ankinote"
     config_dir.mkdir()
     (config_dir / "settings.json").write_text(
-        '{"provider": "OpenAI", "image_model": "gpt-image-1"}', encoding="utf-8"
+        json.dumps(
+            {
+                "provider": "OpenAI",
+                "text_model": "gpt-4.1",
+                "image_model": "gpt-image-1",
+                "api_keys": {"OPENAI_API_KEY": "sk-legacy"},
+            }
+        ),
+        encoding="utf-8",
     )
-    assert load_settings().image_provider == "OpenAI"
+    settings = load_settings()
+    assert settings.active_text_provider == "OpenAI"
+    profile = settings.text_providers["OpenAI"]
+    assert profile.vendor == "OpenAI"
+    assert profile.model == "gpt-4.1"
+    assert profile.api_key == "sk-legacy"
+    assert settings.active_image_provider == "OpenAI"
+    assert settings.image_providers["OpenAI"].model == "gpt-image-1"
+
+
+def test_load_settings_migrates_legacy_custom_providers_with_name_collision(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    config_dir = tmp_path / "ankinote"
+    config_dir.mkdir()
+    # The active provider is itself a legacy custom sentinel, AND a
+    # custom_providers entry happens to share the synthesized name "Custom".
+    (config_dir / "settings.json").write_text(
+        json.dumps(
+            {
+                "provider": "Custom (OpenAI-compatible)",
+                "text_model": "qwen-max",
+                "custom_base_url": "http://localhost:8000/v1",
+                "api_keys": {"CUSTOM_API_KEY": "sk-active"},
+                "custom_providers": {
+                    "Custom": {
+                        "base_url": "http://other-host/v1",
+                        "model": "other-model",
+                        "api_key": "sk-other",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = load_settings()
+    # Two distinct profiles — no data loss despite both wanting the name
+    # "Custom"; the synthesized active profile claims it first.
+    assert len(settings.text_providers) == 2
+    assert settings.active_text_provider == "Custom"
+    active = settings.text_providers["Custom"]
+    assert active.vendor == CUSTOM_VENDOR
+    assert active.model == "qwen-max"
+    assert active.api_key == "sk-active"
+    other_name = next(n for n in settings.text_providers if n != "Custom")
+    other = settings.text_providers[other_name]
+    assert other.api_key == "sk-other"
+    assert other.model == "other-model"
+
+
+def test_load_settings_migrates_legacy_custom_provider_as_active(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    config_dir = tmp_path / "ankinote"
+    config_dir.mkdir()
+    (config_dir / "settings.json").write_text(
+        json.dumps(
+            {
+                "provider": "Local vLLM",
+                "custom_providers": {
+                    "Local vLLM": {
+                        "base_url": "http://localhost:8000/v1",
+                        "model": "Qwen/Qwen2.5-7B",
+                        "api_key": "k",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = load_settings()
+    assert settings.active_text_provider == "Local vLLM"
+    assert len(settings.text_providers) == 1
+    profile = settings.text_providers["Local vLLM"]
+    assert profile.vendor == CUSTOM_VENDOR
+    assert profile.model == "Qwen/Qwen2.5-7B"
+    assert profile.base_url == "http://localhost:8000/v1"

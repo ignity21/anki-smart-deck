@@ -108,10 +108,15 @@ class LiteLLMTextService:
     """LiteLLM-backed text generation service."""
 
     def __init__(
-        self, *, api_base: str | None = None, api_key: str | None = None
+        self,
+        *,
+        api_base: str | None = None,
+        api_key: str | None = None,
+        force_openai_route: bool = False,
     ) -> None:
         self._api_base = api_base
         self._api_key = api_key
+        self._force_openai_route = force_openai_route
 
     def _resolve_model(self, model: str) -> str:
         """Tell LiteLLM which provider owns models on a custom endpoint.
@@ -121,8 +126,18 @@ class LiteLLMTextService:
         when ``api_base`` points at an OpenAI-compatible server.  The
         ``openai/`` prefix makes the intended routing explicit.  An existing
         ``openai/`` prefix is left unchanged.
+
+        Only forced when the caller flags the endpoint as genuinely custom
+        (``force_openai_route``) — a known vendor's model id (e.g.
+        ``gemini/...``, or an Anthropic id with no prefix at all) already
+        routes correctly and must not be rewritten just because ``api_base``
+        happens to be set too.
         """
-        if self._api_base is not None and not model.startswith("openai/"):
+        if (
+            self._force_openai_route
+            and self._api_base is not None
+            and not model.startswith("openai/")
+        ):
             return f"openai/{model}"
         return model
 
@@ -178,20 +193,44 @@ class LiteLLMImageService:
     """
 
     def __init__(
-        self, *, model: str, image_size: int, api_key: str | None = None
+        self,
+        *,
+        model: str,
+        image_size: int,
+        api_key: str | None = None,
+        api_base: str | None = None,
+        force_openai_route: bool = False,
     ) -> None:
         self._model = model
         self._image_size = image_size
         self._api_key = api_key
+        self._api_base = api_base
+        self._force_openai_route = force_openai_route
+
+    def _resolve_model(self, model: str) -> str:
+        """Tell LiteLLM which provider owns models on a custom endpoint.
+
+        See :meth:`LiteLLMTextService._resolve_model` — same reasoning,
+        forced only for endpoints the caller flags as genuinely custom.
+        """
+        if (
+            self._force_openai_route
+            and self._api_base is not None
+            and not model.startswith("openai/")
+        ):
+            return f"openai/{model}"
+        return model
 
     async def generate_image(self, *, prompt: str) -> bytes:
         """Generate resized image bytes from a prompt."""
         image_kwargs: dict[str, object] = {
-            "model": self._model,
+            "model": self._resolve_model(self._model),
             "prompt": prompt,
             "timeout": REQUEST_TIMEOUT_SECONDS,
             "num_retries": 0,
         }
+        if self._api_base is not None:
+            image_kwargs["api_base"] = self._api_base
         if self._api_key is not None:
             image_kwargs["api_key"] = self._api_key
         try:

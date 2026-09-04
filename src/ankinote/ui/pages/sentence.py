@@ -11,9 +11,8 @@ from ankinote.consts import Language
 from ankinote.services.ai import LiteLLMTextService
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.ui.config import (
-    CUSTOM_API_KEY_STORAGE_KEY,
-    CUSTOM_PROVIDER,
-    CustomProvider,
+    CUSTOM_VENDOR,
+    ProviderProfile,
     apply_env,
     load_settings,
 )
@@ -137,20 +136,15 @@ def sentence_page() -> None:
                 f"up to {parallelism} at a time…"
             )
 
-            custom_profile = settings.custom_providers.get(settings.provider)
-            if settings.provider == CUSTOM_PROVIDER and custom_profile is None:
-                custom_profile = CustomProvider(
-                    base_url=settings.custom_base_url,
-                    model=settings.text_model,
-                    api_key=settings.api_keys.get(CUSTOM_API_KEY_STORAGE_KEY, ""),
-                )
-            if custom_profile is not None:
-                text_service = LiteLLMTextService(
-                    api_base=custom_profile.base_url or None,
-                    api_key=custom_profile.api_key or None,
-                )
-            else:
-                text_service = LiteLLMTextService()
+            text_profile = (
+                settings.text_providers.get(settings.active_text_provider)
+                or ProviderProfile()
+            )
+            text_service = LiteLLMTextService(
+                api_base=text_profile.base_url or None,
+                api_key=text_profile.api_key or None,
+                force_openai_route=text_profile.vendor == CUSTOM_VENDOR,
+            )
 
             success_count = 0
             fail_count = 0
@@ -162,7 +156,7 @@ def sentence_page() -> None:
                         anki_client,
                         native_language=Language(native),
                         target_language=Language(target),
-                        text_model=settings.text_model,
+                        text_model=text_profile.model,
                         text_service=text_service,
                     ) as collection:
                         semaphore = asyncio.Semaphore(parallelism)

@@ -1,165 +1,146 @@
 """Settings page — LLM provider, TTS, and default language preferences."""
 
-import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Literal
 
 import httpx
 from nicegui import ui
 
 from ankinote.consts import Language
 from ankinote.ui.config import (
+    CUSTOM_VENDOR,
+    DEFAULT_IMAGE_PROFILE_NAME,
+    DEFAULT_TEXT_PROFILE_NAME,
     IMAGE_PROVIDERS,
     PROVIDERS,
-    CustomProvider,
     DefaultsConfig,
+    ProviderProfile,
     Settings,
     apply_env,
     fetch_image_model_ids,
     fetch_model_ids,
     get_image_provider_models,
     get_provider_models,
-    image_provider_for,
     load_settings,
     save_settings,
+    unique_name,
 )
 from ankinote.ui.pages.word import format_error
 
-# Providers offered in the "Add provider" menus, in display order. Anything
-# not on these lists can still be reached through "Custom endpoint" (text
-# generation only — image providers stay built-in-only for now).
-_ADDABLE_PROVIDERS: tuple[str, ...] = tuple(PROVIDERS.keys())
-_IMAGE_ADDABLE_PROVIDERS: tuple[str, ...] = tuple(IMAGE_PROVIDERS.keys())
-
-_PROVIDER_ENV_KEYS: frozenset[str] = frozenset(
-    info["env_key"] for info in PROVIDERS.values()
-)
-_IMAGE_ENV_KEYS: frozenset[str] = frozenset(
-    info["env_key"] for info in IMAGE_PROVIDERS.values()
-)
+# The vendor options offered by each rack's "Add provider" dialog: the
+# curated templates plus the generic custom/other endpoint.
+_TEXT_VENDOR_OPTIONS: tuple[str, ...] = (*PROVIDERS.keys(), CUSTOM_VENDOR)
+_IMAGE_VENDOR_OPTIONS: tuple[str, ...] = (*IMAGE_PROVIDERS.keys(), CUSTOM_VENDOR)
 
 
 @dataclass
 class RouteDraft:
     """One provider profile shown on the settings page, edited in place."""
 
-    kind: Literal["builtin", "custom"]
     name: str
+    vendor: str = ""
     model: str = ""
     base_url: str = ""
     api_key: str = ""
     saved: bool = False
 
 
-def _routes_from_settings(settings: Settings) -> list[RouteDraft]:
-    """Build the editable text-route list: configured built-ins first, then customs.
+def _default_route(
+    vendor: str,
+    vendor_templates: dict[str, dict],
+    get_model_options: Callable[[str], list[str]],
+) -> RouteDraft:
+    """A placeholder route used only when a settings object has none saved."""
+    return RouteDraft(
+        name=vendor,
+        vendor=vendor,
+        model=get_model_options(vendor)[0],
+        base_url=vendor_templates[vendor]["api_base"],
+    )
 
-    A built-in provider is only listed once it has an API key (or is the one
-    currently in use), so unconfigured providers stay out of the way until the
-    user adds them.
-    """
-    routes: list[RouteDraft] = []
-    for name, info in PROVIDERS.items():
-        key = settings.api_keys.get(info["env_key"], "")
-        if not key and name != settings.provider:
-            continue
-        routes.append(
-            RouteDraft(
-                kind="builtin",
-                name=name,
-                model=settings.text_model
-                if name == settings.provider
-                else get_provider_models(name)[0],
-                api_key=key,
-                saved=bool(key),
-            )
+
+def _routes_from_settings(settings: Settings) -> list[RouteDraft]:
+    """Build the editable text-route list from every saved profile."""
+    routes = [
+        RouteDraft(
+            name=name,
+            vendor=profile.vendor,
+            model=profile.model,
+            base_url=profile.base_url,
+            api_key=profile.api_key,
+            saved=True,
         )
-    for name, profile in settings.custom_providers.items():
-        routes.append(
-            RouteDraft(
-                kind="custom",
-                name=name,
-                model=profile.model,
-                base_url=profile.base_url,
-                api_key=profile.api_key,
-                saved=True,
-            )
-        )
+        for name, profile in settings.text_providers.items()
+    ]
     if not routes:
-        first = _ADDABLE_PROVIDERS[0]
         routes.append(
-            RouteDraft(kind="builtin", name=first, model=get_provider_models(first)[0])
+            _default_route(DEFAULT_TEXT_PROFILE_NAME, PROVIDERS, get_provider_models)
         )
     return routes
 
 
 def _image_routes_from_settings(settings: Settings) -> list[RouteDraft]:
-    """Build the editable image-route list, mirroring ``_routes_from_settings``."""
-    resolved_provider = (
-        settings.image_provider
-        if settings.image_provider in IMAGE_PROVIDERS
-        else image_provider_for(settings.image_model)
-    )
-    routes: list[RouteDraft] = []
-    for name, info in IMAGE_PROVIDERS.items():
-        key = settings.api_keys.get(info["env_key"], "")
-        if not key and name != resolved_provider:
-            continue
-        routes.append(
-            RouteDraft(
-                kind="builtin",
-                name=name,
-                model=settings.image_model
-                if name == resolved_provider
-                else get_image_provider_models(name)[0],
-                api_key=key,
-                saved=bool(key),
-            )
+    """Build the editable image-route list from every saved profile."""
+    routes = [
+        RouteDraft(
+            name=name,
+            vendor=profile.vendor,
+            model=profile.model,
+            base_url=profile.base_url,
+            api_key=profile.api_key,
+            saved=True,
         )
+        for name, profile in settings.image_providers.items()
+    ]
     if not routes:
-        first = _IMAGE_ADDABLE_PROVIDERS[0]
         routes.append(
-            RouteDraft(
-                kind="builtin", name=first, model=get_image_provider_models(first)[0]
+            _default_route(
+                DEFAULT_IMAGE_PROFILE_NAME, IMAGE_PROVIDERS, get_image_provider_models
             )
         )
     return routes
 
 
-def _route_hint(route: RouteDraft, builtin_providers: dict[str, dict]) -> str:
+def _route_hint(route: RouteDraft, vendor_templates: dict[str, dict]) -> str:
     """One-line description shown under a route editor."""
-    if route.kind == "custom":
+    info = vendor_templates.get(route.vendor)
+    if route.vendor == CUSTOM_VENDOR or info is None:
         return route.base_url or "OpenAI-compatible endpoint"
-    return f"Built-in route · {builtin_providers[route.name]['litellm_provider']}"
+    return f"{route.vendor} · {info['litellm_provider']}"
+
+
+def _suggest_name(vendor: str, routes: list[RouteDraft]) -> str:
+    """A default profile name for a newly-picked vendor, deduped against routes."""
+    base = "Custom" if vendor == CUSTOM_VENDOR else vendor
+    return unique_name(base, {r.name for r in routes})
 
 
 class RouteRack:
-    """A pill rack of saved provider routes plus an editor for the active one.
+    """A pill rack of saved provider profiles plus an editor for the active one.
 
     Shared by the text- and image-generation sections so both offer the exact
-    same add/select/fetch/remove/save interaction — only the provider catalog,
-    model lookup, and whether custom endpoints are allowed differ.
+    same add/select/fetch/remove/save interaction — only the vendor catalog
+    and model lookup differ. Every profile — vendor-templated or fully custom
+    (``vendor == CUSTOM_VENDOR``) — carries its own name, base URL, model, and
+    API key, so multiple accounts of the same vendor can coexist.
     """
 
     def __init__(
         self,
         *,
-        builtin_providers: dict[str, dict],
+        vendor_templates: dict[str, dict],
         get_model_options: Callable[[str], list[str]],
         fetch_ids: Callable[..., Awaitable[list[str]]],
-        allow_custom: bool,
         routes: list[RouteDraft],
         selected: int,
         on_save: Callable[[], None],
         on_removed: Callable[[], None],
         fetched_noun: str = "models",
     ) -> None:
-        self.builtin_providers = builtin_providers
-        self.addable: tuple[str, ...] = tuple(builtin_providers.keys())
+        self.vendor_templates = vendor_templates
+        self.vendor_options: tuple[str, ...] = (*vendor_templates.keys(), CUSTOM_VENDOR)
         self.get_model_options = get_model_options
         self.fetch_ids = fetch_ids
-        self.allow_custom = allow_custom
         self.routes = routes
         self.state: dict = {"selected": selected}
         self.on_save = on_save
@@ -170,19 +151,8 @@ class RouteRack:
         self.state["selected"] = index
         self.workspace.refresh()
 
-    def add_builtin(self, name: str) -> None:
-        existing = next((i for i, r in enumerate(self.routes) if r.name == name), None)
-        if existing is None:
-            self.routes.append(
-                RouteDraft(
-                    kind="builtin", name=name, model=self.get_model_options(name)[0]
-                )
-            )
-            existing = len(self.routes) - 1
-        self.select(existing)
-
-    def add_custom(self) -> None:
-        self.routes.append(RouteDraft(kind="custom", name=""))
+    def add_profile(self, *, name: str, vendor: str, base_url: str) -> None:
+        self.routes.append(RouteDraft(name=name, vendor=vendor, base_url=base_url))
         self.select(len(self.routes) - 1)
 
     def remove(self, index: int) -> None:
@@ -198,9 +168,7 @@ class RouteRack:
         with ui.dialog() as dialog, ui.card().classes("w-96 gap-2"):
             ui.label(f'Remove "{route.name}"?').classes("text-lg font-semibold")
             ui.label(
-                "Its API key is cleared from this app."
-                if route.kind == "builtin"
-                else "Its endpoint, model, and API key are deleted from this app."
+                "Its endpoint, model, and API key are removed from this app."
             ).classes("text-sm text-slate-600")
 
             def _confirm() -> None:
@@ -218,13 +186,70 @@ class RouteRack:
                 )
         dialog.open()
 
+    def _open_add_dialog(self) -> None:
+        vendor_options = list(self.vendor_options)
+        last_vendor = {"value": vendor_options[0]}
+
+        with ui.dialog() as dialog, ui.card().classes("w-96 gap-3 route-dialog"):
+            ui.label("Add provider").classes("text-lg font-semibold")
+            vendor_select = ui.select(
+                label="Vendor", options=vendor_options, value=vendor_options[0]
+            ).classes("w-full")
+            name_input = ui.input(
+                label="Name", value=_suggest_name(vendor_options[0], self.routes)
+            ).classes("w-full")
+            base_input = ui.input(
+                label="Base URL",
+                value=self.vendor_templates.get(vendor_options[0], {}).get(
+                    "api_base", ""
+                ),
+            ).classes("w-full")
+
+            def _on_vendor_change(e) -> None:
+                vendor = e.value or CUSTOM_VENDOR
+                prev_suggestion = _suggest_name(last_vendor["value"], self.routes)
+                if (name_input.value or "") == prev_suggestion:
+                    name_input.value = _suggest_name(vendor, self.routes)
+                base_input.value = self.vendor_templates.get(vendor, {}).get(
+                    "api_base", ""
+                )
+                last_vendor["value"] = vendor
+
+            vendor_select.on_value_change(_on_vendor_change)
+
+            def _create() -> None:
+                name = (name_input.value or "").strip()
+                if not name:
+                    ui.notify("Name this provider first", type="warning")
+                    return
+                if any(r.name == name for r in self.routes):
+                    ui.notify(
+                        f'A provider named "{name}" already exists', type="warning"
+                    )
+                    return
+                self.add_profile(
+                    name=name,
+                    vendor=vendor_select.value or CUSTOM_VENDOR,
+                    base_url=(base_input.value or "").strip(),
+                )
+                dialog.close()
+                self.workspace.refresh()
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button("Create", on_click=_create).props("unelevated no-caps")
+        dialog.open()
+
     @ui.refreshable_method
     def workspace(self) -> None:
         if not self.routes:  # user removed the last route — fall back to a default
-            first = self.addable[0]
+            first = self.vendor_options[0]
             self.routes.append(
                 RouteDraft(
-                    kind="builtin", name=first, model=self.get_model_options(first)[0]
+                    name=first,
+                    vendor=first,
+                    model=self.get_model_options(first)[0],
+                    base_url=self.vendor_templates[first]["api_base"],
                 )
             )
         selected = max(0, min(self.state["selected"], len(self.routes) - 1))
@@ -241,54 +266,42 @@ class RouteRack:
                     .classes(classes)
                     .on("click", lambda *_, index=index: self.select(index))
                 ):
-                    ui.icon("dns" if item.kind == "custom" else "hub").classes(
+                    ui.icon("dns" if item.vendor == CUSTOM_VENDOR else "hub").classes(
                         "text-sm"
                     )
-                    ui.label(item.name or "New endpoint")
+                    ui.label(item.name or "New provider")
                     if not item.saved:
                         ui.label("draft").classes("route-pill__tag")
 
-            with ui.button(icon="add").props("flat round dense").classes("route-add"):
+            add_btn = (
+                ui.button(icon="add", on_click=self._open_add_dialog)
+                .props("flat round dense")
+                .classes("route-add")
+            )
+            with add_btn:
                 ui.tooltip("Add provider")
-                with ui.menu():
-                    remaining = [
-                        n for n in self.addable if all(r.name != n for r in self.routes)
-                    ]
-                    for name in remaining:
-                        ui.menu_item(
-                            name, on_click=lambda *_, name=name: self.add_builtin(name)
-                        )
-                    if self.allow_custom:
-                        if remaining:
-                            ui.separator()
-                        ui.menu_item("Custom endpoint…", on_click=self.add_custom)
 
         with ui.column().classes("route-editor"):
-            is_builtin = route.kind == "builtin"
-            base_input: ui.input | None = None
+            name_input = ui.input(
+                label="Name",
+                value=route.name,
+            ).classes("w-full")
+            name_input.on_value_change(
+                lambda e: setattr(route, "name", (e.value or "").strip())
+            )
+            base_input = ui.input(
+                label="Base URL",
+                placeholder="https://your-endpoint.example.com/v1",
+                value=route.base_url,
+            ).classes("w-full")
+            base_input.on_value_change(
+                lambda e: setattr(route, "base_url", (e.value or "").strip())
+            )
 
-            if not is_builtin:
-                name_input = ui.input(
-                    label="Name",
-                    placeholder="e.g. Alibaba Cloud",
-                    value=route.name,
-                ).classes("w-full")
-                name_input.on_value_change(
-                    lambda e: setattr(route, "name", (e.value or "").strip())
-                )
-                base_input = ui.input(
-                    label="Base URL",
-                    placeholder="https://your-endpoint.example.com/v1",
-                    value=route.base_url,
-                ).classes("w-full")
-                base_input.on_value_change(
-                    lambda e: setattr(route, "base_url", (e.value or "").strip())
-                )
-
-            if is_builtin:
-                model_options = self.get_model_options(route.name)
-            else:
+            if route.vendor == CUSTOM_VENDOR:
                 model_options = [route.model] if route.model else []
+            else:
+                model_options = self.get_model_options(route.vendor)
             if route.model and route.model not in model_options:
                 model_options = [route.model, *model_options]
 
@@ -311,10 +324,9 @@ class RouteRack:
                 with fetch_btn:
                     ui.tooltip("Fetch the model list from the provider")
 
+            vendor_info = self.vendor_templates.get(route.vendor)
             key_input = ui.input(
-                label=self.builtin_providers[route.name]["env_key"]
-                if is_builtin
-                else "API key",
+                label=vendor_info["env_key"] if vendor_info else "API key",
                 placeholder="sk-…",
                 password=True,
                 password_toggle_button=True,
@@ -324,26 +336,18 @@ class RouteRack:
                 lambda e: setattr(route, "api_key", e.value or "")
             )
 
-            async def _fetch(
-                *, _route: RouteDraft = route, _base: ui.input | None = base_input
-            ) -> None:
+            async def _fetch(*, _route: RouteDraft = route) -> None:
                 key = (key_input.value or "").strip()
                 if not key:
                     ui.notify("Enter the API key first", type="warning")
                     return
-                if _route.kind == "builtin":
-                    info = self.builtin_providers[_route.name]
-                    provider, prefix, api_base = (
-                        info["litellm_provider"],
-                        info["model_prefix"],
-                        info["api_base"],
-                    )
-                else:
-                    api_base = ((_base.value if _base else "") or "").strip()
-                    if not api_base:
-                        ui.notify("Enter the Base URL first", type="warning")
-                        return
-                    provider, prefix = "openai", None
+                api_base = (base_input.value or "").strip()
+                if not api_base:
+                    ui.notify("Enter the Base URL first", type="warning")
+                    return
+                info = self.vendor_templates.get(_route.vendor)
+                provider = info["litellm_provider"] if info else "openai"
+                prefix = info["model_prefix"] if info else None
 
                 fetch_btn.props("loading")
                 fetch_btn.update()
@@ -376,7 +380,7 @@ class RouteRack:
 
             fetch_btn.on("click", _fetch)
 
-            ui.label(_route_hint(route, self.builtin_providers)).classes(
+            ui.label(_route_hint(route, self.vendor_templates)).classes(
                 "text-xs text-slate-500 pt-1"
             )
             with ui.row().classes("w-full justify-between items-center"):
@@ -393,90 +397,71 @@ def settings_page() -> None:
 
     _settings_styles()
 
-    settings: Settings = ui.context.client.storage.get("settings") or load_settings()
+    cached = ui.context.client.storage.get("settings")
+    settings: Settings = (
+        cached
+        if isinstance(cached, Settings) and hasattr(cached, "text_providers")
+        else load_settings()
+    )
 
     def _build_settings() -> Settings | None:
         """Collect every field into a Settings, or notify and return None."""
-        active_text = (
+        active_text_route = (
             text_rack.routes[text_rack.state["selected"]] if text_rack.routes else None
         )
-        active_image = (
+        active_image_route = (
             image_rack.routes[image_rack.state["selected"]]
             if image_rack.routes
             else None
         )
 
-        builtin_routes: list[tuple[RouteDraft, str]] = [
-            (r, PROVIDERS[r.name]["env_key"])
-            for r in text_rack.routes
-            if r.kind == "builtin"
-        ] + [
-            (r, IMAGE_PROVIDERS[r.name]["env_key"])
-            for r in image_rack.routes
-            if r.kind == "builtin"
-        ]
-        present_env = {env for _, env in builtin_routes}
-        env_values = {env: r.api_key for r, env in builtin_routes if r.api_key}
-
-        api_keys = dict(settings.api_keys)
-        for env in _PROVIDER_ENV_KEYS | _IMAGE_ENV_KEYS:
-            if env not in present_env:
-                api_keys.pop(env, None)
-        for env in present_env:
-            if env in env_values:
-                api_keys[env] = env_values[env]
-            else:
-                api_keys.pop(env, None)
-
-        custom_providers: dict[str, CustomProvider] = {}
-        seen: set[str] = set()
+        text_providers: dict[str, ProviderProfile] = {}
         for route in text_rack.routes:
-            if route.kind == "custom" and not route.name:
-                if route is active_text:
-                    ui.notify("Name this custom endpoint first", type="warning")
+            name = route.name.strip()
+            if not name:
+                if route is active_text_route:
+                    ui.notify("Name this provider first", type="warning")
                     return None
                 continue  # unnamed draft the user left behind — skip it
-            if route.kind == "custom" and route.name in PROVIDERS:
-                ui.notify(f'"{route.name}" is a reserved provider name', type="warning")
+            if name in text_providers:
+                ui.notify(f'Two providers are both named "{name}"', type="warning")
                 return None
-            if route.name in seen:
-                ui.notify(f'Two routes are both named "{route.name}"', type="warning")
-                return None
-            seen.add(route.name)
-            if route.kind == "custom":
-                custom_providers[route.name] = CustomProvider(
-                    base_url=route.base_url,
-                    model=route.model,
-                    api_key=route.api_key,
-                )
-
-        api_keys["GOOGLE_TTS_KEY"] = tts_key_input.value or ""
-
-        if active_text is None:
-            provider, text_model, base_url = "OpenAI", Settings().text_model, ""
-        else:
-            provider = active_text.name
-            text_model = active_text.model
-            base_url = active_text.base_url if active_text.kind == "custom" else ""
-
-        if active_image is None:
-            image_provider, image_model = (
-                Settings().image_provider,
-                Settings().image_model,
+            text_providers[name] = ProviderProfile(
+                vendor=route.vendor,
+                model=route.model,
+                base_url=route.base_url,
+                api_key=route.api_key,
             )
-        else:
-            image_provider = active_image.name
-            image_model = active_image.model
+
+        image_providers: dict[str, ProviderProfile] = {}
+        for route in image_rack.routes:
+            name = route.name.strip()
+            if not name:
+                if route is active_image_route:
+                    ui.notify("Name this provider first", type="warning")
+                    return None
+                continue
+            if name in image_providers:
+                ui.notify(f'Two providers are both named "{name}"', type="warning")
+                return None
+            image_providers[name] = ProviderProfile(
+                vendor=route.vendor,
+                model=route.model,
+                base_url=route.base_url,
+                api_key=route.api_key,
+            )
 
         return Settings(
-            provider=provider,
-            text_model=text_model,
-            image_provider=image_provider,
-            image_model=image_model,
+            text_providers=text_providers,
+            active_text_provider=active_text_route.name.strip()
+            if active_text_route
+            else "",
+            image_providers=image_providers,
+            active_image_provider=active_image_route.name.strip()
+            if active_image_route
+            else "",
             image_size=settings.image_size,
-            custom_base_url=base_url,
-            api_keys=api_keys,
-            custom_providers=custom_providers,
+            api_keys={"GOOGLE_TTS_KEY": tts_key_input.value or ""},
             defaults=DefaultsConfig(
                 native_language=native_select.value or "",
                 target_language=target_select.value or "",
@@ -486,9 +471,6 @@ def settings_page() -> None:
 
     def _persist(new_settings: Settings) -> None:
         nonlocal settings
-        for env in _PROVIDER_ENV_KEYS | _IMAGE_ENV_KEYS:
-            if not new_settings.api_keys.get(env):
-                os.environ.pop(env, None)
         save_settings(new_settings)
         apply_env(new_settings)
         ui.context.client.storage["settings"] = new_settings
@@ -499,10 +481,8 @@ def settings_page() -> None:
         if new_settings is None:
             return
         _persist(new_settings)
-        for route in text_rack.routes:
-            route.saved = route.kind == "custom" or bool(route.api_key)
-        for route in image_rack.routes:
-            route.saved = bool(route.api_key)
+        for route in (*text_rack.routes, *image_rack.routes):
+            route.saved = bool(route.name.strip())
         text_rack.workspace.refresh()
         image_rack.workspace.refresh()
         ui.notify("Settings saved", type="positive")
@@ -514,13 +494,17 @@ def settings_page() -> None:
 
     text_routes = _routes_from_settings(settings)
     text_rack = RouteRack(
-        builtin_providers=PROVIDERS,
+        vendor_templates=PROVIDERS,
         get_model_options=get_provider_models,
         fetch_ids=fetch_model_ids,
-        allow_custom=True,
         routes=text_routes,
         selected=next(
-            (i for i, r in enumerate(text_routes) if r.name == settings.provider), 0
+            (
+                i
+                for i, r in enumerate(text_routes)
+                if r.name == settings.active_text_provider
+            ),
+            0,
         ),
         on_save=_save,
         on_removed=_persist_after_removal,
@@ -529,13 +513,16 @@ def settings_page() -> None:
 
     image_routes = _image_routes_from_settings(settings)
     image_rack = RouteRack(
-        builtin_providers=IMAGE_PROVIDERS,
+        vendor_templates=IMAGE_PROVIDERS,
         get_model_options=get_image_provider_models,
         fetch_ids=fetch_image_model_ids,
-        allow_custom=False,
         routes=image_routes,
         selected=next(
-            (i for i, r in enumerate(image_routes) if r.name == settings.image_provider),
+            (
+                i
+                for i, r in enumerate(image_routes)
+                if r.name == settings.active_image_provider
+            ),
             0,
         ),
         on_save=_save,
@@ -550,8 +537,8 @@ def settings_page() -> None:
             ui.label("Generation route").classes("settings-eyebrow")
             ui.label("Where card text is generated").classes("settings-h2")
             ui.label(
-                "Pick the active provider. Add the ones you have a key for; "
-                "everything else stays hidden."
+                "Pick the active provider. Add as many accounts as you like — "
+                "each keeps its own model and key."
             ).classes("text-sm text-slate-500")
 
         text_rack.workspace()
@@ -561,8 +548,8 @@ def settings_page() -> None:
             ui.label("Image route").classes("settings-eyebrow")
             ui.label("Where card images are generated").classes("settings-h2")
             ui.label(
-                "Pick the active provider. Add the ones you have a key for; "
-                "everything else stays hidden."
+                "Pick the active provider. Add as many accounts as you like — "
+                "each keeps its own model and key."
             ).classes("text-sm text-slate-500")
 
         image_rack.workspace()
@@ -690,6 +677,9 @@ def _settings_styles() -> None:
             margin-top: .4rem;
             padding: 1.1rem;
             width: 100%;
+        }
+        .route-dialog {
+            border-radius: 14px;
         }
         .route-model-row {
             flex-wrap: nowrap;

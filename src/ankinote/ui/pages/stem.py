@@ -14,14 +14,11 @@ from ankinote.services.ai import (
 )
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.ui.config import (
-    CUSTOM_API_KEY_STORAGE_KEY,
-    CUSTOM_PROVIDER,
-    IMAGE_PROVIDERS,
-    CustomProvider,
+    CUSTOM_VENDOR,
+    ProviderProfile,
     Settings,
     apply_env,
     get_image_provider_models,
-    image_provider_for,
     load_settings,
 )
 from ankinote.ui.pages.word import format_error
@@ -36,20 +33,15 @@ _THINKING_OPTIONS = {
 
 
 def _build_text_service(settings: Settings) -> LiteLLMTextService:
-    """Assemble the text service, honouring a custom OpenAI-compatible provider."""
-    custom_profile = settings.custom_providers.get(settings.provider)
-    if settings.provider == CUSTOM_PROVIDER and custom_profile is None:
-        custom_profile = CustomProvider(
-            base_url=settings.custom_base_url,
-            model=settings.text_model,
-            api_key=settings.api_keys.get(CUSTOM_API_KEY_STORAGE_KEY, ""),
-        )
-    if custom_profile is not None:
-        return LiteLLMTextService(
-            api_base=custom_profile.base_url or None,
-            api_key=custom_profile.api_key or None,
-        )
-    return LiteLLMTextService()
+    """Assemble the text service from the active text provider profile."""
+    profile = settings.text_providers.get(settings.active_text_provider) or (
+        ProviderProfile()
+    )
+    return LiteLLMTextService(
+        api_base=profile.base_url or None,
+        api_key=profile.api_key or None,
+        force_openai_route=profile.vendor == CUSTOM_VENDOR,
+    )
 
 
 def stem_page() -> None:
@@ -66,16 +58,14 @@ def stem_page() -> None:
         with client:
             ui.notify(message, type=notification_type)
 
-    image_provider = (
-        settings.image_provider
-        if settings.image_provider in IMAGE_PROVIDERS
-        else image_provider_for(settings.image_model)
-    )
-
-    def _image_model_options(provider: str, current: str) -> list[str]:
-        models = get_image_provider_models(provider)
-        if current and current not in models:
-            models = [*models, current]
+    def _image_model_options(profile: ProviderProfile) -> list[str]:
+        models = (
+            []
+            if profile.vendor == CUSTOM_VENDOR
+            else get_image_provider_models(profile.vendor)
+        )
+        if profile.model and profile.model not in models:
+            models = [profile.model, *models]
         return models
 
     with ui.column().classes("w-full max-w-2xl mx-auto p-6 gap-4"):
@@ -101,32 +91,41 @@ def stem_page() -> None:
             value=settings.defaults.generate_image,
         )
 
+        active_image_profile = (
+            settings.image_providers.get(settings.active_image_provider)
+            or ProviderProfile()
+        )
+
         with (
             ui.row()
             .classes("w-full gap-4")
             .bind_visibility_from(generate_image_switch, "value")
         ):
-            image_provider_select = ui.select(
+            image_profile_select = ui.select(
                 label="Image Provider",
-                options=list(IMAGE_PROVIDERS.keys()),
-                value=image_provider,
+                options=list(settings.image_providers.keys()),
+                value=settings.active_image_provider,
             ).classes("flex-1")
             image_model_select = ui.select(
                 label="Image Model",
-                options=_image_model_options(image_provider, settings.image_model),
-                value=settings.image_model,
+                options=_image_model_options(active_image_profile),
+                value=active_image_profile.model,
                 new_value_mode="add-unique",
             ).classes("flex-1")
 
-        def _on_image_provider_change() -> None:
-            models = _image_model_options(
-                image_provider_select.value, image_model_select.value or ""
+        def _on_image_profile_change() -> None:
+            profile = (
+                settings.image_providers.get(image_profile_select.value)
+                or ProviderProfile()
             )
+            models = _image_model_options(profile)
             current = image_model_select.value
             image_model_select.set_options(models)
-            image_model_select.value = current if current in models else models[0]
+            image_model_select.value = (
+                current if current in models else (models[0] if models else current)
+            )
 
-        image_provider_select.on_value_change(lambda _: _on_image_provider_change())
+        image_profile_select.on_value_change(lambda _: _on_image_profile_change())
 
         results_container = ui.column().classes("w-full gap-2")
         status_label = ui.label("").classes("text-sm text-gray-500")
@@ -150,15 +149,24 @@ def stem_page() -> None:
         ) -> StemCollection:
             image_service = None
             if with_image:
-                # apply_env() has pushed every configured key into os.environ;
-                # litellm picks the right one from the model's provider prefix.
-                image_service = LiteLLMImageService(
-                    model=image_model_select.value or settings.image_model,
-                    image_size=settings.image_size,
+                image_profile = (
+                    settings.image_providers.get(image_profile_select.value)
+                    or ProviderProfile()
                 )
+                image_service = LiteLLMImageService(
+                    model=image_model_select.value or image_profile.model,
+                    image_size=settings.image_size,
+                    api_key=image_profile.api_key or None,
+                    api_base=image_profile.base_url or None,
+                    force_openai_route=image_profile.vendor == CUSTOM_VENDOR,
+                )
+            text_profile = (
+                settings.text_providers.get(settings.active_text_provider)
+                or ProviderProfile()
+            )
             return StemCollection(
                 anki_client,
-                text_model=settings.text_model,
+                text_model=text_profile.model,
                 text_service=_build_text_service(settings),
                 image_service=image_service,
                 reasoning_effort=reasoning_effort,

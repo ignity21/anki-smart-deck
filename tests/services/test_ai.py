@@ -145,6 +145,7 @@ async def test_litellm_text_service_routes_custom_endpoint_through_openai(
     service = LiteLLMTextService(
         api_base="http://localhost:8000/v1",
         api_key="test-key",
+        force_openai_route=True,
     )
     await service.generate_text(
         model="Qwen/Qwen3-8B",
@@ -176,7 +177,9 @@ async def test_litellm_text_service_keeps_explicit_openai_prefix(
         ),
     )
 
-    service = LiteLLMTextService(api_base="http://localhost:8000/v1")
+    service = LiteLLMTextService(
+        api_base="http://localhost:8000/v1", force_openai_route=True
+    )
     await service.generate_text(
         model="openai/my-model",
         messages=[{"role": "user", "content": "hello"}],
@@ -184,6 +187,34 @@ async def test_litellm_text_service_keeps_explicit_openai_prefix(
     )
 
     assert completion.await_args.kwargs["model"] == "openai/my-model"
+
+
+@pytest.mark.asyncio
+async def test_litellm_text_service_does_not_prefix_known_vendors_by_default(
+    mocker: MockerFixture,
+):
+    """A known-vendor profile now also carries an explicit ``api_base`` (so
+    multiple accounts of the same vendor can coexist), but that must not
+    trigger the custom-endpoint ``openai/`` prefix forcing — only a profile
+    explicitly flagged ``force_openai_route`` (i.e. vendor == CUSTOM_VENDOR)
+    should get it."""
+    completion = mocker.patch(
+        "ankinote.services.ai.acompletion",
+        return_value=SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+        ),
+    )
+
+    service = LiteLLMTextService(
+        api_base="https://api.anthropic.com/v1", api_key="sk-a"
+    )
+    await service.generate_text(
+        model="claude-sonnet-4-20250514",
+        messages=[{"role": "user", "content": "hello"}],
+        temperature=0.2,
+    )
+
+    assert completion.await_args.kwargs["model"] == "claude-sonnet-4-20250514"
 
 
 @pytest.mark.asyncio
@@ -236,3 +267,59 @@ async def test_litellm_image_service_decodes_and_resizes(
         timeout=60,
         num_retries=0,
     )
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_forwards_api_base_and_key(
+    mocker: MockerFixture,
+):
+    """Every image profile now carries its own base URL/key explicitly, so
+    multiple accounts of the same vendor can coexist (no env-var reliance)."""
+    image_generation = mocker.patch(
+        "ankinote.services.ai.aimage_generation",
+        return_value=SimpleNamespace(
+            data=[SimpleNamespace(b64_json="")],
+        ),
+    )
+    mocker.patch("ankinote.services.ai.base64.b64decode", return_value=b"\x00")
+    mocker.patch("ankinote.services.ai.resize_to_max_edge", return_value=b"resized")
+
+    service = LiteLLMImageService(
+        model="gemini/gemini-2.5-flash-image",
+        image_size=128,
+        api_key="sk-g",
+        api_base="https://generativelanguage.googleapis.com/v1beta",
+    )
+    result = await service.generate_image(prompt="draw a cat")
+
+    assert result == b"resized"
+    image_generation.assert_awaited_once_with(
+        model="gemini/gemini-2.5-flash-image",
+        prompt="draw a cat",
+        timeout=60,
+        num_retries=0,
+        api_base="https://generativelanguage.googleapis.com/v1beta",
+        api_key="sk-g",
+    )
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_forces_openai_route_for_custom_vendor(
+    mocker: MockerFixture,
+):
+    image_generation = mocker.patch(
+        "ankinote.services.ai.aimage_generation",
+        return_value=SimpleNamespace(data=[SimpleNamespace(b64_json="")]),
+    )
+    mocker.patch("ankinote.services.ai.base64.b64decode", return_value=b"\x00")
+    mocker.patch("ankinote.services.ai.resize_to_max_edge", return_value=b"resized")
+
+    service = LiteLLMImageService(
+        model="my-diffusion-model",
+        image_size=128,
+        api_base="http://localhost:8000/v1",
+        force_openai_route=True,
+    )
+    await service.generate_image(prompt="draw a cat")
+
+    assert image_generation.await_args.kwargs["model"] == "openai/my-diffusion-model"
