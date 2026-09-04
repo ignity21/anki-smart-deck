@@ -148,6 +148,73 @@ async def fetch_model_ids(
     )
 
 
+async def fetch_image_model_ids(
+    *,
+    litellm_provider: str,
+    api_base: str,
+    api_key: str,
+    model_prefix: str | None = None,
+) -> list[str]:
+    """Ask a provider's HTTP API for image-generation model ids it serves.
+
+    When a provider explicitly marks which models support image generation,
+    only those are returned. Otherwise, all models are returned as a fallback.
+    Ids come back prefixed the way litellm expects them (e.g. ``gemini/…``).
+    Raises ``httpx`` errors when the request fails.
+    """
+    import httpx
+
+    url = f"{api_base.rstrip('/')}/models"
+    headers: dict[str, str] = {}
+    params: dict[str, str] = {}
+    if litellm_provider == "anthropic":
+        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+        params = {"limit": "1000"}
+    elif litellm_provider in {"gemini", "vertex_ai"}:
+        params = {"key": api_key, "pageSize": "1000"}
+    else:
+        headers = {"Authorization": f"Bearer {api_key}"}
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(url, headers=headers, params=params or None)
+        response.raise_for_status()
+        payload = response.json()
+
+    if litellm_provider in {"gemini", "vertex_ai"}:
+        all_entries = payload.get("models", [])
+        has_filter = any(
+            "imageGeneration" in entry.get("supportedGenerationMethods", [])
+            for entry in all_entries
+        )
+        names = [
+            entry.get("name", "").removeprefix("models/")
+            for entry in all_entries
+            if not has_filter
+            or "imageGeneration" in entry.get("supportedGenerationMethods", [])
+        ]
+    else:
+        all_entries = payload.get("data", [])
+        has_filter = any(
+            entry.get("id", "").startswith(("dall-e", "gpt-image"))
+            for entry in all_entries
+            if isinstance(entry, dict)
+        )
+        names = [
+            entry["id"]
+            for entry in all_entries
+            if isinstance(entry, dict) and entry.get("id")
+            and (
+                not has_filter
+                or entry["id"].startswith(("dall-e", "gpt-image", "image"))
+            )
+        ]
+
+    prefix = model_prefix or ""
+    return sorted(
+        {name if name.startswith(prefix) else prefix + name for name in names if name}
+    )
+
+
 DEFAULT_IMAGE_MODELS: list[str] = [
     "gemini/gemini-3.1-flash-lite-image",
     "gemini/gemini-2.0-flash-exp-image",
@@ -164,6 +231,7 @@ IMAGE_PROVIDERS: dict[str, dict] = {
         "env_key": "OPENAI_API_KEY",
         "litellm_provider": "openai",
         "model_prefix": None,
+        "api_base": "https://api.openai.com/v1",
     },
     "Google": {
         "models": [
@@ -174,12 +242,14 @@ IMAGE_PROVIDERS: dict[str, dict] = {
         "env_key": "GEMINI_API_KEY",
         "litellm_provider": "gemini",
         "model_prefix": "gemini/",
+        "api_base": "https://generativelanguage.googleapis.com/v1beta",
     },
     "xAI": {
         "models": ["xai/grok-2-image"],
         "env_key": "XAI_API_KEY",
         "litellm_provider": "xai",
         "model_prefix": "xai/",
+        "api_base": "https://api.x.ai/v1",
     },
 }
 

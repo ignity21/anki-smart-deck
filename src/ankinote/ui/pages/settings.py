@@ -15,6 +15,7 @@ from ankinote.ui.config import (
     DefaultsConfig,
     Settings,
     apply_env,
+    fetch_image_model_ids,
     fetch_model_ids,
     get_image_provider_models,
     get_provider_models,
@@ -450,12 +451,18 @@ def settings_page() -> None:
                 models = [*models, settings.image_model]
             return models
 
-        image_model_select = ui.select(
-            label="Image Model",
-            options=_image_model_options(image_provider),
-            value=settings.image_model,
-            new_value_mode="add-unique",
-        ).classes("w-full")
+        with ui.row().classes("route-model-row w-full items-center gap-2"):
+            image_model_select = ui.select(
+                label="Image Model",
+                options=_image_model_options(image_provider),
+                value=settings.image_model,
+                new_value_mode="add-unique",
+            ).classes("flex-1 min-w-0")
+            image_fetch_btn = (
+                ui.button(icon="sync").props("flat dense").classes("route-fetch-btn")
+            )
+            with image_fetch_btn:
+                ui.tooltip("Fetch the model list from the provider")
 
         def _image_env_key() -> str:
             return image_env_key_for(image_model_select.value or settings.image_model)
@@ -473,6 +480,41 @@ def settings_page() -> None:
             image_api_key_input.label = key
             image_api_key_input.value = settings.api_keys.get(key, "")
             image_api_key_input.update()
+
+        async def _fetch_image_models() -> None:
+            key = (image_api_key_input.value or "").strip()
+            if not key:
+                ui.notify("Enter the API key first", type="warning")
+                return
+            info = IMAGE_PROVIDERS[image_provider_select.value]
+
+            image_fetch_btn.props("loading")
+            image_fetch_btn.update()
+            try:
+                ids = await fetch_image_model_ids(
+                    litellm_provider=info["litellm_provider"],
+                    api_base=info["api_base"],
+                    api_key=key,
+                    model_prefix=info["model_prefix"],
+                )
+            except (httpx.HTTPError, ValueError) as exc:
+                ui.notify(
+                    f"Couldn't fetch models: {format_error(exc)}", type="negative"
+                )
+                return
+            finally:
+                image_fetch_btn.props(remove="loading")
+                image_fetch_btn.update()
+
+            if not ids:
+                ui.notify("The provider returned no image models", type="warning")
+                return
+            current = image_model_select.value
+            options = ids if not current or current in ids else [current, *ids]
+            image_model_select.set_options(options, value=current or ids[0])
+            ui.notify(f"Loaded {len(ids)} image models", type="positive")
+
+        image_fetch_btn.on("click", _fetch_image_models)
 
         def _on_image_provider_change() -> None:
             models = _image_model_options(image_provider_select.value)
