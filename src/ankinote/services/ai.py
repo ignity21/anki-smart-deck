@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Protocol, cast
 
+import httpx
 from litellm import acompletion, aimage_generation
 
 from ankinote.utils.img import resize_to_max_edge
@@ -242,12 +243,27 @@ class LiteLLMImageService:
             ) from exc
         data = cast(object, response.data[0])  # pyright: ignore[reportOptionalSubscript]
         b64 = getattr(data, "b64_json", None)
-        if not isinstance(b64, str):
-            raise RuntimeError(  # noqa: TRY004
-                "Image generation returned no base64 payload"
-            )
-        raw = base64.b64decode(b64)
+        if isinstance(b64, str):
+            raw = base64.b64decode(b64)
+        else:
+            url = getattr(data, "url", None)
+            if not isinstance(url, str):
+                raise RuntimeError(  # noqa: TRY004
+                    "Image generation returned neither a base64 payload nor a URL"
+                )
+            raw = await self._fetch_image_url(url)
         return resize_to_max_edge(raw, self._image_size)
+
+    async def _fetch_image_url(self, url: str) -> bytes:
+        """Download image bytes from a provider-hosted URL.
+
+        Some providers (fal.ai, ``dall-e-3`` in its default mode) return a
+        hosted URL instead of inline base64 data.
+        """
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.content
 
 
 __all__ = [

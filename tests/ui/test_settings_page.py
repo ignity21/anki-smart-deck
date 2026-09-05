@@ -27,7 +27,7 @@ def test_text_vendor_options_are_the_curated_list_plus_custom() -> None:
 
 
 def test_image_vendor_options_are_the_curated_list_plus_custom() -> None:
-    assert set(_IMAGE_VENDOR_OPTIONS) == {"OpenAI", "Gemini", CUSTOM_VENDOR}
+    assert set(_IMAGE_VENDOR_OPTIONS) == {"OpenAI", "Gemini", "Fal", CUSTOM_VENDOR}
 
 
 def test_routes_from_fresh_settings_shows_the_default_profile() -> None:

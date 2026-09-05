@@ -298,6 +298,14 @@ class RouteRack:
                 lambda e: setattr(route, "base_url", (e.value or "").strip())
             )
 
+            vendor_info = self.vendor_templates.get(route.vendor)
+            # A vendor with no live model-listing endpoint (e.g. fal.ai) opts
+            # out via ``supports_fetch: False``; its models are instead fully
+            # populated from ``get_model_options`` (litellm's catalog).
+            supports_fetch = vendor_info is None or vendor_info.get(
+                "supports_fetch", True
+            )
+
             if route.vendor == CUSTOM_VENDOR:
                 model_options = [route.model] if route.model else []
             else:
@@ -316,15 +324,16 @@ class RouteRack:
                 model_select.on_value_change(
                     lambda e: setattr(route, "model", e.value or "")
                 )
-                fetch_btn = (
-                    ui.button(icon="sync")
-                    .props("flat dense")
-                    .classes("route-fetch-btn")
-                )
-                with fetch_btn:
-                    ui.tooltip("Fetch the model list from the provider")
+                fetch_btn = None
+                if supports_fetch:
+                    fetch_btn = (
+                        ui.button(icon="sync")
+                        .props("flat dense")
+                        .classes("route-fetch-btn")
+                    )
+                    with fetch_btn:
+                        ui.tooltip("Fetch the model list from the provider")
 
-            vendor_info = self.vendor_templates.get(route.vendor)
             key_input = ui.input(
                 label=vendor_info["env_key"] if vendor_info else "API key",
                 placeholder="sk-…",
@@ -336,49 +345,53 @@ class RouteRack:
                 lambda e: setattr(route, "api_key", e.value or "")
             )
 
-            async def _fetch(*, _route: RouteDraft = route) -> None:
-                key = (key_input.value or "").strip()
-                if not key:
-                    ui.notify("Enter the API key first", type="warning")
-                    return
-                api_base = (base_input.value or "").strip()
-                if not api_base:
-                    ui.notify("Enter the Base URL first", type="warning")
-                    return
-                info = self.vendor_templates.get(_route.vendor)
-                provider = info["litellm_provider"] if info else "openai"
-                prefix = info["model_prefix"] if info else None
+            if fetch_btn is not None:
 
-                fetch_btn.props("loading")
-                fetch_btn.update()
-                try:
-                    ids = await self.fetch_ids(
-                        litellm_provider=provider,
-                        api_base=api_base,
-                        api_key=key,
-                        model_prefix=prefix,
-                    )
-                except (httpx.HTTPError, ValueError) as exc:
-                    ui.notify(
-                        f"Couldn't fetch models: {format_error(exc)}", type="negative"
-                    )
-                    return
-                finally:
-                    fetch_btn.props(remove="loading")
+                async def _fetch(*, _route: RouteDraft = route) -> None:
+                    key = (key_input.value or "").strip()
+                    if not key:
+                        ui.notify("Enter the API key first", type="warning")
+                        return
+                    api_base = (base_input.value or "").strip()
+                    if not api_base:
+                        ui.notify("Enter the Base URL first", type="warning")
+                        return
+                    info = self.vendor_templates.get(_route.vendor)
+                    provider = info["litellm_provider"] if info else "openai"
+                    prefix = info["model_prefix"] if info else None
+
+                    fetch_btn.props("loading")
                     fetch_btn.update()
+                    try:
+                        ids = await self.fetch_ids(
+                            litellm_provider=provider,
+                            api_base=api_base,
+                            api_key=key,
+                            model_prefix=prefix,
+                        )
+                    except (httpx.HTTPError, ValueError) as exc:
+                        ui.notify(
+                            f"Couldn't fetch models: {format_error(exc)}",
+                            type="negative",
+                        )
+                        return
+                    finally:
+                        fetch_btn.props(remove="loading")
+                        fetch_btn.update()
 
-                if not ids:
-                    ui.notify(
-                        f"The provider returned no {self.fetched_noun}", type="warning"
-                    )
-                    return
-                current = model_select.value
-                options = ids if not current or current in ids else [current, *ids]
-                model_select.set_options(options, value=current or ids[0])
-                _route.model = model_select.value or ""
-                ui.notify(f"Loaded {len(ids)} {self.fetched_noun}", type="positive")
+                    if not ids:
+                        ui.notify(
+                            f"The provider returned no {self.fetched_noun}",
+                            type="warning",
+                        )
+                        return
+                    current = model_select.value
+                    options = ids if not current or current in ids else [current, *ids]
+                    model_select.set_options(options, value=current or ids[0])
+                    _route.model = model_select.value or ""
+                    ui.notify(f"Loaded {len(ids)} {self.fetched_noun}", type="positive")
 
-            fetch_btn.on("click", _fetch)
+                fetch_btn.on("click", _fetch)
 
             ui.label(_route_hint(route, self.vendor_templates)).classes(
                 "text-xs text-slate-500 pt-1"

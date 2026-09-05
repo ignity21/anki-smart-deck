@@ -244,6 +244,18 @@ IMAGE_PROVIDERS: dict[str, dict] = {
         "model_prefix": "gemini/",
         "api_base": "https://generativelanguage.googleapis.com/v1beta",
     },
+    "Fal": {
+        "models": ["fal_ai/fal-ai/flux/schnell"],
+        "env_key": "FAL_AI_API_KEY",
+        "litellm_provider": "fal_ai",
+        "model_prefix": "fal_ai/",
+        "api_base": "https://fal.run",
+        # fal.ai has no OpenAI-style `GET /models` endpoint; its model list
+        # is instead fully populated from litellm's catalog (see
+        # `_discover_image_models`), so the settings page's "fetch models"
+        # button is hidden for it rather than surfacing a 404.
+        "supports_fetch": False,
+    },
 }
 
 DEFAULT_IMAGE_PROVIDER = "Gemini"
@@ -271,8 +283,10 @@ def _discover_image_models(
         if model_prefix is not None and not name.startswith(model_prefix):
             continue
         # Drop litellm's size-/step-prefixed catalog variants
-        # (e.g. "1024-x-1024/dall-e-2", "fal-ai/.../text-to-image").
-        if "/" in name.removeprefix(prefix):
+        # (e.g. "1024-x-1024/dall-e-2"). fal_ai's canonical model ids are
+        # themselves slash-separated paths (e.g. "fal-ai/flux/schnell"), so
+        # this "no nested slash" heuristic does not apply to it.
+        if litellm_provider != "fal_ai" and "/" in name.removeprefix(prefix):
             continue
         models.append(name)
     return tuple(sorted(models))

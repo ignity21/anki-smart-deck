@@ -113,17 +113,6 @@ Open items:
 
 Status: minor follow-ups; not scheduled.
 
-## Image generation: non-b64 provider responses
-
-`LiteLLMImageService` (`src/ankinote/services/ai.py`) reads `data[0].b64_json`
-from LiteLLM's `image_generation` response. `gemini/*` and OpenAI's
-`gpt-image-1` return inline base64, so they work; `dall-e-3` defaults to
-returning a URL and would need either `response_format="b64_json"` passed
-through or a fetch-and-decode fallback. Add that only when a URL-returning
-provider is actually adopted.
-
-Status: known limitation; not scheduled.
-
 ## Future major version: deployable web service
 
 Explore evolving ankinote from a local CLI/NiceGUI application into a web

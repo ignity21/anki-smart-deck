@@ -323,3 +323,42 @@ async def test_litellm_image_service_forces_openai_route_for_custom_vendor(
     await service.generate_image(prompt="draw a cat")
 
     assert image_generation.await_args.kwargs["model"] == "openai/my-diffusion-model"
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_fetches_url_when_no_b64_json(
+    mocker: MockerFixture,
+):
+    """fal.ai (and dall-e-3 in its default mode) return a hosted URL instead
+    of inline base64 data."""
+    mocker.patch(
+        "ankinote.services.ai.aimage_generation",
+        return_value=SimpleNamespace(
+            data=[SimpleNamespace(b64_json=None, url="https://fal.media/files/foo.png")]
+        ),
+    )
+    fetch_image_url = mocker.patch.object(
+        LiteLLMImageService, "_fetch_image_url", return_value=b"\x00"
+    )
+    mocker.patch("ankinote.services.ai.resize_to_max_edge", return_value=b"resized")
+
+    service = LiteLLMImageService(model="fal_ai/fal-ai/flux/schnell", image_size=128)
+    result = await service.generate_image(prompt="draw a cat")
+
+    assert result == b"resized"
+    fetch_image_url.assert_awaited_once_with("https://fal.media/files/foo.png")
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_raises_when_no_b64_or_url(
+    mocker: MockerFixture,
+):
+    mocker.patch(
+        "ankinote.services.ai.aimage_generation",
+        return_value=SimpleNamespace(data=[SimpleNamespace(b64_json=None, url=None)]),
+    )
+
+    service = LiteLLMImageService(model="fal_ai/fal-ai/flux/schnell", image_size=128)
+
+    with pytest.raises(RuntimeError, match="neither a base64 payload nor a URL"):
+        await service.generate_image(prompt="draw a cat")

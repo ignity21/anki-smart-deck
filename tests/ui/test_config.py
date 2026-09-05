@@ -97,6 +97,7 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, handler) -> None:
         ("gemini/gemini-3.1-flash-lite-image", "Gemini"),
         ("gpt-image-1", "OpenAI"),
         ("dall-e-3", "OpenAI"),
+        ("fal_ai/fal-ai/flux/schnell", "Fal"),
         ("no-such-provider/whatever", "Gemini"),
     ],
 )
@@ -106,12 +107,33 @@ def test_image_provider_for(model: str, expected: str) -> None:
 
 def test_get_image_provider_models_returns_non_empty_for_each_provider() -> None:
     for provider in IMAGE_PROVIDERS:
+        info = IMAGE_PROVIDERS[provider]
         models = get_image_provider_models(provider)
         assert models, provider
-        prefix = IMAGE_PROVIDERS[provider]["model_prefix"]
+        prefix = info["model_prefix"]
         if prefix:
             assert all(m.startswith(prefix) for m in models)
-        assert all("/" not in m.removeprefix(prefix or "") for m in models)
+        # fal_ai's canonical model ids are themselves slash-separated paths
+        # (e.g. "fal-ai/flux/schnell"), so the "no nested slash" invariant
+        # that holds for the other providers doesn't apply to it.
+        if info["litellm_provider"] != "fal_ai":
+            assert all("/" not in m.removeprefix(prefix or "") for m in models)
+
+
+def test_fal_image_models_are_discovered_from_litellm_catalog() -> None:
+    """The curated ``models`` fallback is a single entry — anything beyond
+    that must come from litellm's catalog, proving discovery actually runs
+    for fal_ai instead of silently falling back."""
+    models = get_image_provider_models("Fal")
+    assert len(models) > 1
+    assert "fal_ai/fal-ai/flux-pro/v1.1" in models
+
+
+def test_fal_does_not_support_live_model_fetch() -> None:
+    """fal.ai has no OpenAI-style `GET /models` endpoint; the settings page
+    uses this flag to hide its "fetch models" button rather than surfacing
+    a 404."""
+    assert IMAGE_PROVIDERS["Fal"]["supports_fetch"] is False
 
 
 def test_openai_image_models_include_gpt_image_1() -> None:
