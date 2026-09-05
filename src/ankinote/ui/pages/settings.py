@@ -152,7 +152,11 @@ class RouteRack:
         self.workspace.refresh()
 
     def add_profile(self, *, name: str, vendor: str, base_url: str) -> None:
-        self.routes.append(RouteDraft(name=name, vendor=vendor, base_url=base_url))
+        options = self.get_model_options(vendor) if vendor != CUSTOM_VENDOR else []
+        model = options[0] if options else ""
+        self.routes.append(
+            RouteDraft(name=name, vendor=vendor, model=model, base_url=base_url)
+        )
         self.select(len(self.routes) - 1)
 
     def remove(self, index: int) -> None:
