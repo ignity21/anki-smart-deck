@@ -1,0 +1,4 @@
+# Nothing is COPYed into the image (it installs from PyPI); this just keeps the
+# build context small.
+*
+!Dockerfile

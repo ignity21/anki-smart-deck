@@ -1,5 +1,7 @@
 """ankinote GUI — NiceGUI-powered interface for Anki card generation."""
 
+import os
+
 from nicegui import ui
 
 from ankinote.ui.config import load_settings, save_settings
@@ -137,7 +139,10 @@ def start_gui() -> None:
     ui.run(
         title="ankinote",
         favicon="📝",
-        storage_secret="ankinote-ui-session-key",
+        host=os.getenv("ANKINOTE_HOST", "0.0.0.0"),
+        port=int(os.getenv("ANKINOTE_PORT", "8080")),
+        storage_secret=os.getenv("ANKINOTE_STORAGE_SECRET", "ankinote-ui-session-key"),
+        show=os.getenv("ANKINOTE_SHOW", "true").lower() != "false",
         reload=False,
     )
 

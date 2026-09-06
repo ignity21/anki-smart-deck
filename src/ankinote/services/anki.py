@@ -6,6 +6,7 @@ from typing import Any, Protocol
 
 import httpx
 
+from ankinote.config import envs
 from ankinote.utils.httpcli import post
 
 
@@ -778,13 +779,14 @@ class NoteClient:
 class AnkiConnectClient:
     """Client for interacting with AnkiConnect API."""
 
-    def __init__(self, url: str = "http://localhost:8765") -> None:
+    def __init__(self, url: str | None = None) -> None:
         """Initialize AnkiConnect client.
 
         Args:
-            url: AnkiConnect server URL
+            url: AnkiConnect server URL. Defaults to ``ANKI_CONNECT_URL``
+                (env var), otherwise ``http://localhost:8765``.
         """
-        self._url = url
+        self._url = url or envs.ANKI_CONNECT_URL
         self.models = ModelClient(self)
         self.notes = NoteClient(self)
         self.decks = DeckClient(self)

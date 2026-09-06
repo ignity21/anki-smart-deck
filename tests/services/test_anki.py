@@ -344,3 +344,15 @@ class TestAnkiConnectInvoke:
 
         with pytest.raises(AnkiConnectError, match="model was not found"):
             await client._invoke("addNote")
+
+
+class TestAnkiConnectUrl:
+    """URL resolution for the AnkiConnect client."""
+
+    def test_defaults_to_env_var(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr("ankinote.config.envs.ANKI_CONNECT_URL", "http://anki:8765")
+        assert AnkiConnectClient()._url == "http://anki:8765"
+
+    def test_explicit_url_wins_over_env_var(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr("ankinote.config.envs.ANKI_CONNECT_URL", "http://anki:8765")
+        assert AnkiConnectClient(url="http://other:1234")._url == "http://other:1234"
