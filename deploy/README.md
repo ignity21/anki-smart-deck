@@ -49,8 +49,27 @@ existing collection file instead, see the commented bind mount in
   them in `.env`.
 - `ANKINOTE_STORAGE_SECRET` signs the GUI session cookie — generate one with
   `openssl rand -hex 32`. Defaults to a shared built-in value if unset.
+- `ANKINOTE_PUBLISH` sets the published address/port (default `127.0.0.1:8080`).
+  Use `8080` to bind all interfaces, `127.0.0.1:9000` for a different port.
 - `headless/` additionally needs `ANKIWEB_USER` / `ANKIWEB_PASS` for the bundled
   AnkiConnect server.
+
+## Customizing beyond `.env`
+
+For structural changes — an extra volume, another service, a different network —
+drop a `compose.override.yaml` next to the stack's `compose.yaml`. Compose loads
+and merges it automatically on `docker compose up`; it is gitignored.
+
+```yaml
+# deploy/standard/compose.override.yaml
+services:
+  ankinote:
+    volumes:
+      - ./media:/media
+```
+
+Note list merges *append* (e.g. a `ports:` entry in the override is added, not
+replaced) — for the published port use `ANKINOTE_PUBLISH` instead.
 - `ANKINOTE_IMAGE` overrides the image/tag (default
   `ghcr.io/ignity21/ankinote-ai:latest`).
 

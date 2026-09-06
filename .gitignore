@@ -143,6 +143,10 @@ celerybeat.pid
 # Environments
 .env
 .envrc
+
+# Local Compose overrides (deploy/*/compose.override.yaml)
+compose.override.yaml
+compose.override.yml
 .venv
 env/
 venv/

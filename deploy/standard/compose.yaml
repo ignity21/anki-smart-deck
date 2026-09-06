@@ -20,7 +20,9 @@ services:
     #   args:
     #     ANKINOTE_VERSION: ${ANKINOTE_VERSION:?set ANKINOTE_VERSION}
     ports:
-      - "127.0.0.1:8080:8080"
+      # Change the published address/port via ANKINOTE_PUBLISH in .env, e.g.
+      # "8080" (all interfaces) or "127.0.0.1:9000".
+      - "${ANKINOTE_PUBLISH:-127.0.0.1:8080}:8080"
     env_file:
       - path: .env
         required: false
