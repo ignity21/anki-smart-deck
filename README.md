@@ -90,12 +90,13 @@ Two ready-made compose stacks under [`deploy/`](deploy/):
 ```bash
 cd deploy/standard        # GUI + an AnkiConnect you already run
 # or: cd deploy/headless  # GUI + a headless AnkiConnect that syncs with AnkiWeb
-cp .env.example .env      # then fill it in
+cp .env.example .env      # set ANKINOTE_STORAGE_SECRET (+ AnkiWeb login for headless)
 docker compose up -d      # http://localhost:8080
 ```
 
-See [`deploy/README.md`](deploy/README.md) for the difference, the AnkiConnect
-host setup, and building locally.
+AI provider keys are added in the web UI (Settings page), not `.env`. See
+[`deploy/README.md`](deploy/README.md) for the difference between the stacks, the
+AnkiConnect host setup, and building locally.
 
 Container env vars:
 

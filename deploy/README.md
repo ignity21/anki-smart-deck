@@ -17,9 +17,13 @@ Each directory is standalone:
 
 ```bash
 cd deploy/standard        # or deploy/headless
-cp .env.example .env      # then fill it in
+cp .env.example .env      # set ANKINOTE_STORAGE_SECRET (+ AnkiWeb login for headless)
 docker compose up -d      # http://localhost:8080
 ```
+
+**AI provider keys are configured in the web UI**, not in `.env` — open the
+Settings page after first launch and add your text/image provider profiles and the
+Google TTS key. They persist in the `ankinote-config` volume.
 
 ## `standard/`
 
@@ -41,9 +45,12 @@ existing collection file instead, see the commented bind mount in
 ## Config & secrets
 
 - Provider profiles and API keys entered on the Settings page persist in the
-  `ankinote-config` volume (`/config` in the container).
+  `ankinote-config` volume (`/config` in the container) — there is no need to put
+  them in `.env`.
 - `ANKINOTE_STORAGE_SECRET` signs the GUI session cookie — generate one with
   `openssl rand -hex 32`. Defaults to a shared built-in value if unset.
+- `headless/` additionally needs `ANKIWEB_USER` / `ANKIWEB_PASS` for the bundled
+  AnkiConnect server.
 - `ANKINOTE_IMAGE` overrides the image/tag (default
   `ghcr.io/ignity21/ankinote-ai:latest`).
 
