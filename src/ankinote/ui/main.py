@@ -2,8 +2,9 @@
 
 import os
 
-from nicegui import ui
+from nicegui import app, ui
 
+from ankinote.services.anki_factory import start_anki_backend, stop_anki_backend
 from ankinote.ui.config import load_settings, save_settings
 from ankinote.ui.i18n import SUPPORTED_LOCALES, set_locale, t
 from ankinote.ui.pages.notetypes import notetypes_page
@@ -168,6 +169,18 @@ def _settings_page() -> None:
     """Settings page."""
     _create_layout()
     settings_page()
+
+
+@app.on_startup
+async def _open_anki_backend() -> None:
+    """Open the shared collection runtime once for the whole web app."""
+    await start_anki_backend()
+
+
+@app.on_shutdown
+async def _close_anki_backend() -> None:
+    """Close the shared collection runtime on web app shutdown."""
+    await stop_anki_backend()
 
 
 def start_gui() -> None:

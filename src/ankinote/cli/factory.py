@@ -21,7 +21,7 @@ from ankinote.services.ai import (
     resolve_thinking,
 )
 from ankinote.services.anki import AnkiCollectionClient
-from ankinote.services.anki_factory import create_anki_client
+from ankinote.services.anki_factory import anki_backend_scope, create_anki_client
 
 # ``THINKING_CHOICES`` / ``resolve_thinking`` moved to ``ankinote.services.ai``
 # (shared with the GUI); re-exported here for the CLI modules that import them.
@@ -163,7 +163,7 @@ async def collection_context[TOptions, TCollection](
     options: TOptions,
 ) -> AsyncIterator[TCollection]:
     """Create application, transport client, and collection in one place."""
-    async with Application():
+    async with Application(), anki_backend_scope():
         client = create_anki_client()
         async with builder(client, options) as collection:
             yield collection

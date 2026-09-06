@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from ankinote.services.anki import AnkiConnectClient
-from ankinote.services.anki_factory import AnkiBackendConfigError, create_anki_client
+from ankinote.services.anki_direct import DirectCollectionClient
+from ankinote.services.anki_factory import (
+    AnkiBackendConfigError,
+    anki_backend_scope,
+    create_anki_client,
+    get_shared_runtime,
+)
 
 _SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "ankinote"
 _FACTORY_MODULE = _SRC_ROOT / "services" / "anki_factory.py"
@@ -38,15 +44,80 @@ class TestBackendSelection:
         with pytest.raises(AnkiBackendConfigError, match="ANKI_COLLECTION_PATH"):
             create_anki_client()
 
-    def test_collection_backend_not_implemented_yet(
+    def test_collection_backend_without_active_scope_raises(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr("ankinote.config.envs.ANKI_BACKEND", "collection")
         monkeypatch.setattr(
             "ankinote.config.envs.ANKI_COLLECTION_PATH", "/tmp/collection"
         )
-        with pytest.raises(AnkiBackendConfigError, match="not implemented"):
+        with pytest.raises(AnkiBackendConfigError, match="not started"):
             create_anki_client()
+
+
+@pytest.fixture
+def collection_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("ankinote.config.envs.ANKI_BACKEND", "collection")
+    monkeypatch.setattr(
+        "ankinote.config.envs.ANKI_COLLECTION_PATH",
+        str(tmp_path / "collection.anki2"),
+    )
+
+
+class TestBackendScope:
+    async def test_scope_shares_one_runtime_across_clients(
+        self, collection_env: None
+    ) -> None:
+        async with anki_backend_scope():
+            a = create_anki_client()
+            b = create_anki_client()
+            assert isinstance(a, DirectCollectionClient)
+            assert a._runtime is b._runtime is get_shared_runtime()  # type: ignore[attr-defined]
+        assert get_shared_runtime() is None
+
+    async def test_scope_closes_runtime_on_exception(
+        self, collection_env: None
+    ) -> None:
+        with pytest.raises(RuntimeError, match="boom"):
+            async with anki_backend_scope():
+                assert get_shared_runtime() is not None
+                raise RuntimeError("boom")
+        assert get_shared_runtime() is None
+
+    async def test_nested_scope_reuses_and_defers_close(
+        self, collection_env: None
+    ) -> None:
+        async with anki_backend_scope():
+            outer = get_shared_runtime()
+            async with anki_backend_scope():
+                assert get_shared_runtime() is outer
+            # inner exit must not close the runtime the outer scope owns
+            assert get_shared_runtime() is outer
+        assert get_shared_runtime() is None
+
+    async def test_connect_backend_scope_is_noop(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("ankinote.config.envs.ANKI_BACKEND", "connect")
+        async with anki_backend_scope():
+            assert get_shared_runtime() is None
+            assert isinstance(create_anki_client(), AnkiConnectClient)
+
+    async def test_concurrent_collection_calls_serialize_and_complete(
+        self, collection_env: None
+    ) -> None:
+        import asyncio
+
+        async with anki_backend_scope():
+            client = create_anki_client()
+            await client.decks.create("D")
+            results = await asyncio.gather(
+                client.decks.create("D"),
+                client.decks.create("D"),
+                client.models.exists("nope"),
+            )
+        assert results[0] == results[1]
+        assert results[2] is False
 
 
 def test_no_direct_backend_construction_outside_factory() -> None:

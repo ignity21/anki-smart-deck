@@ -217,6 +217,15 @@ CLI context closes the runtime on both success and exception paths; a
 generation task awaiting the AI service does not block another task's
 collection call.
 
+**Done 2026-09-06:** `anki_backend_scope()` / `start_anki_backend()` /
+`stop_anki_backend()` in `anki_factory.py` own one process-wide
+`_shared_runtime`. The web app opens it in `app.on_startup` and closes it in
+`app.on_shutdown` (`ui/main.py`); the CLI wraps `collection_context` in
+`anki_backend_scope()`. `create_anki_client()` for `collection` returns a
+`DirectCollectionClient` over the shared runtime and raises if no scope is
+active. Nested scopes reuse the outer runtime. Connect backend is unchanged
+and stateless.
+
 ### Stage 5 — Sync state machine (no network)
 
 - Implement the state machine (`not_logged_in`, `initializing`, `idle`,
