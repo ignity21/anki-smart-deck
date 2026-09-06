@@ -56,9 +56,9 @@ def test_no_direct_backend_construction_outside_factory() -> None:
     for path in _SRC_ROOT.rglob("*.py"):
         if path in (_FACTORY_MODULE, _DEFINING_MODULE):
             continue
-        if "AnkiConnectClient" in path.read_text(encoding="utf-8"):
+        if "AnkiConnectClient(" in path.read_text(encoding="utf-8"):
             offenders.append(str(path.relative_to(_SRC_ROOT)))
     assert not offenders, (
-        f"modules reference AnkiConnectClient directly instead of "
+        f"modules construct AnkiConnectClient directly instead of "
         f"create_anki_client(): {offenders}"
     )
