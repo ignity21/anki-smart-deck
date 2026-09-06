@@ -1,64 +1,94 @@
-"""STEM card data models for Anki."""
+"""Independent STEM generation schemas and their Anki storage fields."""
 
-from dataclasses import dataclass
 from enum import StrEnum
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 
 class CardType(StrEnum):
     CONCEPT = "concept"
     FORMULA = "formula"
     PROCEDURE = "procedure"
+    EXAMPLE = "example"
+
+
+class CardContent(BaseModel):
+    """Common generation metadata, not an Anki note type."""
+
+    model_config = ConfigDict(
+        extra="forbid", coerce_numbers_to_str=True, str_strip_whitespace=True
+    )
+    front: str = Field(min_length=1)
+    tags: list[str]
+    image_description: str | None = None
 
 
 class Variable(BaseModel):
-    """A single symbol definition for formula cards."""
-
     symbol: str
     description: str
 
 
-class StemModel(BaseModel):
-    """Structured STEM card model for AI generation.
-
-    The STEM collection covers concept definitions, formulas/theorems,
-    and step-by-step procedures across Math, Physics, CS, and Engineering.
-    card_type controls which Anki template is rendered.
-    back_brief is a concise answer (<=2 sentences, no derivation).
-    back_detail is the full explanation, derivation, or worked steps.
-    Supports LaTeX in all text fields via MathJax.
-
-    Structured fields are optional and rendered into the stored back_detail
-    HTML by the collection:
-    - latex: the core formula expression, shown as a centered block
-      (formula cards).
-    - variables: symbol definitions, shown as a table (formula cards).
-    - steps: ordered procedure steps, shown as a numbered list (procedure
-      cards).
-
-    If the AI determines that a diagram would aid understanding (e.g. graphs,
-    geometry, flowcharts), it should set image_description. The system will
-    generate an image from that description and embed it in back_detail.
-    """
-
-    card_type: CardType
-    front: str
-    back_brief: str
+class ConceptModel(CardContent):
+    card_type: Literal[CardType.CONCEPT] = CardType.CONCEPT
+    back_brief: str = Field(min_length=1)
     back_detail: str
-    tags: list[str]
-    image_description: str | None = None
-    latex: str | None = None
-    variables: list[Variable] | None = None
-    steps: list[str] | None = None
 
 
-@dataclass
-class StemNoteType:
-    """Anki note type for STEM cards (all string fields)."""
+class FormulaModel(CardContent):
+    card_type: Literal[CardType.FORMULA] = CardType.FORMULA
+    latex: str = Field(min_length=1)
+    meaning: str = Field(min_length=1)
+    variables: list[Variable]
+    conditions: str
+    derivation: str
 
-    card_type: str  # "concept" | "formula" | "procedure"
-    front: str
-    back_brief: str
-    back_detail: str
-    tags: str
+
+class ProcedureModel(CardContent):
+    card_type: Literal[CardType.PROCEDURE] = CardType.PROCEDURE
+    summary: str = Field(min_length=1)
+    steps: list[Annotated[str, Field(min_length=1)]] = Field(min_length=1)
+    conditions: str
+
+
+class ExampleModel(CardContent):
+    card_type: Literal[CardType.EXAMPLE] = CardType.EXAMPLE
+    answer: str = Field(min_length=1)
+    steps: list[Annotated[str, Field(min_length=1)]] = Field(min_length=1)
+    explanation: str
+
+
+type StemCard = ConceptModel | FormulaModel | ProcedureModel | ExampleModel
+
+CARD_ADAPTER: TypeAdapter[StemCard] = TypeAdapter(
+    Annotated[StemCard, Field(discriminator="card_type")]
+)
+MODEL_TYPES: dict[
+    CardType, type[ConceptModel | FormulaModel | ProcedureModel | ExampleModel]
+] = {
+    CardType.CONCEPT: ConceptModel,
+    CardType.FORMULA: FormulaModel,
+    CardType.PROCEDURE: ProcedureModel,
+    CardType.EXAMPLE: ExampleModel,
+}
+
+# Structured lists render into their own fields. Tags use Anki's native store.
+NOTE_FIELDS: dict[CardType, tuple[str, ...]] = {
+    CardType.CONCEPT: ("front", "back_brief", "back_detail", "image"),
+    CardType.FORMULA: (
+        "front",
+        "latex",
+        "meaning",
+        "variables",
+        "conditions",
+        "derivation",
+        "image",
+    ),
+    CardType.PROCEDURE: ("front", "summary", "steps", "conditions", "image"),
+    CardType.EXAMPLE: ("front", "answer", "steps", "explanation", "image"),
+}
+
+
+def note_type_name(card_type: CardType) -> str:
+    """Return the stable, unversioned Anki note type name."""
+    return f"AINote STEM {card_type.title()}"

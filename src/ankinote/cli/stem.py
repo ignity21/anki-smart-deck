@@ -1,6 +1,7 @@
 """CLI commands for STEM card generation."""
 
 import asyncio
+import mimetypes
 from pathlib import Path
 
 import click
@@ -15,6 +16,7 @@ from ankinote.cli.factory import (
     collection_context,
     resolve_thinking,
 )
+from ankinote.collections.stem import CardType
 from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
 
 console = Console()
@@ -25,13 +27,13 @@ def collection_options(f):
     f = click.option(
         "--llm",
         default=None,
-        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model_id,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model,
         help="LLM model ID for content generation",
     )(f)
     f = click.option(
         "--image-model",
         default=None,
-        show_default=DEFAULT_AI_SERVICE_CONFIG.image_model_id,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.image_model,
         help="Image model ID for diagram generation",
     )(f)
     f = click.option(
@@ -50,6 +52,13 @@ def collection_options(f):
             "(default: provider default, thinking on for STEM cards)."
         ),
     )(f)
+    f = click.option(
+        "--type",
+        "card_type",
+        type=click.Choice(["auto", *(str(kind) for kind in CardType)]),
+        default="auto",
+        show_default=True,
+    )(f)
     return f
 
 
@@ -58,13 +67,15 @@ def build_options(
     image_model: str | None,
     image_size: int | None,
     thinking: str | None = None,
+    card_type: str = "auto",
 ) -> StemCollectionOptions:
     """Convert CLI parameters to typed collection options."""
     return StemCollectionOptions(
-        llm_model_id=llm,
-        image_model_id=image_model,
+        llm_model=llm,
+        image_model=image_model,
         image_size=image_size,
         reasoning_effort=resolve_thinking(thinking, unset=None),
+        card_type=None if card_type == "auto" else CardType(card_type),
     )
 
 
@@ -75,11 +86,11 @@ def stem():
 
 @stem.command("init")
 @collection_options
-def init(llm, image_model, image_size, thinking):
+def init(llm, image_model, image_size, thinking, card_type):
     """Create note type and deck in Anki."""
 
     async def _run():
-        options = build_options(llm, image_model, image_size, thinking)
+        options = build_options(llm, image_model, image_size, thinking, card_type)
         async with collection_context(build_stem_collection, options) as collection:
             console.print(
                 f"[green]\u2713[/green] Initialized STEM collection: {collection.deck_name}"
@@ -90,16 +101,30 @@ def init(llm, image_model, image_size, thinking):
 
 @stem.command("add")
 @click.argument("topic")
+@click.option(
+    "--image",
+    "image_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help=(
+        "Reference image (e.g. a photographed problem) for the AI to solve "
+        "from. Requires a vision-capable --llm model."
+    ),
+)
 @collection_options
-def add(topic, llm, image_model, image_size, thinking):
+def add(topic, image_path, llm, image_model, image_size, thinking, card_type):
     """Generate and push a single STEM card.
 
     TOPIC is any question or concept (e.g. "What is a derivative?",
     "请解释平行线的概念", "State Bayes' theorem").
     """
+    reference_image = image_path.read_bytes() if image_path else None
+    reference_image_mime = (
+        image_path and mimetypes.guess_type(image_path.name)[0]
+    ) or "image/png"
 
     async def _run():
-        options = build_options(llm, image_model, image_size, thinking)
+        options = build_options(llm, image_model, image_size, thinking, card_type)
         async with collection_context(build_stem_collection, options) as collection:
             with Progress(
                 SpinnerColumn(),
@@ -109,7 +134,11 @@ def add(topic, llm, image_model, image_size, thinking):
                 task = progress.add_task(
                     f"Generating STEM card for: {topic[:50]}...", total=None
                 )
-                note_id = await collection.generate_and_add_note(topic)
+                note_id = await collection.generate_and_add_note(
+                    topic,
+                    reference_image=reference_image,
+                    reference_image_mime=reference_image_mime,
+                )
                 progress.update(task, completed=True)
 
             console.print(f"[green]\u2713[/green] Created/updated note {note_id}")
@@ -131,7 +160,7 @@ def add(topic, llm, image_model, image_size, thinking):
     type=int,
     help="Requests per minute limit",
 )
-def batch(topics, file, llm, image_model, image_size, rpm, thinking):
+def batch(topics, file, llm, image_model, image_size, rpm, thinking, card_type):
     """Generate and push multiple STEM cards.
 
     Topics can be passed as arguments, read from a file (one per line),
@@ -160,7 +189,7 @@ def batch(topics, file, llm, image_model, image_size, rpm, thinking):
 
     async def _run():
         nonlocal success
-        options = build_options(llm, image_model, image_size, thinking)
+        options = build_options(llm, image_model, image_size, thinking, card_type)
 
         async with collection_context(build_stem_collection, options) as collection:
             delay = 60.0 / rpm if rpm > 0 else 0

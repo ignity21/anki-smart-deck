@@ -5,17 +5,22 @@ import json
 import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import cast
 
-# Built-in LLM provider definitions.
-# Model lists are discovered live from litellm's bundled model catalog
-# (see `get_provider_models`) — these are only used as a fallback if that
-# lookup fails or turns up empty.
+# Vendor templates — the ones the GUI offers directly in the "Add provider"
+# dialog (autofills Base URL + drives model discovery/fetch heuristics for a
+# new profile). Anything else is reached by picking ``CUSTOM_VENDOR`` instead.
+#
+# Model lists here are only a fallback: `get_provider_models` first pulls the
+# provider's chat models from litellm's bundled catalog and uses these curated
+# ids only when that lookup fails or turns up empty.
 PROVIDERS: dict[str, dict] = {
     "OpenAI": {
         "models": ["gpt-4o", "gpt-4o-mini", "o3-mini", "gpt-4.1"],
         "env_key": "OPENAI_API_KEY",
         "litellm_provider": "openai",
         "model_prefix": None,
+        "api_base": "https://api.openai.com/v1",
     },
     "Anthropic": {
         "models": [
@@ -25,8 +30,9 @@ PROVIDERS: dict[str, dict] = {
         "env_key": "ANTHROPIC_API_KEY",
         "litellm_provider": "anthropic",
         "model_prefix": None,
+        "api_base": "https://api.anthropic.com/v1",
     },
-    "Google": {
+    "Gemini": {
         "models": [
             "gemini/gemini-2.0-flash",
             "gemini/gemini-2.5-pro-exp-03-25",
@@ -34,21 +40,23 @@ PROVIDERS: dict[str, dict] = {
         "env_key": "GEMINI_API_KEY",
         "litellm_provider": "gemini",
         "model_prefix": "gemini/",
-    },
-    "DeepSeek": {
-        "models": ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"],
-        "env_key": "DEEPSEEK_API_KEY",
-        "litellm_provider": "deepseek",
-        "model_prefix": "deepseek/",
+        "api_base": "https://generativelanguage.googleapis.com/v1beta",
     },
 }
 
-# Sentinel provider name for a user-supplied OpenAI-compatible endpoint
-# (custom base URL + arbitrary model id), e.g. a local vLLM/Ollama/LM Studio
-# server or a third-party OpenAI-compatible API.
-CUSTOM_PROVIDER = "Custom (OpenAI-compatible)"
-CUSTOM_API_KEY_STORAGE_KEY = "CUSTOM_API_KEY"
-NEW_CUSTOM_PROVIDER = "＋ Add custom provider"
+# Sentinel vendor for a user-supplied OpenAI-compatible endpoint (custom base
+# URL + arbitrary model id), e.g. a local vLLM/Ollama/LM Studio server, a
+# third-party OpenAI-compatible API, or a second account on a vendor not in
+# ``PROVIDERS``/``IMAGE_PROVIDERS``. Offered alongside the curated vendors in
+# the "Add provider" dialog for both text and image profiles.
+CUSTOM_VENDOR = "Custom / Other"
+CUSTOM_VENDOR_TEMPLATE: dict = {
+    "models": [],
+    "env_key": None,
+    "litellm_provider": "openai",
+    "model_prefix": None,
+    "api_base": "",
+}
 
 # Substrings that disqualify an otherwise "chat" mode model from the
 # picker — these variants require request shapes our generators don't send.
@@ -84,16 +92,291 @@ def _discover_chat_models(
 
 
 def get_provider_models(provider: str) -> list[str]:
-    """Return the current list of selectable chat model ids for a provider."""
+    """Return the current list of selectable chat model ids for a vendor."""
     info = PROVIDERS[provider]
     models = list(_discover_chat_models(info["litellm_provider"], info["model_prefix"]))
     return models or list(info["models"])
 
 
+async def fetch_model_ids(
+    *,
+    litellm_provider: str,
+    api_base: str,
+    api_key: str,
+    model_prefix: str | None = None,
+) -> list[str]:
+    """Ask a provider's HTTP API for the model ids it currently serves.
+
+    Handles the OpenAI-compatible ``GET /models`` shape (OpenAI, DeepSeek,
+    vLLM, LM Studio, …), Anthropic's ``/v1/models``, and Gemini's
+    ``/v1beta/models``. Ids come back prefixed the way litellm expects them
+    (e.g. ``gemini/…``). Raises ``httpx`` errors when the request fails.
+    """
+    import httpx
+
+    url = f"{api_base.rstrip('/')}/models"
+    headers: dict[str, str] = {}
+    params: dict[str, str] = {}
+    if litellm_provider == "anthropic":
+        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+        params = {"limit": "1000"}
+    elif litellm_provider in {"gemini", "vertex_ai"}:
+        params = {"key": api_key, "pageSize": "1000"}
+    else:
+        headers = {"Authorization": f"Bearer {api_key}"}
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(url, headers=headers, params=params or None)
+        response.raise_for_status()
+        payload = response.json()
+
+    if litellm_provider in {"gemini", "vertex_ai"}:
+        names = [
+            entry.get("name", "").removeprefix("models/")
+            for entry in payload.get("models", [])
+            if "generateContent" in entry.get("supportedGenerationMethods", [])
+        ]
+    else:
+        names = [
+            entry["id"]
+            for entry in payload.get("data", [])
+            if isinstance(entry, dict) and entry.get("id")
+        ]
+
+    prefix = model_prefix or ""
+    return sorted(
+        {name if name.startswith(prefix) else prefix + name for name in names if name}
+    )
+
+
+async def fetch_image_model_ids(
+    *,
+    litellm_provider: str,
+    api_base: str,
+    api_key: str,
+    model_prefix: str | None = None,
+) -> list[str]:
+    """Ask a provider's HTTP API for image-generation model ids it serves.
+
+    When a provider explicitly marks which models support image generation,
+    only those are returned. Otherwise, all models are returned as a fallback.
+    Ids come back prefixed the way litellm expects them (e.g. ``gemini/…``).
+    Raises ``httpx`` errors when the request fails.
+    """
+    import httpx
+
+    if litellm_provider == "fal_ai":
+        return await fetch_fal_image_model_ids(api_base=api_base, api_key=api_key)
+
+    url = f"{api_base.rstrip('/')}/models"
+    headers: dict[str, str] = {}
+    params: dict[str, str] = {}
+    if litellm_provider == "anthropic":
+        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+        params = {"limit": "1000"}
+    elif litellm_provider in {"gemini", "vertex_ai"}:
+        params = {"key": api_key, "pageSize": "1000"}
+    else:
+        headers = {"Authorization": f"Bearer {api_key}"}
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(url, headers=headers, params=params or None)
+        response.raise_for_status()
+        payload = response.json()
+
+    if litellm_provider in {"gemini", "vertex_ai"}:
+        all_entries = payload.get("models", [])
+        has_filter = any(
+            "imageGeneration" in entry.get("supportedGenerationMethods", [])
+            for entry in all_entries
+        )
+        names = [
+            entry.get("name", "").removeprefix("models/")
+            for entry in all_entries
+            if not has_filter
+            or "imageGeneration" in entry.get("supportedGenerationMethods", [])
+        ]
+    else:
+        all_entries = payload.get("data", [])
+        has_filter = any(
+            entry.get("id", "").startswith(("dall-e", "gpt-image"))
+            for entry in all_entries
+            if isinstance(entry, dict)
+        )
+        names = [
+            entry["id"]
+            for entry in all_entries
+            if isinstance(entry, dict)
+            and entry.get("id")
+            and (
+                not has_filter
+                or entry["id"].startswith(("dall-e", "gpt-image", "image"))
+            )
+        ]
+
+    prefix = model_prefix or ""
+    return sorted(
+        {name if name.startswith(prefix) else prefix + name for name in names if name}
+    )
+
+
+async def fetch_fal_image_model_ids(*, api_base: str, api_key: str) -> list[str]:
+    """List active text-to-image endpoint IDs through Fal's Platform API.
+
+    Fal's inference base (``https://fal.run``) is intentionally separate from
+    this discovery base (``https://api.fal.ai/v1``). The API key is optional
+    for this endpoint, although supplying it provides a higher rate limit.
+    """
+    import httpx
+
+    headers = {"Authorization": f"Key {api_key}"} if api_key else {}
+    params: dict[str, str] = {
+        "category": "text-to-image",
+        "status": "active",
+        "limit": "100",
+    }
+    endpoint_ids: set[str] = set()
+    cursor: str | None = None
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        while True:
+            if cursor is None:
+                params.pop("cursor", None)
+            else:
+                params["cursor"] = cursor
+            response = await client.get(
+                f"{api_base.rstrip('/')}/models",
+                headers=headers,
+                params=params,
+            )
+            response.raise_for_status()
+            payload = cast(dict[str, object], response.json())
+            models = payload.get("models", [])
+            if not isinstance(models, list):
+                raise TypeError("Fal model search returned an invalid models list")
+            endpoint_ids.update(
+                endpoint_id
+                for entry in models
+                if isinstance(entry, dict)
+                and isinstance((endpoint_id := entry.get("endpoint_id")), str)
+                and endpoint_id
+            )
+            next_cursor = payload.get("next_cursor")
+            if not isinstance(next_cursor, str) or not next_cursor:
+                break
+            if next_cursor == cursor:
+                raise ValueError("Fal model search returned a repeated cursor")
+            cursor = next_cursor
+    return sorted(endpoint_ids)
+
+
 DEFAULT_IMAGE_MODELS: list[str] = [
     "gemini/gemini-3.1-flash-lite-image",
     "gemini/gemini-2.0-flash-exp-image",
+    "gpt-image-1",
 ]
+
+# Built-in image vendor templates, mirroring ``PROVIDERS``. Model lists are
+# discovered live from litellm's catalog (see ``get_image_provider_models``);
+# these are only the fallback when that lookup fails or turns up empty.
+IMAGE_PROVIDERS: dict[str, dict] = {
+    "OpenAI": {
+        "models": ["gpt-image-1", "dall-e-3"],
+        "env_key": "OPENAI_API_KEY",
+        "litellm_provider": "openai",
+        "model_prefix": None,
+        "api_base": "https://api.openai.com/v1",
+    },
+    "Gemini": {
+        "models": [
+            "gemini/gemini-3.1-flash-lite-image",
+            "gemini/gemini-2.5-flash-image",
+            "gemini/imagen-3.0-generate-002",
+        ],
+        "env_key": "GEMINI_API_KEY",
+        "litellm_provider": "gemini",
+        "model_prefix": "gemini/",
+        "api_base": "https://generativelanguage.googleapis.com/v1beta",
+    },
+    "Fal": {
+        "models": ["fal_ai/fal-ai/flux/schnell"],
+        "env_key": "FAL_AI_API_KEY",
+        "litellm_provider": "fal_ai",
+        "model_prefix": "fal_ai/",
+        "api_base": "https://fal.run",
+        "model_api_base": "https://api.fal.ai/v1",
+    },
+}
+
+DEFAULT_IMAGE_PROVIDER = "Gemini"
+
+
+@functools.cache
+def _discover_image_models(
+    litellm_provider: str, model_prefix: str | None
+) -> tuple[str, ...]:
+    """Pull the current image-generation model ids for a provider from litellm."""
+    try:
+        import litellm
+    except ImportError:
+        return ()
+
+    prefix = model_prefix or ""
+    models: list[str] = []
+    for name, info in litellm.model_cost.items():
+        if not isinstance(info, dict):
+            continue
+        if info.get("litellm_provider") != litellm_provider:
+            continue
+        if info.get("mode") != "image_generation":
+            continue
+        if model_prefix is not None and not name.startswith(model_prefix):
+            continue
+        # Drop litellm's size-/step-prefixed catalog variants
+        # (e.g. "1024-x-1024/dall-e-2"). fal_ai's canonical model ids are
+        # themselves slash-separated paths (e.g. "fal-ai/flux/schnell"), so
+        # this "no nested slash" heuristic does not apply to it.
+        if litellm_provider != "fal_ai" and "/" in name.removeprefix(prefix):
+            continue
+        models.append(name)
+    return tuple(sorted(models))
+
+
+def get_image_provider_models(provider: str) -> list[str]:
+    """Return the selectable image model ids for a vendor.
+
+    Curated defaults come first (they stay valid even if litellm's catalog
+    lags), followed by any additional ids discovered in the catalog.
+    """
+    info = IMAGE_PROVIDERS[provider]
+    discovered = _discover_image_models(info["litellm_provider"], info["model_prefix"])
+    return list(dict.fromkeys([*info["models"], *discovered]))
+
+
+def image_provider_for(model: str) -> str:
+    """Return the :data:`IMAGE_PROVIDERS` key that owns an image model id.
+
+    Matches by ``model_prefix`` first, then falls back to litellm's provider
+    lookup, and finally to :data:`DEFAULT_IMAGE_PROVIDER` for unknown ids.
+    """
+    for name, info in IMAGE_PROVIDERS.items():
+        prefix = info["model_prefix"]
+        if prefix and model.startswith(prefix):
+            return name
+        if name == "Fal" and model.startswith("fal-ai/"):
+            return name
+    try:
+        import litellm
+    except ImportError:
+        return DEFAULT_IMAGE_PROVIDER
+    try:
+        _, provider, _, _ = litellm.get_llm_provider(model)
+    except litellm.exceptions.BadRequestError:
+        return DEFAULT_IMAGE_PROVIDER
+    for name, info in IMAGE_PROVIDERS.items():
+        if info["litellm_provider"] == provider:
+            return name
+    return DEFAULT_IMAGE_PROVIDER
 
 
 @dataclass
@@ -104,24 +387,72 @@ class DefaultsConfig:
 
 
 @dataclass
-class CustomProvider:
-    """A named OpenAI-compatible endpoint configured by the user."""
+class ProviderProfile:
+    """One independently-configured provider profile.
 
-    base_url: str = ""
+    Every profile — whether created from a curated vendor template or as a
+    fully custom endpoint (``vendor == CUSTOM_VENDOR``) — carries its own
+    model, base URL, and API key, so multiple accounts of the same vendor can
+    coexist and are each used explicitly at generation time (no shared
+    env-var indirection).
+    """
+
+    vendor: str = ""
     model: str = ""
+    base_url: str = ""
     api_key: str = ""
+
+
+DEFAULT_TEXT_PROFILE_NAME = "OpenAI"
+DEFAULT_IMAGE_PROFILE_NAME = "Gemini"
+
+
+def _default_text_providers() -> dict[str, ProviderProfile]:
+    info = PROVIDERS[DEFAULT_TEXT_PROFILE_NAME]
+    return {
+        DEFAULT_TEXT_PROFILE_NAME: ProviderProfile(
+            vendor=DEFAULT_TEXT_PROFILE_NAME,
+            model=info["models"][0],
+            base_url=info["api_base"],
+        )
+    }
+
+
+def _default_image_providers() -> dict[str, ProviderProfile]:
+    info = IMAGE_PROVIDERS[DEFAULT_IMAGE_PROFILE_NAME]
+    return {
+        DEFAULT_IMAGE_PROFILE_NAME: ProviderProfile(
+            vendor=DEFAULT_IMAGE_PROFILE_NAME,
+            model=info["models"][0],
+            base_url=info["api_base"],
+        )
+    }
+
+
+def unique_name(base: str, taken: set[str]) -> str:
+    """Return ``base``, or ``base`` with a disambiguating suffix if taken."""
+    if base not in taken:
+        return base
+    n = 2
+    while f"{base} ({n})" in taken:
+        n += 1
+    return f"{base} ({n})"
 
 
 @dataclass
 class Settings:
-    provider: str = "OpenAI"
-    text_model: str = "gpt-4o"
-    image_model: str = "gemini/gemini-3.1-flash-lite-image"
+    text_providers: dict[str, ProviderProfile] = field(
+        default_factory=_default_text_providers
+    )
+    active_text_provider: str = DEFAULT_TEXT_PROFILE_NAME
+    image_providers: dict[str, ProviderProfile] = field(
+        default_factory=_default_image_providers
+    )
+    active_image_provider: str = DEFAULT_IMAGE_PROFILE_NAME
     image_size: int = 512
-    custom_base_url: str = ""
     api_keys: dict[str, str] = field(default_factory=dict)
-    custom_providers: dict[str, CustomProvider] = field(default_factory=dict)
     defaults: DefaultsConfig = field(default_factory=DefaultsConfig)
+    ui_language: str = "en"
 
 
 def _get_config_dir() -> Path:
@@ -137,46 +468,150 @@ def _get_config_path() -> Path:
     return _get_config_dir() / "settings.json"
 
 
+def _parse_profiles(raw: dict) -> dict[str, ProviderProfile]:
+    return {
+        name: ProviderProfile(
+            vendor=value.get("vendor", ""),
+            model=value.get("model", ""),
+            base_url=value.get("base_url", ""),
+            api_key=value.get("api_key", ""),
+        )
+        for name, value in raw.items()
+        if isinstance(name, str) and isinstance(value, dict)
+    }
+
+
+def _settings_from_current_shape(data: dict) -> Settings:
+    """Parse a settings.json already in the multi-profile shape."""
+    text_providers = _parse_profiles(data.get("text_providers", {}))
+    image_providers = _parse_profiles(data.get("image_providers", {}))
+    return Settings(
+        text_providers=text_providers or _default_text_providers(),
+        active_text_provider=data.get("active_text_provider")
+        or next(iter(text_providers), DEFAULT_TEXT_PROFILE_NAME),
+        image_providers=image_providers or _default_image_providers(),
+        active_image_provider=data.get("active_image_provider")
+        or next(iter(image_providers), DEFAULT_IMAGE_PROFILE_NAME),
+        image_size=data.get("image_size", 512),
+        api_keys=data.get("api_keys", {}),
+        defaults=DefaultsConfig(**data.get("defaults", {})),
+        ui_language=data.get("ui_language", "en"),
+    )
+
+
+# Literals from the pre-profile settings.json shape, kept only so an old
+# config file can still be recognized and migrated on first load.
+_LEGACY_CUSTOM_PROVIDER = "Custom (OpenAI-compatible)"
+_LEGACY_CUSTOM_API_KEY_STORAGE_KEY = "CUSTOM_API_KEY"
+
+
+def _settings_from_legacy_shape(data: dict) -> Settings:
+    """Migrate a pre-profile settings.json into the multi-profile shape.
+
+    The old shape had a single active ``provider``/``text_model`` (plus an
+    optional flat ``custom_providers`` dict of named custom endpoints) and a
+    single active ``image_provider``/``image_model`` — each becomes one
+    ``ProviderProfile`` here.
+    """
+    old_api_keys: dict = data.get("api_keys", {})
+    old_custom_providers: dict = data.get("custom_providers", {})
+    old_provider = data.get("provider", "OpenAI")
+    old_text_model = data.get("text_model", "gpt-4o")
+
+    text_providers: dict[str, ProviderProfile] = {}
+    taken: set[str] = set()
+    active_text_provider = ""
+
+    if old_provider in PROVIDERS:
+        info = PROVIDERS[old_provider]
+        name = unique_name(old_provider, taken)
+        taken.add(name)
+        text_providers[name] = ProviderProfile(
+            vendor=old_provider,
+            model=old_text_model,
+            base_url=info["api_base"],
+            api_key=old_api_keys.get(info["env_key"], ""),
+        )
+        active_text_provider = name
+    elif old_provider not in old_custom_providers:
+        # The legacy single-custom-provider sentinel, or an unrecognized
+        # provider string with no matching named profile.
+        base_name = (
+            "Custom"
+            if old_provider in ("", _LEGACY_CUSTOM_PROVIDER)
+            else str(old_provider)
+        )
+        name = unique_name(base_name, taken)
+        taken.add(name)
+        text_providers[name] = ProviderProfile(
+            vendor=CUSTOM_VENDOR,
+            model=old_text_model,
+            base_url=data.get("custom_base_url", ""),
+            api_key=old_api_keys.get(_LEGACY_CUSTOM_API_KEY_STORAGE_KEY, ""),
+        )
+        active_text_provider = name
+    # else: old_provider names an entry in old_custom_providers, handled below.
+
+    for cname, cvalue in old_custom_providers.items():
+        if not isinstance(cname, str) or not isinstance(cvalue, dict):
+            continue
+        name = unique_name(cname, taken)
+        taken.add(name)
+        text_providers[name] = ProviderProfile(
+            vendor=CUSTOM_VENDOR,
+            model=cvalue.get("model", ""),
+            base_url=cvalue.get("base_url", ""),
+            api_key=cvalue.get("api_key", ""),
+        )
+        if cname == old_provider:
+            active_text_provider = name
+
+    old_image_model = data.get("image_model", "gemini/gemini-3.1-flash-lite-image")
+    old_image_provider = data.get("image_provider") or image_provider_for(
+        old_image_model
+    )
+    image_providers: dict[str, ProviderProfile] = {}
+    active_image_provider = ""
+    if old_image_provider in IMAGE_PROVIDERS:
+        iinfo = IMAGE_PROVIDERS[old_image_provider]
+        image_providers[old_image_provider] = ProviderProfile(
+            vendor=old_image_provider,
+            model=old_image_model,
+            base_url=iinfo["api_base"],
+            api_key=old_api_keys.get(iinfo["env_key"], ""),
+        )
+        active_image_provider = old_image_provider
+
+    return Settings(
+        text_providers=text_providers or _default_text_providers(),
+        active_text_provider=active_text_provider
+        or next(iter(text_providers), DEFAULT_TEXT_PROFILE_NAME),
+        image_providers=image_providers or _default_image_providers(),
+        active_image_provider=active_image_provider
+        or next(iter(image_providers), DEFAULT_IMAGE_PROFILE_NAME),
+        image_size=data.get("image_size", 512),
+        api_keys={"GOOGLE_TTS_KEY": old_api_keys.get("GOOGLE_TTS_KEY", "")},
+        defaults=DefaultsConfig(**data.get("defaults", {})),
+        ui_language=data.get("ui_language", "en"),
+    )
+
+
 def load_settings() -> Settings:
-    """Load settings from ~/.config/ankinote/settings.json."""
+    """Load settings from ~/.config/ankinote/settings.json.
+
+    Transparently migrates a pre-profile settings.json (one active provider
+    per kind, plus a flat ``custom_providers`` dict) into the current
+    multi-profile shape. The file is rewritten in the new shape on next save.
+    """
     path = _get_config_path()
     if not path.exists():
         return Settings()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        defaults_data = data.get("defaults", {})
-        defaults = DefaultsConfig(**defaults_data)
-        custom_providers = {
-            name: CustomProvider(
-                base_url=value.get("base_url", ""),
-                model=value.get("model", ""),
-                api_key=value.get("api_key", ""),
-            )
-            for name, value in data.get("custom_providers", {}).items()
-            if isinstance(name, str) and isinstance(value, dict)
-        }
-        # Migrate the original single custom provider into a named profile.
-        # Keep the old fields in Settings as well so older callers/configs
-        # remain readable during the transition.
-        legacy_provider = data.get("provider") == CUSTOM_PROVIDER
-        if legacy_provider and CUSTOM_PROVIDER not in custom_providers:
-            custom_providers[CUSTOM_PROVIDER] = CustomProvider(
-                base_url=data.get("custom_base_url", ""),
-                model=data.get("text_model", ""),
-                api_key=data.get("api_keys", {}).get(CUSTOM_API_KEY_STORAGE_KEY, ""),
-            )
-
-        return Settings(
-            provider=data.get("provider", "OpenAI"),
-            text_model=data.get("text_model", "gpt-4o"),
-            image_model=data.get("image_model", "gemini/gemini-3.1-flash-lite-image"),
-            image_size=data.get("image_size", 512),
-            custom_base_url=data.get("custom_base_url", ""),
-            api_keys=data.get("api_keys", {}),
-            custom_providers=custom_providers,
-            defaults=defaults,
-        )
-    except (json.JSONDecodeError, KeyError, TypeError):
+        if "text_providers" in data:
+            return _settings_from_current_shape(data)
+        return _settings_from_legacy_shape(data)
+    except json.JSONDecodeError, KeyError, TypeError:
         return Settings()
 
 
@@ -185,24 +620,31 @@ def save_settings(settings: Settings) -> None:
     config_dir = _get_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
     data = {
-        "provider": settings.provider,
-        "text_model": settings.text_model,
-        "image_model": settings.image_model,
-        "image_size": settings.image_size,
-        "custom_base_url": settings.custom_base_url,
-        "api_keys": settings.api_keys,
-        "custom_providers": {
-            name: asdict(provider)
-            for name, provider in settings.custom_providers.items()
+        "text_providers": {
+            name: asdict(profile) for name, profile in settings.text_providers.items()
         },
+        "active_text_provider": settings.active_text_provider,
+        "image_providers": {
+            name: asdict(profile) for name, profile in settings.image_providers.items()
+        },
+        "active_image_provider": settings.active_image_provider,
+        "image_size": settings.image_size,
+        "api_keys": settings.api_keys,
         "defaults": asdict(settings.defaults),
+        "ui_language": settings.ui_language,
     }
     path = _get_config_path()
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def apply_env(settings: Settings) -> None:
-    """Set API keys from settings into os.environ (for litellm / Google TTS)."""
-    for key, value in settings.api_keys.items():
-        if value:
-            os.environ[key] = value
+    """Push the Google TTS API key into os.environ.
+
+    Provider-profile keys are now passed explicitly to each LiteLLM service
+    call (see ``ProviderProfile``) rather than resolved via env-var
+    indirection, so this only concerns the separate Google Cloud TTS
+    integration.
+    """
+    key = settings.api_keys.get("GOOGLE_TTS_KEY", "")
+    if key:
+        os.environ["GOOGLE_TTS_KEY"] = key

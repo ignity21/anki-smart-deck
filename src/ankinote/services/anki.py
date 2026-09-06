@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import base64
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -148,11 +150,21 @@ class AnkiDeckService(Protocol):
         """Create a deck or return the existing deck id."""
         ...
 
+    async def exists(self, deck_name: str) -> bool:
+        """Check whether a deck with the given name exists."""
+        ...
+
 
 class AnkiNoteService(Protocol):
     """Subset of note operations required by collections."""
 
-    async def find(self, deck_name: str, unique_fields: dict[str, str]) -> int | None:
+    async def find(
+        self,
+        deck_name: str,
+        unique_fields: dict[str, str],
+        *,
+        model_name: str | None = None,
+    ) -> int | None:
         """Find a note by deck and unique fields."""
         ...
 
@@ -219,7 +231,7 @@ class ModelClient:
         """
         self._client = client
 
-    async def list(self) -> list[str]:
+    async def list_names(self) -> list[str]:
         """List all note types (models) in Anki.
 
         Returns:
@@ -597,7 +609,7 @@ class DeckClient:
                 "deck": deck_name,
             },
         )
-        return True if resp is not False else False
+        return resp is not False
 
 
 class NoteClient:
@@ -611,7 +623,13 @@ class NoteClient:
         """
         self._client = client
 
-    async def find(self, deck_name: str, unique_fields: dict[str, str]) -> int | None:
+    async def find(
+        self,
+        deck_name: str,
+        unique_fields: dict[str, str],
+        *,
+        model_name: str | None = None,
+    ) -> int | None:
         """Query for a note ID based on unique field values.
 
         Args:
@@ -630,25 +648,30 @@ class NoteClient:
             ...     unique_fields={"Front": "hello"}
             ... )
         """
-        query_parts = [f'deck:"{deck_name}"']
+
+        def escape(value: str) -> str:
+            return (
+                value.replace("\\", "\\\\")
+                .replace('"', '\\"')
+                .replace("*", "\\*")
+                .replace("_", "\\_")
+            )
+
+        query_parts = [f'deck:"{escape(deck_name)}"']
+        if model_name is not None:
+            query_parts.append(f'note:"{escape(model_name)}"')
         for field_, value in unique_fields.items():
-            query_parts.append(f'{field_}:"{value}"')
+            query_parts.append(f'{field_}:"{escape(value)}"')
         query_str = " ".join(query_parts)
 
-        try:
-            note_ids = await self._client._invoke(
-                "findNotes", params={"query": query_str}
+        note_ids = await self._client._invoke("findNotes", params={"query": query_str})
+        if not note_ids:
+            return None
+        if len(note_ids) > 1:
+            raise KeyError(
+                f"Expected exactly one note matching {unique_fields} in deck '{deck_name}', but found {len(note_ids)}"
             )
-        except RuntimeError:
-            raise
-        else:
-            if not note_ids:
-                return None
-            if len(note_ids) > 1:
-                raise KeyError(
-                    f"Expected exactly one note matching {unique_fields} in deck '{deck_name}', but found {len(note_ids)}"
-                )
-            return note_ids[0]
+        return note_ids[0]
 
     async def add(
         self,

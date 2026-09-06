@@ -4,8 +4,30 @@ from typing import cast
 
 import pytest
 
+from ankinote.collections.stem.models import CardType, note_type_name
 from ankinote.services.anki import AnkiCollectionClient
 from ankinote.ui.pages import notetypes
+
+
+async def test_stem_specs_sync_each_independent_type(monkeypatch):
+    selected = []
+
+    class FakeStemCollection:
+        def __init__(self, client, **kwargs):
+            selected.append(kwargs["card_type"])
+
+        async def ensure_in_anki(self):
+            pass
+
+    monkeypatch.setattr(notetypes, "StemCollection", FakeStemCollection)
+    specs = [spec for spec in notetypes._build_specs() if spec.key.startswith("stem_")]
+    assert len(specs) == 4
+    for spec, kind in zip(specs, CardType, strict=True):
+        assert spec.notetype_name == note_type_name(kind)
+        assert spec.fields[0] == "front"
+        assert "card_type" not in spec.fields
+        await spec.sync(cast(AnkiCollectionClient, object()))
+    assert selected == list(CardType)
 
 
 @pytest.mark.asyncio

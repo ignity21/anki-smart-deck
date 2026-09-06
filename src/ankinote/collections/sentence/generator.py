@@ -2,7 +2,6 @@
 
 import json
 from dataclasses import dataclass
-from typing import cast
 
 from loguru import logger
 
@@ -54,7 +53,7 @@ async def generate_sentence_data(
     target_language: Language,
     native_language: Language,
     text_service: TextGenerationService,
-    model_id: str,
+    model: str,
     temperature: float = 0.3,
     reasoning_effort: str | None = DISABLE_REASONING,
 ) -> SentenceModel:
@@ -81,7 +80,7 @@ async def generate_sentence_data(
 
     try:
         content = await text_service.generate_text(
-            model_id=model_id,
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
@@ -89,7 +88,6 @@ async def generate_sentence_data(
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )
-        content = cast(str, content)
 
         logger.debug(content)
         logger.info(f"Raw AI response length: {len(content)} characters")
@@ -117,10 +115,10 @@ class SentenceGenerator:
         self,
         tts_service: SpeechSynthesizer,
         text_service: TextGenerationService,
-        text_model_id: str,
+        text_model: str,
     ) -> None:
         self._text_service = text_service
-        self._text_model_id = text_model_id
+        self._text_model = text_model
         self._tts_service = tts_service
 
     async def generate_sentence_data(
@@ -137,7 +135,7 @@ class SentenceGenerator:
             target_language=target_lang,
             native_language=native_lang,
             text_service=self._text_service,
-            model_id=self._text_model_id,
+            model=self._text_model,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )

@@ -34,7 +34,7 @@ COLLECTION_OPTIONS = [
     click.option(
         "--llm",
         default=None,
-        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model_id,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model,
     ),
     click.option(
         "--thinking",
@@ -64,7 +64,7 @@ def build_options(
     return LanguageCollectionOptions(
         native_language=Language(native),
         target_language=Language(target),
-        llm_model_id=llm,
+        llm_model=llm,
         reasoning_effort=resolve_thinking(thinking, unset=DISABLE_REASONING),
     )
 

@@ -111,7 +111,6 @@ body.nightMode {
 }
 
 .audio-stage,
-.translation-prompt,
 .plain-text,
 .type-result {
   text-align: center;
@@ -160,7 +159,12 @@ body.nightMode {
 .meaning-anchor,
 .meaning-prompt {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.7rem;
+}
+
+.meaning-row {
+  display: grid;
+  gap: 0.3rem;
 }
 
 .meaning-target {
@@ -168,18 +172,9 @@ body.nightMode {
   line-height: 1.4;
 }
 
-.meaning-native,
-.translation-prompt {
+.meaning-native {
   font-size: 0.98rem;
   color: var(--muted);
-}
-
-.hint-box {
-  margin-top: 1rem;
-  padding: 0.9rem;
-  border-radius: 1rem;
-  background: linear-gradient(135deg, var(--paper-strong), transparent);
-  border: 1px dashed var(--border);
 }
 
 .section-title {
@@ -256,24 +251,6 @@ ruby {
 
 rt {
   font-size: 0.58em;
-}
-
-.sense-note {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.7rem 0;
-  border-top: 1px solid var(--border);
-}
-
-.sense-note:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.sense-native {
-  color: var(--muted);
-  font-size: 0.92rem;
 }
 
 .bullet-list {

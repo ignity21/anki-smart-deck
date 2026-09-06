@@ -52,7 +52,7 @@ class TestWordGenerator:
             tts_service=synth,
             text_service=FakeTextService(),
             image_service=FakeImageService(),
-            text_model_id="text-model",
+            text_model="text-model",
         )
         word_model = WordModel(
             lemma="test",
@@ -65,7 +65,6 @@ class TestWordGenerator:
                 native_text="测试",
                 is_visualizable=False,
             ),
-            supporting_meanings=[],
             examples=[
                 WordExample(
                     sentence="a test example",
@@ -76,7 +75,6 @@ class TestWordGenerator:
             collocations=["take a test"],
             confusions=[],
             etymology_or_memory=None,
-            production_hint="school check",
         )
 
         media = await generator.generate_media(word_model, Language.ENGLISH)
@@ -95,7 +93,7 @@ class TestPhraseGenerator:
         generator = PhraseGenerator(
             tts_service=synth,
             text_service=FakeTextService(),
-            text_model_id="text-model",
+            text_model="text-model",
         )
         phrase_model = PhraseModel(
             phrase="take off",
@@ -132,7 +130,7 @@ class TestSentenceGenerator:
         generator = SentenceGenerator(
             tts_service=synth,
             text_service=FakeTextService(),
-            text_model_id="text-model",
+            text_model="text-model",
         )
         sentence_model = SentenceModel(
             target_sentence="This is a test.",

@@ -124,7 +124,7 @@ def _build_collection(
         client,
         native_language=Language.CHINESE_S,
         target_language=target_language,
-        text_model_id="phrase-model",
+        text_model="phrase-model",
         text_service=cast(TextGenerationService, DummyTextService()),
     )
     return collection, models

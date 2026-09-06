@@ -131,7 +131,7 @@ def _build_collection(
         client,
         native_language=Language.CHINESE_S,
         target_language=target_language,
-        text_model_id="word-model",
+        text_model="word-model",
         text_service=cast(TextGenerationService, DummyTextService()),
         image_service=cast(ImageGenerationService, DummyImageService()),
     )
@@ -150,13 +150,6 @@ def _build_model() -> WordModel:
             native_text="测试",
             is_visualizable=True,
         ),
-        supporting_meanings=[
-            Sense(
-                target_text="a trial of quality",
-                native_text="试验",
-                is_visualizable=False,
-            )
-        ],
         examples=[
             Example(
                 sentence="The test starts now.",
@@ -167,7 +160,6 @@ def _build_model() -> WordModel:
         collocations=["take a test", "pass a test"],
         confusions=["Do not confuse with quiz in formal contexts."],
         etymology_or_memory="From Latin testum.",
-        production_hint="school check",
     )
 
 
@@ -184,7 +176,6 @@ def test_word_model_accepts_japanese_ruby_schema():
                 "native_text": "招财猫",
                 "is_visualizable": True,
             },
-            "supporting_meanings": [],
             "examples": [
                 {
                     "sentence": "<店:みせ>に<招:まね>き<猫:ねこ>を<置:お>く。",
@@ -195,40 +186,11 @@ def test_word_model_accepts_japanese_ruby_schema():
             "collocations": ["<招:まね>き<猫:ねこ>を<飾:かざ>る"],
             "confusions": [],
             "etymology_or_memory": None,
-            "production_hint": "商店里常见的吉祥摆件",
         }
     )
 
     assert model.lemma == "招き猫"
     assert model.core_meaning.target_text.startswith("<招:まね>")
-
-
-def test_word_model_rejects_duplicate_supporting_meaning():
-    with pytest.raises(ValueError, match="supporting_meanings"):
-        WordModel(
-            lemma="test",
-            part_of_speech="noun",
-            pronunciation=None,
-            difficulty="A1",
-            morphology=None,
-            core_meaning=Sense(
-                target_text="an exam",
-                native_text="测试",
-                is_visualizable=False,
-            ),
-            supporting_meanings=[
-                Sense(
-                    target_text="an exam",
-                    native_text="测试",
-                    is_visualizable=False,
-                )
-            ],
-            examples=[Example(sentence="A test.", translation="测试。", highlights=[])],
-            collocations=[],
-            confusions=[],
-            etymology_or_memory=None,
-            production_hint="school check",
-        )
 
 
 def test_convert_to_note_type_renders_expected_html():
@@ -245,12 +207,30 @@ def test_convert_to_note_type_renders_expected_html():
     assert note["lemma"] == "test"
     assert note["headword_audio"] == "[sound:head.mp3]"
     assert "an exam or check" in note["core_meaning"]
-    assert note["translations"] == "试验"
     assert "example-audio inline-audio" in note["examples"]
     assert "[sound:ex0.mp3]" in note["examples"]
     assert "img0.png" in note["image_refs"]
     assert "<figcaption>" not in note["image_refs"]
     assert note["user_notes"] == ""
+
+
+def test_core_meaning_splits_multiple_senses_into_rows():
+    collection, _ = _build_collection(Language.ENGLISH)
+    model = _build_model()
+    model.core_meaning = Sense(
+        target_text="an exam; a trial of quality",
+        native_text="考试；试验",
+        is_visualizable=False,
+    )
+    note = collection._convert_to_note_type(
+        model,
+        MediaReferences(headword_audio="h.mp3", example_audios=[], images={}),
+    )
+
+    assert note["core_meaning"].count("meaning-row") == 2
+    assert "an exam" in note["core_meaning"]
+    assert "试验" in note["core_meaning"]
+    assert ";" not in note["core_meaning"]
 
 
 def test_convert_to_note_type_renders_ruby_for_japanese():
@@ -267,7 +247,6 @@ def test_convert_to_note_type_renders_ruby_for_japanese():
                 native_text="招财猫",
                 is_visualizable=True,
             ),
-            supporting_meanings=[],
             examples=[
                 Example(
                     sentence="「<店:みせ>に<招:まね>き<猫:ねこ>を<置:お>く。」",
@@ -290,7 +269,6 @@ def test_convert_to_note_type_renders_ruby_for_japanese():
                 "中文里常作招财摆件理解",
             ],
             etymology_or_memory=None,
-            production_hint="商店里常见的吉祥摆件",
         ),
         MediaReferences(
             headword_audio="head.mp3",
@@ -332,15 +310,12 @@ async def test_ensure_note_type_exists_registers_v2_templates():
         "difficulty",
         "morphology",
         "core_meaning",
-        "sense_notes",
-        "translations",
         "examples",
         "example_audio_refs",
         "collocations",
         "confusions",
         "etymology_or_memory",
         "image_refs",
-        "production_hint",
         "user_notes",
     ]
     templates = cast(list[dict[str, str]], created["templates"])

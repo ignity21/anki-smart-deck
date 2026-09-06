@@ -1,89 +1,52 @@
 # Roadmap
 
-Unscheduled product directions. Nothing here is a commitment to a date, a
-framework, or an API. Detailed design is intentionally deferred to the session
-that picks the item up.
+Unscheduled product directions. Nothing here is a commitment to a date,
+framework, or API.
 
-## STEM card expansion
+## STEM architecture (shipped)
 
-The STEM collection (`src/ankinote/collections/stem/`) now covers three card
-types — `concept`, `formula`, `procedure` — with structured schema fields
-(`latex`, `variables`, `steps`) rendered into the stored `back_detail` HTML.
-The legacy `math` collection was removed once STEM superseded it: `concept` and
-`formula` cards cover explanatory and formula content better than the old
-all-in-one `MathModel`, and its remaining extras (`key_points`,
-`related_concepts`, `difficulty`, multi-image example lists) were judged to be
-prose or metadata that belong in `back_detail`, in Anki tags, or on their own
-cards.
+The unified STEM schema has been replaced by four independent generation models,
+prompts, field sets, and Anki note types:
 
-### Design constraints (carried over from the completed schema work)
+- `AINote STEM Concept`: front, brief answer, detailed explanation, image.
+- `AINote STEM Formula`: front, formula, meaning, variables, conditions, derivation, image.
+- `AINote STEM Procedure`: front, summary, steps, conditions, image.
+- `AINote STEM Example`: front, answer, solution steps, explanation, image.
 
-- `StemNoteType` stays all-string. New structured AI output is rendered to HTML
-  in `_build_note_data()` before storage, so no note-type migration is needed
-  and existing notes keep rendering.
-- New visual elements only extend the existing token set in
-  `stem/card_templates/style.css` (`--badge-<type>-*`, `--accent*`, `--paper*`).
-  No new fonts, layouts, or themes; keep the paper-card / amber-accent / serif
-  look.
-- New prompts follow the current contract: JSON-only output, same-language
-  rule, escaped LaTeX in JSON, English Title Case tags, every new key optional
-  so older outputs still validate.
+All use `front` as the first field (Anki's default sort field), native Anki
+tags, and the shared `AINote::STEM` deck and paper-card visual theme.
+Structured variable/step lists render into their own storage fields.
+There is no stored `card_type` field and no V2 suffix.
 
-### Worked-example card type
+The common STEM entrypoint accepts automatic classification or an explicit type.
+Automatic mode classifies first and then loads the selected type's prompt/schema;
+explicit selection skips classification. All four GUI flows offer editable
+previews before saving. Reference-image input and optional generated diagrams
+remain available. Upserts are scoped by note type as well as front and deck.
 
-The highest-value gap. Worked examples train *production* (solve this problem)
-rather than *recognition*, and are general to STEM problem-solving, not
-math-specific. The old `math` collection modelled 1–3 examples as a sub-list on
-a single note, which cannot be reviewed or scheduled independently — the
-replacement is one card per problem.
+The legacy `AINote STEM` is no longer created or updated. Existing legacy notes
+are left alone; there is no automatic migration or deletion.
 
-- Add `CardType.EXAMPLE`:
-  - `front` = the problem statement.
-  - `back_brief` = the final answer only.
-  - `back_detail` = the fully worked solution; reuse the `steps` field and its
-    numbered-list rendering for the solution steps.
-  - `image_description` = optional figure (geometry, function graph, circuit).
-- Add `prompts/example.md`: problem difficulty matched to the topic, no trivial
-  restatement of a definition, one self-contained problem per card. Register
-  the type in the generator's auto-detection instruction.
-- Badge token pair (`--badge-example-*`) and a template branch consistent with
-  the other types.
-- Focused tests mirroring `test_stem_collection.py`: model validation with and
-  without the new keys, `_build_note_data()` HTML, one end-to-end mocked
-  generation.
+## Comparison card type (next)
 
-### Comparison card type
+Add `AINote STEM Comparison` with its own model, prompt, field set, and templates.
+Contrast pairs such as L1 vs L2 regularization, bias vs variance, or TCP vs UDP.
 
-Contrast pairs (L1 vs L2 regularization, bias vs variance, TCP vs UDP) — a
-common study need with no current home.
+- Structured `items` (name + definition) and `aspects` (aspect + per-item values).
+- Render an aspect-by-aspect table, stacking vertically on narrow screens.
+- Register the type in classification, CLI selection, and GUI management/preview.
+- Reuse shared styling with `--badge-comparison-*` tokens.
 
-- Add `CardType.COMPARISON` with structured fields: `items` (name + definition)
-  and `aspects` (aspect + per-item values) so the back renders as a real
-  aspect-by-aspect table that stacks vertically on narrow screens.
-- Add `prompts/comparison.md`; include the type in auto-detection.
-- `--badge-comparison-*` token pair following the existing badge pattern.
+## Progressive disclosure and rendering polish
 
-### Progressive disclosure and rendering polish
-
-- Wrap the `back_detail` section of `back.html` in `<details>/<summary>` so
-  recall practice sees the brief answer first, with detail one tap away. Verify
-  `<details>` behaviour on Anki desktop and AnkiDroid before committing;
-  fall back to always-visible detail where unsupported.
+- Allow detailed explanations/derivations to expand on demand. Verify
+  `<details>` on Anki desktop and AnkiDroid before shipping; keep a visible
+  fallback where unsupported.
 - Shared MathJax macro configuration for common notation.
+- Optional `common_mistakes` callout where appropriate, added to the relevant
+  type's schema and template rather than a new card type.
 
-### Misconception callout (optional, small)
-
-Rather than a new type, an optional `common_mistakes: list[str]` field rendered
-as a small warning-styled callout at the bottom of `back_detail`, reusing
-existing `--error` / muted tones. Update `_system.md` guidance on when to
-populate it.
-
-### Rough delivery order
-
-The worked-example and comparison types are independent of each other and each
-sized for one focused session. Progressive disclosure is independent of both.
-The misconception callout folds into whichever session touches the templates
-last.
+Comparison is the next feature; rendering polish can be delivered independently.
 
 ## Thinking control (shipped; follow-ups)
 
@@ -94,16 +57,13 @@ service turns into DeepSeek's OpenAI-format `extra_body={"thinking": {"type":
 discards a plain `reasoning_effort`). `stem` keeps thinking on.
 
 All CLI commands now take `--thinking [off|low|medium|high|default]` to override
-the per-collection default for a single run (`cli/factory.resolve_thinking`
-threads the choice through the typed options and each collection constructor's
-`reasoning_effort`).
+the per-collection default for a single run. `services.ai.resolve_thinking`
+(with `THINKING_CHOICES`) maps the choice to a `reasoning_effort` value; it is
+shared by the CLI (`cli/factory` re-exports it) and the STEM generation page in
+the GUI, which exposes the same five levels as a dropdown.
 
 Open items:
 
-- UI control for the `stem` thinking level: expose it on the STEM generation
-  page (NiceGUI) so a user can dial reasoning up or down per run, rather than
-  relying on the built-in default. `StemCollection` already accepts
-  `reasoning_effort`; the page just needs to pass it.
 - DeepSeek ignores `temperature` while thinking is on, so `stem`'s
   `temperature=0.3` is currently a no-op. Decide whether `stem` should also
   disable thinking (regaining temperature control) or drop the unused argument.

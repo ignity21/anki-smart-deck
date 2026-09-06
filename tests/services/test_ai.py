@@ -9,9 +9,23 @@ from pytest_mock import MockerFixture
 
 from ankinote.services.ai import (
     DISABLE_REASONING,
-    LiteLLMGeminiImageService,
+    IMAGE_GENERATION_TIMEOUT_SECONDS,
+    TEXT_GENERATION_TIMEOUT_SECONDS,
+    THINKING_CHOICES,
+    GenerationTimeoutError,
+    LiteLLMImageService,
     LiteLLMTextService,
+    resolve_thinking,
 )
+
+
+def test_resolve_thinking_maps_choices() -> None:
+    assert resolve_thinking(None, unset=DISABLE_REASONING) == DISABLE_REASONING
+    assert resolve_thinking(None, unset=None) is None
+    assert resolve_thinking("off", unset=None) == DISABLE_REASONING
+    assert resolve_thinking("default", unset=DISABLE_REASONING) is None
+    assert resolve_thinking("high", unset=None) == "high"
+    assert set(THINKING_CHOICES) == {"off", "low", "medium", "high", "default"}
 
 
 @pytest.mark.asyncio
@@ -31,7 +45,7 @@ async def test_litellm_text_service_forwards_completion_args(
 
     service = LiteLLMTextService()
     result = await service.generate_text(
-        model_id="deepseek/deepseek-v4-flash",
+        model="deepseek/deepseek-v4-flash",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
     )
@@ -43,7 +57,7 @@ async def test_litellm_text_service_forwards_completion_args(
         stream=False,
         temperature=0.2,
         drop_params=True,
-        timeout=60,
+        timeout=TEXT_GENERATION_TIMEOUT_SECONDS,
         num_retries=0,
     )
 
@@ -61,7 +75,7 @@ async def test_litellm_text_service_disables_deepseek_thinking(
 
     service = LiteLLMTextService()
     await service.generate_text(
-        model_id="deepseek/deepseek-v4-flash",
+        model="deepseek/deepseek-v4-flash",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
         reasoning_effort=DISABLE_REASONING,
@@ -87,7 +101,7 @@ async def test_litellm_text_service_forwards_named_reasoning_effort(
 
     service = LiteLLMTextService()
     await service.generate_text(
-        model_id="deepseek/deepseek-v4-flash",
+        model="deepseek/deepseek-v4-flash",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
         reasoning_effort="high",
@@ -111,7 +125,7 @@ async def test_litellm_text_service_omits_reasoning_effort_when_unset(
 
     service = LiteLLMTextService()
     await service.generate_text(
-        model_id="deepseek/deepseek-v4-flash",
+        model="deepseek/deepseek-v4-flash",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
     )
@@ -134,9 +148,10 @@ async def test_litellm_text_service_routes_custom_endpoint_through_openai(
     service = LiteLLMTextService(
         api_base="http://localhost:8000/v1",
         api_key="test-key",
+        force_openai_route=True,
     )
     await service.generate_text(
-        model_id="Qwen/Qwen3-8B",
+        model="Qwen/Qwen3-8B",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
     )
@@ -147,7 +162,7 @@ async def test_litellm_text_service_routes_custom_endpoint_through_openai(
         stream=False,
         temperature=0.2,
         drop_params=True,
-        timeout=60,
+        timeout=TEXT_GENERATION_TIMEOUT_SECONDS,
         num_retries=0,
         api_base="http://localhost:8000/v1",
         api_key="test-key",
@@ -165,14 +180,44 @@ async def test_litellm_text_service_keeps_explicit_openai_prefix(
         ),
     )
 
-    service = LiteLLMTextService(api_base="http://localhost:8000/v1")
+    service = LiteLLMTextService(
+        api_base="http://localhost:8000/v1", force_openai_route=True
+    )
     await service.generate_text(
-        model_id="openai/my-model",
+        model="openai/my-model",
         messages=[{"role": "user", "content": "hello"}],
         temperature=0.2,
     )
 
     assert completion.await_args.kwargs["model"] == "openai/my-model"
+
+
+@pytest.mark.asyncio
+async def test_litellm_text_service_does_not_prefix_known_vendors_by_default(
+    mocker: MockerFixture,
+):
+    """A known-vendor profile now also carries an explicit ``api_base`` (so
+    multiple accounts of the same vendor can coexist), but that must not
+    trigger the custom-endpoint ``openai/`` prefix forcing — only a profile
+    explicitly flagged ``force_openai_route`` (i.e. vendor == CUSTOM_VENDOR)
+    should get it."""
+    completion = mocker.patch(
+        "ankinote.services.ai.acompletion",
+        return_value=SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+        ),
+    )
+
+    service = LiteLLMTextService(
+        api_base="https://api.anthropic.com/v1", api_key="sk-a"
+    )
+    await service.generate_text(
+        model="claude-sonnet-4-20250514",
+        messages=[{"role": "user", "content": "hello"}],
+        temperature=0.2,
+    )
+
+    assert completion.await_args.kwargs["model"] == "claude-sonnet-4-20250514"
 
 
 @pytest.mark.asyncio
@@ -190,14 +235,14 @@ async def test_litellm_text_service_rejects_non_string_content(
 
     with pytest.raises(RuntimeError, match="non-string"):
         await service.generate_text(
-            model_id="deepseek/deepseek-v4-flash",
+            model="deepseek/deepseek-v4-flash",
             messages=[{"role": "user", "content": "hello"}],
             temperature=0.2,
         )
 
 
 @pytest.mark.asyncio
-async def test_litellm_gemini_image_service_decodes_and_resizes(
+async def test_litellm_image_service_decodes_and_resizes(
     mocker: MockerFixture,
 ):
     image = Image.new("RGB", (80, 40), color=(10, 20, 30))
@@ -211,9 +256,7 @@ async def test_litellm_gemini_image_service_decodes_and_resizes(
         ),
     )
 
-    service = LiteLLMGeminiImageService(
-        model_id="gemini/gemini-2.5-flash-image", image_size=128
-    )
+    service = LiteLLMImageService(model="gemini/gemini-2.5-flash-image", image_size=128)
     mocker.patch(
         "ankinote.services.ai.base64.b64decode", return_value=buffer.getvalue()
     )
@@ -224,6 +267,139 @@ async def test_litellm_gemini_image_service_decodes_and_resizes(
     image_generation.assert_awaited_once_with(
         model="gemini/gemini-2.5-flash-image",
         prompt="draw a cat",
-        timeout=60,
+        timeout=IMAGE_GENERATION_TIMEOUT_SECONDS,
         num_retries=0,
     )
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_forwards_api_base_and_key(
+    mocker: MockerFixture,
+):
+    """Every image profile now carries its own base URL/key explicitly, so
+    multiple accounts of the same vendor can coexist (no env-var reliance)."""
+    image_generation = mocker.patch(
+        "ankinote.services.ai.aimage_generation",
+        return_value=SimpleNamespace(
+            data=[SimpleNamespace(b64_json="")],
+        ),
+    )
+    mocker.patch("ankinote.services.ai.base64.b64decode", return_value=b"\x00")
+    mocker.patch("ankinote.services.ai.resize_to_max_edge", return_value=b"resized")
+
+    service = LiteLLMImageService(
+        model="gemini/gemini-2.5-flash-image",
+        image_size=128,
+        api_key="sk-g",
+        api_base="https://generativelanguage.googleapis.com/v1beta",
+    )
+    result = await service.generate_image(prompt="draw a cat")
+
+    assert result == b"resized"
+    image_generation.assert_awaited_once_with(
+        model="gemini/gemini-2.5-flash-image",
+        prompt="draw a cat",
+        timeout=IMAGE_GENERATION_TIMEOUT_SECONDS,
+        num_retries=0,
+        api_base="https://generativelanguage.googleapis.com/v1beta",
+        api_key="sk-g",
+    )
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_forces_openai_route_for_custom_vendor(
+    mocker: MockerFixture,
+):
+    image_generation = mocker.patch(
+        "ankinote.services.ai.aimage_generation",
+        return_value=SimpleNamespace(data=[SimpleNamespace(b64_json="")]),
+    )
+    mocker.patch("ankinote.services.ai.base64.b64decode", return_value=b"\x00")
+    mocker.patch("ankinote.services.ai.resize_to_max_edge", return_value=b"resized")
+
+    service = LiteLLMImageService(
+        model="my-diffusion-model",
+        image_size=128,
+        api_base="http://localhost:8000/v1",
+        force_openai_route=True,
+    )
+    await service.generate_image(prompt="draw a cat")
+
+    assert image_generation.await_args.kwargs["model"] == "openai/my-diffusion-model"
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_fetches_url_when_no_b64_json(
+    mocker: MockerFixture,
+):
+    """fal.ai (and dall-e-3 in its default mode) return a hosted URL instead
+    of inline base64 data."""
+    mocker.patch(
+        "ankinote.services.ai.aimage_generation",
+        return_value=SimpleNamespace(
+            data=[SimpleNamespace(b64_json=None, url="https://fal.media/files/foo.png")]
+        ),
+    )
+    fetch_image_url = mocker.patch.object(
+        LiteLLMImageService, "_fetch_image_url", return_value=b"\x00"
+    )
+    mocker.patch("ankinote.services.ai.resize_to_max_edge", return_value=b"resized")
+
+    service = LiteLLMImageService(model="fal_ai/fal-ai/flux/schnell", image_size=128)
+    result = await service.generate_image(prompt="draw a cat")
+
+    assert result == b"resized"
+    fetch_image_url.assert_awaited_once_with("https://fal.media/files/foo.png")
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_raises_when_no_b64_or_url(
+    mocker: MockerFixture,
+):
+    mocker.patch(
+        "ankinote.services.ai.aimage_generation",
+        return_value=SimpleNamespace(data=[SimpleNamespace(b64_json=None, url=None)]),
+    )
+
+    service = LiteLLMImageService(model="fal_ai/fal-ai/flux/schnell", image_size=128)
+
+    with pytest.raises(RuntimeError, match="neither a base64 payload nor a URL"):
+        await service.generate_image(prompt="draw a cat")
+
+
+@pytest.mark.asyncio
+async def test_litellm_text_service_reports_card_content_timeout(
+    mocker: MockerFixture,
+) -> None:
+    async def timeout(**_: object) -> None:
+        raise TimeoutError
+
+    mocker.patch("ankinote.services.ai.acompletion", side_effect=timeout)
+    service = LiteLLMTextService()
+
+    with pytest.raises(
+        GenerationTimeoutError,
+        match="Card content generation timed out after 60 seconds",
+    ):
+        await service.generate_text(
+            model="test",
+            messages=[{"role": "user", "content": "hello"}],
+            temperature=0.2,
+        )
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_reports_its_180_second_timeout(
+    mocker: MockerFixture,
+) -> None:
+    async def timeout(**_: object) -> None:
+        raise TimeoutError
+
+    mocker.patch("ankinote.services.ai.aimage_generation", side_effect=timeout)
+    service = LiteLLMImageService(model="test", image_size=128)
+
+    with pytest.raises(
+        GenerationTimeoutError,
+        match="Image generation timed out after 180 seconds",
+    ):
+        await service.generate_image(prompt="draw a cat")

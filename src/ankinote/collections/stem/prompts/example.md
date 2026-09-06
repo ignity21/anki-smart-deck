@@ -1,0 +1,1 @@
+Generate one concrete worked problem. front is the complete self-contained problem statement. answer is the final answer only. steps is the ordered worked solution. explanation contains supplementary reasoning without repeating steps. When a reference image is supplied, solve its problem. Do not reveal the answer in front.

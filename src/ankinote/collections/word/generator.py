@@ -66,7 +66,7 @@ async def generate_word_data(
     target_language: Language,
     native_language: Language,
     text_service: TextGenerationService,
-    model_id: str,
+    model: str,
     temperature: float = 0.3,
     reasoning_effort: str | None = DISABLE_REASONING,
 ) -> list[WordModel]:
@@ -90,7 +90,7 @@ async def generate_word_data(
 
     try:
         content = await text_service.generate_text(
-            model_id=model_id,
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
@@ -98,7 +98,6 @@ async def generate_word_data(
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )
-        content = cast(str, content)
 
         logger.debug(content)
         logger.info(f"Raw AI response length: {len(content)} characters")
@@ -136,11 +135,11 @@ class WordGenerator:
         tts_service: SpeechSynthesizer,
         text_service: TextGenerationService,
         image_service: ImageGenerationService | None,
-        text_model_id: str,
+        text_model: str,
     ) -> None:
         self._text_service = text_service
         self._image_service = image_service
-        self._text_model_id = text_model_id
+        self._text_model = text_model
         self._tts_service = tts_service
 
     async def generate_word_data(
@@ -157,7 +156,7 @@ class WordGenerator:
             target_language=target_lang,
             native_language=native_lang,
             text_service=self._text_service,
-            model_id=self._text_model_id,
+            model=self._text_model,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
         )
@@ -173,7 +172,7 @@ class WordGenerator:
         )
 
         headword_audio = await self._generate_audio(word_model.lemma, target_lang)
-        senses = [word_model.core_meaning, *word_model.supporting_meanings]
+        senses = [word_model.core_meaning]
 
         try:
             async with asyncio.TaskGroup() as tg:
@@ -191,12 +190,15 @@ class WordGenerator:
                         if sense.is_visualizable
                     }
         except* Exception as exc_group:
+            messages = [str(sub_exc) for sub_exc in exc_group.exceptions]
             for sub_exc in exc_group.exceptions:
                 logger.error(
                     f"Error during media generation for '{word_model.lemma}': {sub_exc}",
                     exc_info=sub_exc,
                 )
-            raise RuntimeError(f"Media generation failed: {exc_group}") from exc_group
+            raise RuntimeError(
+                f"Media generation failed: {'; '.join(messages)}"
+            ) from exc_group
 
         example_audios = [task.result() for task in example_tasks]
         images: dict[int, bytes] = {}
@@ -227,6 +229,8 @@ class WordGenerator:
         return await self._tts_service.synthesize(text)
 
     async def _generate_image(self, lemma: str, sense: Sense) -> bytes:
+        if self._image_service is None:
+            raise RuntimeError("Image service not available")
         system_prompt = (
             files("ankinote.collections.word.prompts")
             .joinpath("image.md")

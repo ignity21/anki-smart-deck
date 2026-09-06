@@ -1,4 +1,4 @@
-"""Template loader for sentence collection card templates."""
+"""Load independent STEM templates and their shared stylesheet."""
 
 from ankinote.collections.common import create_template_loader
 

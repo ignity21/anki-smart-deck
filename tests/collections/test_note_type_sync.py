@@ -1,75 +1,50 @@
-"""Tests for updating an existing STEM note type."""
+"""STEM initialization creates four independent note types, without legacy writes."""
 
 from types import SimpleNamespace
 from typing import cast
+from unittest.mock import AsyncMock
 
 import pytest
 
-from ankinote.collections.stem import StemCollection
-from ankinote.collections.stem.models import StemNoteType
+from ankinote.collections.stem import CardType, StemCollection
+from ankinote.collections.stem.models import NOTE_FIELDS, note_type_name
 from ankinote.services.ai import TextGenerationService
-from ankinote.services.anki import (
-    AnkiCollectionClient,
-    AnkiDeckService,
-    AnkiModelService,
-    TemplateUpsert,
-)
+from ankinote.services.anki import AnkiCollectionClient
 
 
-class RecordingModelService:
-    """Record updates made to an existing note type."""
-
-    def __init__(self) -> None:
-        self.ensured_fields: list[str] | None = None
-        self.updated_templates: list[TemplateUpsert] | None = None
-        self.updated_css: str | None = None
-
-    async def exists(self, model_name: str) -> bool:
-        return True
-
-    async def ensure_fields(self, model_name: str, field_names: list[str]) -> None:
-        self.ensured_fields = field_names
-
-    async def update_templates(
-        self, model_name: str, templates: list[TemplateUpsert]
-    ) -> None:
-        self.updated_templates = templates
-
-    async def update_styling(self, model_name: str, css: str) -> None:
-        self.updated_css = css
-
-
-class FakeDeckService:
-    """Record-free deck service for protocol completeness."""
-
-    async def create(self, deck_name: str) -> int:
-        return 1
-
-
-def _build_client(models: RecordingModelService) -> AnkiCollectionClient:
-    return cast(
-        AnkiCollectionClient,
-        SimpleNamespace(
-            models=cast(AnkiModelService, models),
-            decks=cast(AnkiDeckService, FakeDeckService()),
-        ),
+@pytest.mark.parametrize("exists", [True, False])
+@pytest.mark.parametrize("selected", [None, *CardType])
+async def test_stem_sync_types(exists, selected):
+    models = SimpleNamespace(
+        exists=AsyncMock(return_value=exists),
+        create=AsyncMock(),
+        ensure_fields=AsyncMock(),
+        update_templates=AsyncMock(),
+        update_styling=AsyncMock(),
     )
-
-
-@pytest.mark.asyncio
-async def test_stem_sync_updates_an_existing_note_type() -> None:
-    models = RecordingModelService()
+    decks = SimpleNamespace(create=AsyncMock(return_value=1))
     collection = StemCollection(
-        _build_client(models),
-        text_model_id="test-model",
+        cast(AnkiCollectionClient, SimpleNamespace(models=models, decks=decks)),
+        card_type=selected,
+        text_model="test",
         text_service=cast(TextGenerationService, object()),
     )
-
     await collection.ensure_in_anki()
-
-    assert models.ensured_fields == [
-        field.name for field in StemNoteType.__dataclass_fields__.values()
-    ]
-    assert models.updated_templates is not None
-    assert models.updated_templates[0].name == "Card 1"
-    assert models.updated_css is not None
+    kinds = [selected] if selected else list(CardType)
+    assert models.exists.await_count == len(kinds)
+    for index, kind in enumerate(kinds):
+        assert models.exists.await_args_list[index].args == (note_type_name(kind),)
+        if exists:
+            args = models.ensure_fields.await_args_list[index].args
+            assert args == (note_type_name(kind), list(NOTE_FIELDS[kind]))
+            assert (
+                models.update_templates.await_args_list[index].args[1][0].name
+                == "Card 1"
+            )
+        else:
+            kwargs = models.create.await_args_list[index].kwargs
+            assert kwargs["model_name"] == note_type_name(kind)
+            assert kwargs["fields"][0] == "front"
+            assert kwargs["fields"] == list(NOTE_FIELDS[kind])
+            assert "{{card_type}}" not in kwargs["templates"][0]["Front"]
+    decks.create.assert_awaited_once_with("AINote::STEM")

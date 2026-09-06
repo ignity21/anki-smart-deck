@@ -4,14 +4,10 @@
   <div class="section-title">Answer</div>
   <div class="brief">{{back_brief}}</div>
   {{/back_brief}}
-
   {{#back_detail}}
-  <div class="section-title">Detail</div>
+  <div class="section-title">Explanation</div>
   <div class="detail">{{back_detail}}</div>
   {{/back_detail}}
-
-  {{#Tags}}
-  <div class="section-title">Tags</div>
-  <div class="tags">{{Tags}}</div>
-  {{/Tags}}
+  {{#image}}<div class="diagram-container">{{image}}</div>{{/image}}
+  {{#Tags}}<div class="section-title">Tags</div><div class="tags">{{Tags}}</div>{{/Tags}}
 </section>

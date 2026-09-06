@@ -25,7 +25,7 @@ lint:
 	uv run ruff check --fix
 
 check:
-	uv run basedpyright
+	uv run ty check
 
 format:
 	uv run ruff format

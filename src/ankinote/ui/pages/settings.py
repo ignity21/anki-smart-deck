@@ -1,378 +1,619 @@
 """Settings page — LLM provider, TTS, and default language preferences."""
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+
+import httpx
 from nicegui import ui
 
 from ankinote.consts import Language
 from ankinote.ui.config import (
-    CUSTOM_API_KEY_STORAGE_KEY,
-    CUSTOM_PROVIDER,
-    DEFAULT_IMAGE_MODELS,
-    NEW_CUSTOM_PROVIDER,
+    CUSTOM_VENDOR,
+    DEFAULT_IMAGE_PROFILE_NAME,
+    DEFAULT_TEXT_PROFILE_NAME,
+    IMAGE_PROVIDERS,
     PROVIDERS,
-    CustomProvider,
     DefaultsConfig,
+    ProviderProfile,
     Settings,
     apply_env,
+    fetch_image_model_ids,
+    fetch_model_ids,
+    get_image_provider_models,
     get_provider_models,
+    load_settings,
     save_settings,
+    unique_name,
 )
+from ankinote.ui.i18n import set_locale, t
+from ankinote.ui.pages.word import format_error
+
+# The vendor options offered by each rack's "Add provider" dialog: the
+# curated templates plus the generic custom/other endpoint.
+_TEXT_VENDOR_OPTIONS: tuple[str, ...] = (*PROVIDERS.keys(), CUSTOM_VENDOR)
+_IMAGE_VENDOR_OPTIONS: tuple[str, ...] = (*IMAGE_PROVIDERS.keys(), CUSTOM_VENDOR)
+
+
+@dataclass
+class RouteDraft:
+    """One provider profile shown on the settings page, edited in place."""
+
+    name: str
+    vendor: str = ""
+    model: str = ""
+    base_url: str = ""
+    api_key: str = ""
+    saved: bool = False
+
+
+def _default_route(
+    vendor: str,
+    vendor_templates: dict[str, dict],
+    get_model_options: Callable[[str], list[str]],
+) -> RouteDraft:
+    """A placeholder route used only when a settings object has none saved."""
+    return RouteDraft(
+        name=vendor,
+        vendor=vendor,
+        model=get_model_options(vendor)[0],
+        base_url=vendor_templates[vendor]["api_base"],
+    )
+
+
+def _routes_from_settings(settings: Settings) -> list[RouteDraft]:
+    """Build the editable text-route list from every saved profile."""
+    routes = [
+        RouteDraft(
+            name=name,
+            vendor=profile.vendor,
+            model=profile.model,
+            base_url=profile.base_url,
+            api_key=profile.api_key,
+            saved=True,
+        )
+        for name, profile in settings.text_providers.items()
+    ]
+    if not routes:
+        routes.append(
+            _default_route(DEFAULT_TEXT_PROFILE_NAME, PROVIDERS, get_provider_models)
+        )
+    return routes
+
+
+def _image_routes_from_settings(settings: Settings) -> list[RouteDraft]:
+    """Build the editable image-route list from every saved profile."""
+    routes = [
+        RouteDraft(
+            name=name,
+            vendor=profile.vendor,
+            model=profile.model,
+            base_url=profile.base_url,
+            api_key=profile.api_key,
+            saved=True,
+        )
+        for name, profile in settings.image_providers.items()
+    ]
+    if not routes:
+        routes.append(
+            _default_route(
+                DEFAULT_IMAGE_PROFILE_NAME, IMAGE_PROVIDERS, get_image_provider_models
+            )
+        )
+    return routes
+
+
+def _route_hint(route: RouteDraft, vendor_templates: dict[str, dict]) -> str:
+    """One-line description shown under a route editor."""
+    info = vendor_templates.get(route.vendor)
+    if route.vendor == CUSTOM_VENDOR or info is None:
+        return route.base_url or "OpenAI-compatible endpoint"
+    return f"{route.vendor} · {info['litellm_provider']}"
+
+
+def _suggest_name(vendor: str, routes: list[RouteDraft]) -> str:
+    """A default profile name for a newly-picked vendor, deduped against routes."""
+    base = "Custom" if vendor == CUSTOM_VENDOR else vendor
+    return unique_name(base, {r.name for r in routes})
+
+
+class RouteRack:
+    """A pill rack of saved provider profiles plus an editor for the active one.
+
+    Shared by the text- and image-generation sections so both offer the exact
+    same add/select/fetch/remove/save interaction — only the vendor catalog
+    and model lookup differ. Every profile — vendor-templated or fully custom
+    (``vendor == CUSTOM_VENDOR``) — carries its own name, base URL, model, and
+    API key, so multiple accounts of the same vendor can coexist.
+    """
+
+    def __init__(
+        self,
+        *,
+        vendor_templates: dict[str, dict],
+        get_model_options: Callable[[str], list[str]],
+        fetch_ids: Callable[..., Awaitable[list[str]]],
+        routes: list[RouteDraft],
+        selected: int,
+        on_save: Callable[[], None],
+        on_removed: Callable[[], None],
+        fetched_noun: str = "models",
+    ) -> None:
+        self.vendor_templates = vendor_templates
+        self.vendor_options: tuple[str, ...] = (*vendor_templates.keys(), CUSTOM_VENDOR)
+        self.get_model_options = get_model_options
+        self.fetch_ids = fetch_ids
+        self.routes = routes
+        self.state: dict = {"selected": selected}
+        self.on_save = on_save
+        self.on_removed = on_removed
+        self.fetched_noun = fetched_noun
+
+    def select(self, index: int) -> None:
+        self.state["selected"] = index
+        self.workspace.refresh()
+
+    def add_profile(self, *, name: str, vendor: str, base_url: str) -> None:
+        options = self.get_model_options(vendor) if vendor != CUSTOM_VENDOR else []
+        model = options[0] if options else ""
+        self.routes.append(
+            RouteDraft(name=name, vendor=vendor, model=model, base_url=base_url)
+        )
+        self.select(len(self.routes) - 1)
+
+    def remove(self, index: int) -> None:
+        route = self.routes[index]
+        if not route.saved:
+            self.routes.pop(index)
+            self.state["selected"] = max(0, index - 1)
+            self.workspace.refresh()
+            return
+        self._confirm_remove(route, index)
+
+    def _confirm_remove(self, route: RouteDraft, index: int) -> None:
+        with ui.dialog() as dialog, ui.card().classes("w-96 gap-2"):
+            ui.label(t("settings.remove_confirm", name=route.name)).classes(
+                "text-lg font-semibold"
+            )
+            ui.label(t("settings.remove_help")).classes("text-sm text-slate-600")
+
+            def _confirm() -> None:
+                self.routes.pop(index)
+                self.state["selected"] = max(0, index - 1)
+                self.on_removed()
+                dialog.close()
+                self.workspace.refresh()
+                ui.notify(t("settings.removed", name=route.name), type="positive")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button(t("common.cancel"), on_click=dialog.close).props("flat")
+                ui.button(t("common.remove"), on_click=_confirm, icon="delete").props(
+                    "color=negative"
+                )
+        dialog.open()
+
+    def _open_add_dialog(self) -> None:
+        vendor_options = list(self.vendor_options)
+        last_vendor = {"value": vendor_options[0]}
+
+        with ui.dialog() as dialog, ui.card().classes("w-96 gap-3 route-dialog"):
+            ui.label(t("settings.add_provider")).classes("text-lg font-semibold")
+            vendor_select = ui.select(
+                label=t("settings.vendor"),
+                options=vendor_options,
+                value=vendor_options[0],
+            ).classes("w-full")
+            name_input = ui.input(
+                label=t("settings.name"),
+                value=_suggest_name(vendor_options[0], self.routes),
+            ).classes("w-full")
+            base_input = ui.input(
+                label=t("settings.base_url"),
+                value=self.vendor_templates.get(vendor_options[0], {}).get(
+                    "api_base", ""
+                ),
+            ).classes("w-full")
+
+            def _on_vendor_change(e) -> None:
+                vendor = e.value or CUSTOM_VENDOR
+                prev_suggestion = _suggest_name(last_vendor["value"], self.routes)
+                if (name_input.value or "") == prev_suggestion:
+                    name_input.value = _suggest_name(vendor, self.routes)
+                base_input.value = self.vendor_templates.get(vendor, {}).get(
+                    "api_base", ""
+                )
+                last_vendor["value"] = vendor
+
+            vendor_select.on_value_change(_on_vendor_change)
+
+            def _create() -> None:
+                name = (name_input.value or "").strip()
+                if not name:
+                    ui.notify(t("settings.name_first"), type="warning")
+                    return
+                if any(r.name == name for r in self.routes):
+                    ui.notify(t("settings.duplicate", name=name), type="warning")
+                    return
+                self.add_profile(
+                    name=name,
+                    vendor=vendor_select.value or CUSTOM_VENDOR,
+                    base_url=(base_input.value or "").strip(),
+                )
+                dialog.close()
+                self.workspace.refresh()
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button(t("common.cancel"), on_click=dialog.close).props("flat")
+                ui.button(t("common.create"), on_click=_create).props(
+                    "unelevated no-caps"
+                )
+        dialog.open()
+
+    @ui.refreshable_method
+    def workspace(self) -> None:
+        if not self.routes:  # user removed the last route — fall back to a default
+            first = self.vendor_options[0]
+            self.routes.append(
+                RouteDraft(
+                    name=first,
+                    vendor=first,
+                    model=self.get_model_options(first)[0],
+                    base_url=self.vendor_templates[first]["api_base"],
+                )
+            )
+        selected = max(0, min(self.state["selected"], len(self.routes) - 1))
+        self.state["selected"] = selected
+        route = self.routes[selected]
+
+        with ui.row().classes("route-rack"):
+            for index, item in enumerate(self.routes):
+                classes = "route-pill"
+                if index == selected:
+                    classes += " route-pill--active"
+                with (
+                    ui.element("button")
+                    .classes(classes)
+                    .on("click", lambda *_, index=index: self.select(index))
+                ):
+                    ui.icon("dns" if item.vendor == CUSTOM_VENDOR else "hub").classes(
+                        "text-sm"
+                    )
+                    ui.label(item.name or t("settings.new_provider"))
+                    if not item.saved:
+                        ui.label(t("settings.draft")).classes("route-pill__tag")
+
+            add_btn = (
+                ui.button(icon="add", on_click=self._open_add_dialog)
+                .props("flat round dense")
+                .classes("route-add")
+            )
+            with add_btn:
+                ui.tooltip(t("settings.add_provider"))
+
+        with ui.column().classes("route-editor"):
+            name_input = ui.input(
+                label=t("settings.name"),
+                value=route.name,
+            ).classes("w-full")
+            name_input.on_value_change(
+                lambda e: setattr(route, "name", (e.value or "").strip())
+            )
+            base_input = ui.input(
+                label=t("settings.base_url"),
+                placeholder="https://your-endpoint.example.com/v1",
+                value=route.base_url,
+            ).classes("w-full")
+            base_input.on_value_change(
+                lambda e: setattr(route, "base_url", (e.value or "").strip())
+            )
+
+            vendor_info = self.vendor_templates.get(route.vendor)
+            supports_fetch = vendor_info is None or vendor_info.get(
+                "supports_fetch", True
+            )
+
+            if route.vendor == CUSTOM_VENDOR:
+                model_options = [route.model] if route.model else []
+            else:
+                model_options = self.get_model_options(route.vendor)
+            if route.model and route.model not in model_options:
+                model_options = [route.model, *model_options]
+
+            with ui.row().classes("route-model-row w-full items-center gap-2"):
+                model_select = ui.select(
+                    label=t("settings.model"),
+                    options=model_options,
+                    value=route.model or (model_options[0] if model_options else None),
+                    with_input=True,
+                    new_value_mode="add-unique",
+                ).classes("flex-1 min-w-0")
+                model_select.on_value_change(
+                    lambda e: setattr(route, "model", e.value or "")
+                )
+                fetch_btn = None
+                if supports_fetch:
+                    fetch_btn = (
+                        ui.button(icon="sync")
+                        .props("flat dense")
+                        .classes("route-fetch-btn")
+                    )
+                    with fetch_btn:
+                        ui.tooltip(t("settings.fetch_models"))
+
+            key_input = ui.input(
+                label=vendor_info["env_key"] if vendor_info else t("settings.api_key"),
+                placeholder="sk-…",
+                password=True,
+                password_toggle_button=True,
+                value=route.api_key,
+            ).classes("w-full")
+            key_input.on_value_change(
+                lambda e: setattr(route, "api_key", e.value or "")
+            )
+
+            if fetch_btn is not None:
+
+                async def _fetch(*, _route: RouteDraft = route) -> None:
+                    key = (key_input.value or "").strip()
+                    info = self.vendor_templates.get(_route.vendor)
+                    provider = info["litellm_provider"] if info else "openai"
+                    if not key and provider != "fal_ai":
+                        ui.notify(t("settings.enter_key"), type="warning")
+                        return
+                    api_base = (base_input.value or "").strip()
+                    model_api_base = (
+                        info.get("model_api_base", api_base) if info else api_base
+                    )
+                    if not model_api_base:
+                        ui.notify(t("settings.enter_base"), type="warning")
+                        return
+                    prefix = info["model_prefix"] if info else None
+
+                    fetch_btn.props("loading")
+                    fetch_btn.update()
+                    try:
+                        ids = await self.fetch_ids(
+                            litellm_provider=provider,
+                            api_base=model_api_base,
+                            api_key=key,
+                            model_prefix=prefix,
+                        )
+                    except (httpx.HTTPError, ValueError) as exc:
+                        ui.notify(
+                            t("settings.fetch_failed", message=format_error(exc)),
+                            type="negative",
+                        )
+                        return
+                    finally:
+                        fetch_btn.props(remove="loading")
+                        fetch_btn.update()
+
+                    if not ids:
+                        ui.notify(
+                            t("settings.no_models", noun=self.fetched_noun),
+                            type="warning",
+                        )
+                        return
+                    current = model_select.value
+                    options = ids if not current or current in ids else [current, *ids]
+                    model_select.set_options(options, value=current or ids[0])
+                    _route.model = model_select.value or ""
+                    ui.notify(
+                        t("settings.loaded", count=len(ids), noun=self.fetched_noun),
+                        type="positive",
+                    )
+
+                fetch_btn.on("click", _fetch)
+
+            ui.label(_route_hint(route, self.vendor_templates)).classes(
+                "text-xs text-slate-500 pt-1"
+            )
+            with ui.row().classes("w-full justify-between items-center"):
+                ui.button(
+                    t("common.remove"),
+                    icon="delete",
+                    on_click=lambda: self.remove(selected),
+                ).props("flat dense no-caps color=negative")
+                ui.button(
+                    t("settings.save_provider"), icon="save", on_click=self.on_save
+                ).props("unelevated no-caps").classes("route-save-btn")
 
 
 def settings_page() -> None:
     """Render the settings page."""
 
-    _provider_ui_styles()
+    _settings_styles()
 
-    settings = ui.context.client.storage.get("settings")
-    if settings is None:
-        from ankinote.ui.config import load_settings
+    cached = ui.context.client.storage.get("settings")
+    settings: Settings = (
+        cached
+        if isinstance(cached, Settings) and hasattr(cached, "text_providers")
+        else load_settings()
+    )
+    set_locale(settings.ui_language)
 
-        settings = load_settings()
-
-    custom_profile = settings.custom_providers.get(settings.provider)
-    if settings.provider == CUSTOM_PROVIDER and custom_profile is None:
-        custom_profile = CustomProvider(
-            base_url=settings.custom_base_url,
-            model=settings.text_model,
-            api_key=settings.api_keys.get(CUSTOM_API_KEY_STORAGE_KEY, ""),
+    def _build_settings() -> Settings | None:
+        """Collect every field into a Settings, or notify and return None."""
+        active_text_route = (
+            text_rack.routes[text_rack.state["selected"]] if text_rack.routes else None
         )
-    is_custom = custom_profile is not None or settings.provider in {
-        CUSTOM_PROVIDER,
-        NEW_CUSTOM_PROVIDER,
-    }
-    current_env_key = (
-        CUSTOM_API_KEY_STORAGE_KEY
-        if is_custom
-        else PROVIDERS[settings.provider]["env_key"]
+        active_image_route = (
+            image_rack.routes[image_rack.state["selected"]]
+            if image_rack.routes
+            else None
+        )
+
+        text_providers: dict[str, ProviderProfile] = {}
+        for route in text_rack.routes:
+            name = route.name.strip()
+            if not name:
+                if route is active_text_route:
+                    ui.notify(t("settings.name_first"), type="warning")
+                    return None
+                continue  # unnamed draft the user left behind — skip it
+            if name in text_providers:
+                ui.notify(t("settings.two_named", name=name), type="warning")
+                return None
+            text_providers[name] = ProviderProfile(
+                vendor=route.vendor,
+                model=route.model,
+                base_url=route.base_url,
+                api_key=route.api_key,
+            )
+
+        image_providers: dict[str, ProviderProfile] = {}
+        for route in image_rack.routes:
+            name = route.name.strip()
+            if not name:
+                if route is active_image_route:
+                    ui.notify(t("settings.name_first"), type="warning")
+                    return None
+                continue
+            if name in image_providers:
+                ui.notify(t("settings.two_named", name=name), type="warning")
+                return None
+            image_providers[name] = ProviderProfile(
+                vendor=route.vendor,
+                model=route.model,
+                base_url=route.base_url,
+                api_key=route.api_key,
+            )
+
+        return Settings(
+            text_providers=text_providers,
+            active_text_provider=active_text_route.name.strip()
+            if active_text_route
+            else "",
+            image_providers=image_providers,
+            active_image_provider=active_image_route.name.strip()
+            if active_image_route
+            else "",
+            image_size=settings.image_size,
+            api_keys={"GOOGLE_TTS_KEY": tts_key_input.value or ""},
+            defaults=DefaultsConfig(
+                native_language=native_select.value or "",
+                target_language=target_select.value or "",
+                generate_image=bool(generate_image_switch.value),
+            ),
+            ui_language=settings.ui_language,
+        )
+
+    def _persist(new_settings: Settings) -> None:
+        nonlocal settings
+        save_settings(new_settings)
+        apply_env(new_settings)
+        ui.context.client.storage["settings"] = new_settings
+        settings = new_settings
+
+    def _save() -> None:
+        new_settings = _build_settings()
+        if new_settings is None:
+            return
+        _persist(new_settings)
+        for route in (*text_rack.routes, *image_rack.routes):
+            route.saved = bool(route.name.strip())
+        text_rack.workspace.refresh()
+        image_rack.workspace.refresh()
+        ui.notify(t("common.settings_saved"), type="positive")
+
+    def _persist_after_removal() -> None:
+        new_settings = _build_settings()
+        if new_settings is not None:
+            _persist(new_settings)
+
+    text_routes = _routes_from_settings(settings)
+    text_rack = RouteRack(
+        vendor_templates=PROVIDERS,
+        get_model_options=get_provider_models,
+        fetch_ids=fetch_model_ids,
+        routes=text_routes,
+        selected=next(
+            (
+                i
+                for i, r in enumerate(text_routes)
+                if r.name == settings.active_text_provider
+            ),
+            0,
+        ),
+        on_save=_save,
+        on_removed=_persist_after_removal,
+        fetched_noun="models",
+    )
+
+    image_routes = _image_routes_from_settings(settings)
+    image_rack = RouteRack(
+        vendor_templates=IMAGE_PROVIDERS,
+        get_model_options=get_image_provider_models,
+        fetch_ids=fetch_image_model_ids,
+        routes=image_routes,
+        selected=next(
+            (
+                i
+                for i, r in enumerate(image_routes)
+                if r.name == settings.active_image_provider
+            ),
+            0,
+        ),
+        on_save=_save,
+        on_removed=_persist_after_removal,
+        fetched_noun="image models",
     )
 
     with ui.column().classes("w-full max-w-3xl mx-auto p-6 md:p-8 gap-7"):
-        ui.label("Settings").classes("text-3xl font-bold tracking-tight text-slate-900")
+        ui.label(t("settings.title")).classes("settings-title")
 
-        # -- LLM Provider -----------------------------------------------------------
-        with ui.row().classes("items-end justify-between w-full gap-4"):
-            with ui.column().classes("gap-1"):
-                ui.label("Generation route").classes("settings-eyebrow")
-                ui.label("Choose where card content is generated").classes(
-                    "text-xl font-semibold text-slate-900"
-                )
-            ui.icon("hub").classes("text-3xl text-blue-600")
+        with ui.column().classes("gap-1"):
+            ui.label(t("settings.generation_route")).classes("settings-eyebrow")
+            ui.label(t("settings.text_where")).classes("settings-h2")
+            ui.label(t("settings.route_help")).classes("text-sm text-slate-500")
 
-        with ui.element("div").classes("provider-route-ribbon"):
-            ui.icon("bolt").classes("text-blue-600 text-xl")
-            with ui.column().classes("gap-0 flex-1"):
-                route_name = ui.label(settings.provider).classes(
-                    "font-semibold text-slate-900"
-                )
-                route_detail = ui.label("Active provider profile").classes(
-                    "text-xs text-slate-500"
-                )
-            ui.label("ACTIVE").classes("route-status")
-
-        provider_catalog = ui.row().classes("provider-catalog")
-
-        provider_select = ui.select(
-            label="Provider profile",
-            options=[
-                *PROVIDERS.keys(),
-                *settings.custom_providers.keys(),
-                NEW_CUSTOM_PROVIDER,
-            ],
-            value=settings.provider
-            if settings.provider in PROVIDERS or is_custom
-            else "OpenAI",
-        ).classes("w-full provider-picker")
-
-        model_select = (
-            ui.select(
-                label="Model for this route",
-                options=get_provider_models(settings.provider)
-                if settings.provider in PROVIDERS
-                else [],
-                value=settings.text_model if settings.provider in PROVIDERS else None,
-            )
-            .classes("w-full provider-field")
-            .bind_visibility_from(
-                provider_select, "value", backward=lambda v: v in PROVIDERS
-            )
-        )
-
-        with (
-            ui.column()
-            .classes("provider-custom-panel")
-            .bind_visibility_from(
-                provider_select, "value", backward=lambda v: v not in PROVIDERS
-            )
-        ):
-            ui.label("OpenAI-compatible connection").classes("settings-eyebrow")
-
-            custom_name_input = ui.input(
-                label="Profile name",
-                placeholder="e.g. Alibaba Cloud",
-                value=settings.provider if custom_profile else "",
-            ).classes("w-full provider-field")
-
-            custom_base_url_input = ui.input(
-                label="Base URL",
-                placeholder="https://your-endpoint.example.com/v1",
-                value=custom_profile.base_url if custom_profile else "",
-            ).classes("w-full provider-field")
-
-            custom_model_input = ui.input(
-                label="Model ID",
-                placeholder="e.g. llama-3.1-70b-instruct",
-                value=custom_profile.model if custom_profile else "",
-            ).classes("w-full provider-field")
-
-        api_key_input = ui.input(
-            label=current_env_key,
-            placeholder="sk-...",
-            password=True,
-            password_toggle_button=True,
-            value=custom_profile.api_key
-            if custom_profile
-            else settings.api_keys.get(current_env_key, ""),
-        ).classes("w-full provider-field")
-
-        def _on_provider_change() -> None:
-            provider = provider_select.value
-            route_name.set_text(provider)
-            if provider == NEW_CUSTOM_PROVIDER:
-                route_detail.set_text("Create a new OpenAI-compatible route")
-                api_key_input.label = CUSTOM_API_KEY_STORAGE_KEY
-                api_key_input.value = ""
-                custom_name_input.value = ""
-                custom_base_url_input.value = ""
-                custom_model_input.value = ""
-                return
-            if provider in settings.custom_providers or provider == CUSTOM_PROVIDER:
-                profile = settings.custom_providers.get(provider)
-                if profile is None:
-                    profile = CustomProvider(
-                        base_url=settings.custom_base_url,
-                        model=settings.text_model,
-                        api_key=settings.api_keys.get(CUSTOM_API_KEY_STORAGE_KEY, ""),
-                    )
-                api_key_input.label = CUSTOM_API_KEY_STORAGE_KEY
-                route_detail.set_text("OpenAI-compatible custom endpoint")
-                api_key_input.value = profile.api_key
-                custom_name_input.value = provider
-                custom_base_url_input.value = profile.base_url
-                custom_model_input.value = profile.model
-                return
-            info = PROVIDERS[provider]
-            route_detail.set_text(f"Built-in route · {info['litellm_provider']}")
-            models = get_provider_models(provider)
-            current_model = model_select.value
-            model_select.set_options(models)
-            model_select.value = current_model if current_model in models else models[0]
-            api_key_input.label = info["env_key"]
-            api_key_input.value = settings.api_keys.get(info["env_key"], "")
-
-        provider_select.on_value_change(lambda _: _on_provider_change())
-
-        def _select_provider(provider: str) -> None:
-            provider_select.set_value(provider)
-            _on_provider_change()
-
-        with provider_catalog:
-            for provider in PROVIDERS:
-                ui.button(
-                    provider,
-                    on_click=lambda provider=provider: _select_provider(provider),
-                    icon="public",
-                ).props("outline no-caps").classes("provider-chip")
-            for provider in settings.custom_providers:
-                ui.button(
-                    provider,
-                    on_click=lambda provider=provider: _select_provider(provider),
-                    icon="dns",
-                ).props("outline no-caps").classes("provider-chip")
-            ui.button(
-                "New endpoint",
-                on_click=lambda: _select_provider(NEW_CUSTOM_PROVIDER),
-                icon="add",
-            ).props("flat no-caps").classes("provider-add-chip")
+        text_rack.workspace()
 
         # -- Image Model ------------------------------------------------------------
-        _section("Image Generation")
+        with ui.column().classes("gap-1 mt-2"):
+            ui.label(t("settings.image_route")).classes("settings-eyebrow")
+            ui.label(t("settings.image_where")).classes("settings-h2")
+            ui.label(t("settings.route_help")).classes("text-sm text-slate-500")
 
-        image_model_select = ui.select(
-            label="Image Model",
-            options=DEFAULT_IMAGE_MODELS,
-            value=settings.image_model,
-        ).classes("w-full")
-
-        gemini_env_key = PROVIDERS["Google"]["env_key"]
-
-        image_api_key_input = (
-            ui.input(
-                label=gemini_env_key,
-                placeholder="Required for image generation (Gemini)",
-                password=True,
-                password_toggle_button=True,
-                value=settings.api_keys.get(gemini_env_key, ""),
-            )
-            .classes("w-full")
-            .bind_visibility_from(
-                provider_select, "value", backward=lambda v: v != "Google"
-            )
-        )
-
-        ui.label(
-            "Image generation reuses your Google LLM Provider API key above."
-        ).classes("text-xs text-gray-500").bind_visibility_from(
-            provider_select, "value", backward=lambda v: v == "Google"
-        )
+        image_rack.workspace()
 
         # -- TTS (Google Cloud) -----------------------------------------------------
-        _section("Text-to-Speech (Google Cloud)")
+        _section(t("settings.tts"))
 
         tts_key_input = ui.input(
-            label="Google TTS API Key",
-            placeholder="Your Google Cloud API key for TTS",
+            label=t("settings.tts_key"),
+            placeholder=t("settings.tts_placeholder"),
             password=True,
             password_toggle_button=True,
             value=settings.api_keys.get("GOOGLE_TTS_KEY", ""),
         ).classes("w-full")
 
         # -- Defaults ---------------------------------------------------------------
-        _section("Defaults")
+        _section(t("settings.defaults"))
 
         language_options = [lang.value for lang in Language]
 
         native_select = ui.select(
-            label="Native Language",
+            label=t("settings.native"),
             options=language_options,
             value=settings.defaults.native_language,
         ).classes("w-full")
 
         target_select = ui.select(
-            label="Target Language",
+            label=t("settings.target"),
             options=language_options,
             value=settings.defaults.target_language,
         ).classes("w-full")
 
         generate_image_switch = ui.switch(
-            "Generate images by default",
+            t("settings.images_default"),
             value=settings.defaults.generate_image,
         )
 
-        # -- Save button ------------------------------------------------------------
+        # -- Save -----------------------------------------------------------------
         ui.separator()
-
-        def _save():
-            provider = provider_select.value
-            custom_providers = dict(settings.custom_providers)
-            if provider not in PROVIDERS:
-                provider_name = (custom_name_input.value or "").strip()
-                if not provider_name:
-                    ui.notify("Enter a name for the custom provider", type="warning")
-                    return
-                if provider_name in PROVIDERS or provider_name == NEW_CUSTOM_PROVIDER:
-                    ui.notify("That provider name is reserved", type="warning")
-                    return
-                text_model = (custom_model_input.value or "").strip()
-                env_key = CUSTOM_API_KEY_STORAGE_KEY
-                custom_base_url = (custom_base_url_input.value or "").strip()
-                custom_providers[provider_name] = CustomProvider(
-                    base_url=custom_base_url,
-                    model=text_model,
-                    api_key=api_key_input.value or "",
-                )
-                if (
-                    provider not in {CUSTOM_PROVIDER, NEW_CUSTOM_PROVIDER}
-                    and provider != provider_name
-                ):
-                    custom_providers.pop(provider, None)
-                provider = provider_name
-            else:
-                text_model = model_select.value or ""
-                env_key = PROVIDERS[provider]["env_key"]
-                custom_base_url = ""
-
-            api_keys = {
-                **settings.api_keys,
-                env_key: api_key_input.value or "",
-                "GOOGLE_TTS_KEY": tts_key_input.value or "",
-            }
-            if provider != "Google":
-                api_keys[gemini_env_key] = image_api_key_input.value or ""
-
-            new_settings = Settings(
-                provider=provider,
-                text_model=text_model,
-                image_model=image_model_select.value or "",
-                custom_base_url=custom_base_url,
-                api_keys=api_keys,
-                custom_providers=custom_providers,
-                defaults=DefaultsConfig(
-                    native_language=native_select.value or "",
-                    target_language=target_select.value or "",
-                    generate_image=bool(generate_image_switch.value),
-                ),
-            )
-            save_settings(new_settings)
-            apply_env(new_settings)
-            ui.context.client.storage["settings"] = new_settings
-            ui.notify("Settings saved", type="positive")
-
-        def _delete_current_provider() -> None:
-            provider = provider_select.value
-            if provider not in settings.custom_providers:
-                ui.notify("Select a saved custom provider to delete", type="warning")
-                return
-
-            with ui.dialog() as dialog, ui.card().classes("w-96"):
-                ui.label(f'Delete custom provider "{provider}"?').classes(
-                    "text-lg font-semibold"
-                )
-                ui.label(
-                    "Its endpoint, model, and API key will be removed from this app."
-                ).classes("text-sm text-gray-600")
-
-                def _confirm_delete() -> None:
-                    custom_providers = dict(settings.custom_providers)
-                    custom_providers.pop(provider)
-                    api_keys = dict(settings.api_keys)
-                    if provider == CUSTOM_PROVIDER:
-                        api_keys.pop(CUSTOM_API_KEY_STORAGE_KEY, None)
-
-                    new_settings = Settings(
-                        provider="OpenAI",
-                        text_model=Settings().text_model,
-                        image_model=settings.image_model,
-                        image_size=settings.image_size,
-                        api_keys=api_keys,
-                        custom_providers=custom_providers,
-                        defaults=settings.defaults,
-                    )
-                    save_settings(new_settings)
-                    apply_env(new_settings)
-                    ui.context.client.storage["settings"] = new_settings
-                    dialog.close()
-                    ui.notify(f'Provider "{provider}" deleted', type="positive")
-                    ui.navigate.to("/settings")
-
-                with ui.row().classes("w-full justify-end gap-2 mt-4"):
-                    ui.button("Cancel", on_click=dialog.close).props("flat")
-                    ui.button("Delete", on_click=_confirm_delete, icon="delete").props(
-                        "color=negative"
-                    )
-            dialog.open()
-
-        ui.button("Save route", on_click=_save, icon="save").props(
+        ui.button(t("settings.save"), on_click=_save, icon="save").props(
             "unelevated"
-        ).classes("w-full provider-save-button")
-        ui.button(
-            "Delete custom provider",
-            on_click=_delete_current_provider,
-            icon="delete",
-        ).props("flat color=negative").classes("w-full").bind_visibility_from(
-            provider_select,
-            "value",
-            backward=lambda value: value in settings.custom_providers,
-        )
+        ).classes("w-full settings-save")
 
 
 def _section(title: str) -> None:
@@ -380,10 +621,16 @@ def _section(title: str) -> None:
     ui.label(title).classes("text-lg font-semibold text-primary mt-2")
 
 
-def _provider_ui_styles() -> None:
-    """Add the small design system used by the provider route workspace."""
+def _settings_styles() -> None:
+    """Small design system for the settings page."""
     ui.add_css(
         """
+        .settings-title {
+            color: #0f172a;
+            font-size: 1.75rem;
+            font-weight: 800;
+            letter-spacing: -.02em;
+        }
         .settings-eyebrow {
             color: #64748b;
             font-size: .72rem;
@@ -391,69 +638,98 @@ def _provider_ui_styles() -> None:
             letter-spacing: .11em;
             text-transform: uppercase;
         }
-        .provider-route-ribbon {
+        .settings-h2 {
+            color: #0f172a;
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+        .route-rack {
             align-items: center;
-            background: linear-gradient(100deg, #eff6ff 0%, #f8fafc 72%);
-            border: 1px solid #bfdbfe;
-            border-radius: 14px;
-            display: flex;
-            gap: .8rem;
-            min-height: 4.5rem;
-            padding: .85rem 1rem;
+            flex-wrap: wrap;
+            gap: .4rem;
         }
-        .route-status {
-            background: #dbeafe;
-            border-radius: 999px;
-            color: #1d4ed8;
-            font-size: .66rem;
-            font-weight: 800;
-            letter-spacing: .09em;
-            padding: .28rem .5rem;
-        }
-        .provider-catalog {
+        .route-pill {
+            -webkit-appearance: none;
+            appearance: none;
             align-items: center;
-            gap: .45rem;
-            padding: .1rem 0 .15rem;
-        }
-        .provider-chip {
-            border-color: #cbd5e1 !important;
-            border-radius: 999px !important;
-            color: #334155 !important;
-            font-size: .78rem;
-            min-height: 2rem;
-        }
-        .provider-add-chip {
-            color: #2563eb !important;
-            font-size: .78rem;
-            min-height: 2rem;
-        }
-        .provider-picker .q-field__control,
-        .provider-field .q-field__control {
-            border-radius: 10px;
-        }
-        .provider-picker .q-field__control {
             background: #fff;
-            box-shadow: 0 1px 2px rgb(15 23 42 / .04);
+            font: inherit;
+            border: 1px solid #cbd5e1;
+            border-radius: 999px;
+            color: #334155;
+            cursor: pointer;
+            display: inline-flex;
+            font-size: .82rem;
+            font-weight: 600;
+            gap: .4rem;
+            padding: .4rem .85rem;
         }
-        .provider-custom-panel {
+        .route-pill:hover {
+            background: #eff6ff;
+            border-color: #60a5fa;
+        }
+        .route-pill:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+        }
+        .route-pill--active,
+        .route-pill--active:hover {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #fff;
+        }
+        .route-pill__tag {
+            background: rgba(148, 163, 184, .28);
+            border-radius: 5px;
+            font-size: .6rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+            padding: .05rem .3rem;
+            text-transform: uppercase;
+        }
+        .route-add {
+            border: 1px dashed #93c5fd !important;
+            color: #2563eb !important;
+        }
+        .route-editor {
             background: #f8fafc;
-            border-left: 3px solid #60a5fa;
-            border-radius: 0 12px 12px 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
             gap: .9rem;
-            padding: 1rem;
+            margin-top: .4rem;
+            padding: 1.1rem;
             width: 100%;
         }
-        .provider-save-button {
-            background: #2563eb !important;
+        .route-dialog {
+            border-radius: 14px;
+        }
+        .route-model-row {
+            flex-wrap: nowrap;
+        }
+        .route-fetch-btn {
+            flex: 0 0 auto;
+        }
+        .route-save-btn {
+            border-radius: 8px;
+        }
+        .settings-save {
             border-radius: 10px;
-            box-shadow: 0 8px 20px rgb(37 99 235 / .2);
-            min-height: 2.8rem;
+            min-height: 2.7rem;
         }
         @media (prefers-reduced-motion: no-preference) {
-            .provider-route-ribbon { transition: border-color .18s ease, box-shadow .18s ease; }
-            .provider-route-ribbon:hover { box-shadow: 0 8px 22px rgb(37 99 235 / .08); }
-            .provider-chip { transition: background-color .16s ease, border-color .16s ease; }
-            .provider-chip:hover { background: #eff6ff !important; border-color: #60a5fa !important; }
+            .route-pill { transition: background-color .16s ease, border-color .16s ease; }
+        }
+        .body--dark .settings-title,
+        .body--dark .settings-h2 { color: #f1f5f9; }
+        .body--dark .route-pill {
+            background: #1e293b;
+            border-color: #334155;
+            color: #cbd5e1;
+        }
+        .body--dark .route-pill:hover { background: #1e3a5f; }
+        .body--dark .route-editor {
+            background: #0f172a;
+            border-color: #1e293b;
         }
         """
     )

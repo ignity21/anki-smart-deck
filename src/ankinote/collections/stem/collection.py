@@ -1,7 +1,7 @@
 """STEM collection management for Anki."""
 
-import dataclasses
 import hashlib
+from collections.abc import Callable
 from typing import Self
 
 from loguru import logger
@@ -10,7 +10,15 @@ from ankinote.services.ai import ImageGenerationService, TextGenerationService
 from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
 
 from .generator import StemGenerator
-from .models import StemModel, StemNoteType
+from .models import (
+    NOTE_FIELDS,
+    CardType,
+    ExampleModel,
+    FormulaModel,
+    ProcedureModel,
+    StemCard,
+    note_type_name,
+)
 from .templates import load_card_style, load_template
 
 
@@ -26,9 +34,9 @@ class StemCollection:
         self,
         anki_client: AnkiCollectionClient,
         *,
-        notetype_name: str = "AINote STEM",
+        card_type: CardType | None = None,
         deck_name: str = "AINote::STEM",
-        text_model_id: str,
+        text_model: str,
         text_service: TextGenerationService,
         image_service: ImageGenerationService | None = None,
         reasoning_effort: str | None = None,
@@ -37,21 +45,21 @@ class StemCollection:
 
         Args:
             anki_client: AnkiConnect client instance
-            notetype_name: Name of the Anki note type to use
+            card_type: Selected type, or None for automatic classification
             deck_name: Name of the Anki deck to add notes to
-            text_model_id: Model ID for the LLM used to generate content
+            text_model: The LLM model used to generate content
             text_service: Shared text generation service
             image_service: Optional image generation service for diagrams
             reasoning_effort: Extended-thinking level forwarded to the provider;
                 ``None`` keeps the provider default (thinking on)
         """
-        self.notetype_name = notetype_name
+        self.card_type = card_type
         self.deck_name = deck_name
         self._anki_client = anki_client
         self._reasoning_effort = reasoning_effort
         self._generator = StemGenerator(
             text_service=text_service,
-            text_model_id=text_model_id,
+            text_model=text_model,
             image_service=image_service,
         )
 
@@ -77,15 +85,21 @@ class StemCollection:
         await self._ensure_deck_exists()
 
     async def _ensure_note_type_exists(self) -> None:
+        """Initialize the selected type, or all four for the automatic entrypoint."""
+        for card_type in [self.card_type] if self.card_type else list(CardType):
+            await self._sync_note_type(card_type)
+
+    async def _sync_note_type(self, card_type: CardType) -> None:
         """Ensure the note type exists in Anki, creating or updating it."""
-        fields = [field.name for field in dataclasses.fields(StemNoteType)]
-        front_template = load_template("front.html")
-        back_template = load_template("back.html")
+        fields = list(NOTE_FIELDS[card_type])
+        notetype_name = note_type_name(card_type)
+        front_template = load_template(f"{card_type}/front.html")
+        back_template = load_template(f"{card_type}/back.html")
         style = load_card_style()
-        exists = await self._anki_client.models.exists(self.notetype_name)
+        exists = await self._anki_client.models.exists(notetype_name)
         if not exists:
             await self._anki_client.models.create(
-                model_name=self.notetype_name,
+                model_name=notetype_name,
                 fields=fields,
                 templates=[
                     {
@@ -97,12 +111,12 @@ class StemCollection:
                 css=style,
                 is_cloze=False,
             )
-            logger.success(f"Created note type: {self.notetype_name}")
+            logger.success(f"Created note type: {notetype_name}")
             return
 
-        await self._anki_client.models.ensure_fields(self.notetype_name, fields)
+        await self._anki_client.models.ensure_fields(notetype_name, fields)
         await self._anki_client.models.update_templates(
-            self.notetype_name,
+            notetype_name,
             [
                 TemplateUpsert(
                     name="Card 1",
@@ -111,8 +125,8 @@ class StemCollection:
                 )
             ],
         )
-        await self._anki_client.models.update_styling(self.notetype_name, style)
-        logger.success(f"Updated note type: {self.notetype_name}")
+        await self._anki_client.models.update_styling(notetype_name, style)
+        logger.success(f"Updated note type: {notetype_name}")
 
     async def _ensure_deck_exists(self) -> int:
         """Ensure the deck exists in Anki, create it if it doesn't."""
@@ -124,6 +138,8 @@ class StemCollection:
         self,
         topic: str,
         tags: list[str] | None = None,
+        reference_image: bytes | None = None,
+        reference_image_mime: str = "image/png",
     ) -> int:
         """Generate a STEM card and add/update note in Anki.
 
@@ -135,43 +151,112 @@ class StemCollection:
         Args:
             topic: The user's question or concept (e.g. "What is a derivative?")
             tags: Optional additional tags to apply
+            reference_image: Optional source material (e.g. a photographed
+                problem) for the AI to read and solve from; requires a
+                vision-capable text model.
+            reference_image_mime: MIME type of ``reference_image``.
 
         Returns:
             Note ID
         """
         logger.info(f"Starting generation for STEM card: {topic[:50]}...")
+        stem_model = await self.generate_model(
+            topic,
+            reference_image=reference_image,
+            reference_image_mime=reference_image_mime,
+        )
+        return await self.add_note(stem_model, topic=topic, tags=tags)
 
-        # Step 1: Generate text data using LLM
-        stem_model = await self._generator.generate(
-            topic, reasoning_effort=self._reasoning_effort
+    async def generate_model(
+        self,
+        topic: str,
+        reference_image: bytes | None = None,
+        reference_image_mime: str = "image/png",
+    ) -> StemCard:
+        """Generate structured STEM card data via the LLM (no Anki write).
+
+        The card type (concept, formula, procedure, example) is auto-detected.
+        Callers that want a preview/edit step run this, let the user adjust
+        the result, then pass the model to :meth:`add_note`.
+
+        ``reference_image``, when supplied, is source material for the AI to
+        solve from (e.g. a photographed problem); it requires a
+        vision-capable text model.
+        """
+        return await self._generator.generate(
+            topic,
+            reasoning_effort=self._reasoning_effort,
+            reference_image=reference_image,
+            reference_image_mime=reference_image_mime,
+            card_type=self.card_type,
         )
 
-        # Step 2: Optionally generate an image
+    async def generate_diagram(self, description: str) -> bytes:
+        """Generate a diagram image from a description.
+
+        Raises:
+            RuntimeError: if no image service was configured.
+        """
+        return await self._generator.generate_image(description)
+
+    async def add_note(
+        self,
+        stem_model: StemCard,
+        *,
+        topic: str | None = None,
+        image_bytes: bytes | None = None,
+        tags: list[str] | None = None,
+        on_image_error: Callable[[Exception], None] | None = None,
+    ) -> int:
+        """Add or update an Anki note from a (possibly edited) ``StemCard``.
+
+        Args:
+            stem_model: The card data to store.
+            topic: Original prompt, used only to derive the image filename;
+                falls back to ``stem_model.front``.
+            image_bytes: A pre-generated diagram to store as-is. When omitted, a
+                diagram is generated from ``stem_model.image_description`` if that
+                is set and an image service is configured.
+            tags: Optional additional tags to apply.
+            on_image_error: Optional callback for a non-fatal diagram failure.
+
+        Returns:
+            Note ID
+        """
+        if self.card_type is not None and stem_model.card_type != self.card_type:
+            raise ValueError("Card type does not match the selected collection")
+        notetype_name = note_type_name(stem_model.card_type)
+        image_key = f"{stem_model.card_type}:{topic or stem_model.front}"
+
+        # Store a diagram: use the caller's bytes, else generate from the model.
         image_filename: str | None = None
-        if stem_model.image_description and self._generator._image_service:
+        if image_bytes is None and (
+            stem_model.image_description and self._generator._image_service
+        ):
             try:
                 image_bytes = await self._generator.generate_image(
                     stem_model.image_description
                 )
-                card_hash = hashlib.md5(topic.encode()).hexdigest()[:12]
-                image_filename = f"stem_{card_hash}.png"
-                await self._anki_client.media.store_file(image_filename, image_bytes)
-                logger.info(f"Stored diagram: {image_filename}")
-            except Exception as e:
-                logger.warning(f"Image generation failed: {e}")
+            except Exception as exc:
+                logger.warning(f"Image generation failed: {exc}")
+                if on_image_error is not None:
+                    on_image_error(exc)
+        if image_bytes is not None:
+            card_hash = hashlib.md5(image_key.encode()).hexdigest()[:12]
+            image_filename = f"stem_{card_hash}.png"
+            await self._anki_client.media.store_file(image_filename, image_bytes)
+            logger.info(f"Stored diagram: {image_filename}")
 
-        # Step 3: Build note data
         note_data = self._build_note_data(stem_model, image_filename)
 
-        # Step 4: Combine tags
         all_tags = list(tags or [])
         all_tags.extend(stem_model.tags)
         all_tags.append("AI-generated")
 
-        # Step 5: Add or update note
         note_id = await self._anki_client.notes.find(
             deck_name=self.deck_name,
             unique_fields={"front": stem_model.front},
+            model_name=notetype_name,
         )
 
         if note_id is not None:
@@ -181,10 +266,10 @@ class StemCollection:
         else:
             note_id = await self._anki_client.notes.add(
                 deck_name=self.deck_name,
-                model_name=self.notetype_name,
+                model_name=notetype_name,
                 fields=note_data,
                 tags=all_tags,
-                allow_duplicate=True,
+                allow_duplicate=False,
             )
             logger.info(f"Created note {note_id}")
 
@@ -192,45 +277,29 @@ class StemCollection:
 
     def _build_note_data(
         self,
-        stem_model: StemModel,
+        stem_model: StemCard,
         image_filename: str | None,
     ) -> dict[str, str]:
-        """Convert StemModel and optional image to Anki note fields.
-
-        Structured fields (latex, variables, steps) are rendered into the
-        stored back_detail HTML so the note type stays all-string and old
-        notes remain valid. If an image was generated, it is appended to
-        back_detail as an <img> tag.
-        """
-        parts: list[str] = []
-
-        if stem_model.latex:
-            parts.append(f"<div class='formula-block'>\\[{stem_model.latex}\\]</div>")
-
-        if stem_model.variables:
+        """Render each structured value into its own Anki field."""
+        values = stem_model.model_dump()
+        fields = {
+            name: str(values[name])
+            for name in NOTE_FIELDS[stem_model.card_type]
+            if name not in {"image", "variables", "steps"}
+        }
+        if isinstance(stem_model, FormulaModel):
             rows = "".join(
-                "<tr>"
-                f"<td class='symbol-cell'>\\({v.symbol}\\)</td>"
-                f"<td>{v.description}</td>"
-                "</tr>"
+                f"<tr><td class='symbol-cell'>\\({v.symbol}\\)</td>"
+                + f"<td>{v.description}</td></tr>"
                 for v in stem_model.variables
             )
-            parts.append(f"<table class='symbol-table'>{rows}</table>")
-
-        if stem_model.steps:
+            fields["variables"] = (
+                f"<table class='symbol-table'>{rows}</table>" if rows else ""
+            )
+        if isinstance(stem_model, (ProcedureModel, ExampleModel)):
             items = "".join(f"<li>{step}</li>" for step in stem_model.steps)
-            parts.append(f"<ol class='step-list'>{items}</ol>")
-
-        parts.append(stem_model.back_detail)
-        back_detail = "\n".join(parts)
-
-        if image_filename:
-            back_detail += f"\n<div class='diagram-container'><img src='{image_filename}' class='diagram'></div>"
-
-        return {
-            "card_type": stem_model.card_type.value,
-            "front": stem_model.front,
-            "back_brief": stem_model.back_brief,
-            "back_detail": back_detail,
-            "tags": ", ".join(stem_model.tags),
-        }
+            fields["steps"] = f"<ol class='step-list'>{items}</ol>"
+        fields["image"] = (
+            f"<img src='{image_filename}' class='diagram'>" if image_filename else ""
+        )
+        return {name: fields[name] for name in NOTE_FIELDS[stem_model.card_type]}

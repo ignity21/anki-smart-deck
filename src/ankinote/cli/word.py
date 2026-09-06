@@ -33,12 +33,12 @@ COLLECTION_OPTIONS = [
     click.option(
         "--llm",
         default=None,
-        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model_id,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.text_model,
     ),
     click.option(
         "--image-model",
         default=None,
-        show_default=DEFAULT_AI_SERVICE_CONFIG.image_model_id,
+        show_default=DEFAULT_AI_SERVICE_CONFIG.image_model,
     ),
     click.option(
         "--image-size",
@@ -76,8 +76,8 @@ def build_options(
     return WordCollectionOptions(
         native_language=Language(native),
         target_language=Language(target),
-        llm_model_id=llm,
-        image_model_id=image_model,
+        llm_model=llm,
+        image_model=image_model,
         image_size=image_size,
         reasoning_effort=resolve_thinking(thinking, unset=DISABLE_REASONING),
     )

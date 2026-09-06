@@ -2,7 +2,7 @@
 name = "ankinote-ai"
 dynamic = ["version"]
 description = "AI-powered Anki card generator for vocabulary, phrases, sentences, and STEM concepts, powered by litellm"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 license = { text = "MIT" }
 readme = "README.md"
 authors = [
@@ -13,7 +13,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Education",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Education",
 ]
@@ -61,7 +60,16 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py314"
+
+[tool.ruff.lint]
+# BLE001: batch CLI loops and UI handlers deliberately catch Exception to
+# collect failures / surface them to the user rather than abort.
+ignore = ["BLE001"]
+
+[tool.ruff.lint.per-file-ignores]
+# Example scripts favour readability over async-correctness.
+"examples/**" = ["ASYNC230"]
 
 [tool.pyright]
 include = ["src/ankinote"]
@@ -70,6 +78,9 @@ exclude = [
     "**/__pycache__",
 ]
 typeCheckingMode = "standard"
+
+[tool.ty.src]
+include = ["src/ankinote"]
 
 [tool.pytest.ini_options]
 minversion = "8.4.1"
