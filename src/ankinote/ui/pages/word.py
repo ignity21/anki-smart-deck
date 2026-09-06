@@ -10,7 +10,7 @@ from ankinote.app import Application
 from ankinote.collections.word import WordCollection
 from ankinote.consts import Language
 from ankinote.services.ai import LiteLLMTextService
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.anki_factory import create_anki_client
 from ankinote.ui.config import (
     CUSTOM_VENDOR,
     ProviderProfile,
@@ -177,7 +177,7 @@ def word_page() -> None:
 
             try:
                 async with Application():
-                    client = AnkiConnectClient()
+                    client = create_anki_client()
                     async with WordCollection(
                         client,
                         native_language=Language(native),

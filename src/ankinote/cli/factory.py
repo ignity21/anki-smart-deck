@@ -20,7 +20,8 @@ from ankinote.services.ai import (
     LiteLLMTextService,
     resolve_thinking,
 )
-from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
+from ankinote.services.anki import AnkiCollectionClient
+from ankinote.services.anki_factory import create_anki_client
 
 # ``THINKING_CHOICES`` / ``resolve_thinking`` moved to ``ankinote.services.ai``
 # (shared with the GUI); re-exported here for the CLI modules that import them.
@@ -163,6 +164,6 @@ async def collection_context[TOptions, TCollection](
 ) -> AsyncIterator[TCollection]:
     """Create application, transport client, and collection in one place."""
     async with Application():
-        client = AnkiConnectClient()
+        client = create_anki_client()
         async with builder(client, options) as collection:
             yield collection

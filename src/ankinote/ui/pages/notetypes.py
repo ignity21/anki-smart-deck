@@ -43,7 +43,8 @@ from ankinote.collections.word.templates import (
 )
 from ankinote.consts import Language
 from ankinote.services.ai import LiteLLMTextService
-from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
+from ankinote.services.anki import AnkiCollectionClient
+from ankinote.services.anki_factory import create_anki_client
 from ankinote.ui.config import load_settings
 from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.pages.word import format_error
@@ -719,7 +720,7 @@ def notetypes_page() -> None:
         _workspace.refresh()
         try:
             async with Application():
-                anki_client = AnkiConnectClient()
+                anki_client = create_anki_client()
                 state["statuses"] = [
                     await _load_status(anki_client, spec) for spec in specs
                 ]
@@ -732,7 +733,7 @@ def notetypes_page() -> None:
         _workspace.refresh()
         try:
             async with Application():
-                anki_client = AnkiConnectClient()
+                anki_client = create_anki_client()
                 await spec.sync(anki_client)
             _notify(f"{spec.title} card type is up to date in Anki", "positive")
         except Exception as exc:

@@ -40,7 +40,7 @@ class PhraseModel(BaseModel):
     associations: list[str] = Field(default_factory=list, max_length=5)
 
     @model_validator(mode="after")
-    def validate_content(self) -> "PhraseModel":
+    def validate_content(self) -> PhraseModel:
         """Ensure the core sense is not duplicated in supporting meanings."""
         normalized_core = (
             self.core_meaning.target_text.strip(),

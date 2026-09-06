@@ -13,7 +13,8 @@ from ankinote.services.ai import (
     LiteLLMTextService,
     resolve_thinking,
 )
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.anki import AnkiCollectionClient
+from ankinote.services.anki_factory import create_anki_client
 from ankinote.ui.config import (
     CUSTOM_VENDOR,
     ProviderProfile,
@@ -199,7 +200,7 @@ def stem_page() -> None:
         )
 
         def _collection(
-            anki_client: AnkiConnectClient,
+            anki_client: AnkiCollectionClient,
             settings: Settings,
             *,
             with_image: bool,
@@ -262,7 +263,7 @@ def stem_page() -> None:
                 settings = load_settings()
                 apply_env(settings)
                 async with Application():
-                    anki = AnkiConnectClient()
+                    anki = create_anki_client()
                     async with _collection(
                         anki,
                         settings,
@@ -405,7 +406,7 @@ def stem_page() -> None:
 
             try:
                 async with Application():
-                    anki = AnkiConnectClient()
+                    anki = create_anki_client()
                     async with _collection(
                         anki,
                         settings,

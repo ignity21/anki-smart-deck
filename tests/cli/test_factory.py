@@ -240,7 +240,7 @@ class TestCollectionContext:
         mocker.patch(
             "ankinote.cli.factory.Application", return_value=fake_application()
         )
-        mocker.patch("ankinote.cli.factory.AnkiConnectClient", return_value=client)
+        mocker.patch("ankinote.cli.factory.create_anki_client", return_value=client)
 
         async with collection_context(builder, options) as collection:
             assert collection is built_collection

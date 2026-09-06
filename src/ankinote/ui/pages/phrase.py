@@ -9,7 +9,7 @@ from ankinote.app import Application
 from ankinote.collections.phrase import PhraseCollection
 from ankinote.consts import Language
 from ankinote.services.ai import LiteLLMTextService
-from ankinote.services.anki import AnkiConnectClient
+from ankinote.services.anki_factory import create_anki_client
 from ankinote.ui.config import (
     CUSTOM_VENDOR,
     ProviderProfile,
@@ -148,7 +148,7 @@ def phrase_page() -> None:
 
             try:
                 async with Application():
-                    anki_client = AnkiConnectClient()
+                    anki_client = create_anki_client()
                     async with PhraseCollection(
                         anki_client,
                         native_language=Language(native),
