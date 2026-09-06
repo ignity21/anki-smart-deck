@@ -13,14 +13,50 @@ from ankinote.ui.pages.settings import settings_page
 from ankinote.ui.pages.stem import stem_page
 from ankinote.ui.pages.word import word_page
 
+# Colors are tokenised so the header, drawer and content surfaces stay in sync
+# across themes. The content area and drawer share one surface; the header is the
+# only chrome that carries colour, and it is a distinct (not merely re-tinted)
+# tone in dark mode.
+_PRIMARY = "#3d6fa6"
+_PRIMARY_DARK = "#6fa8dc"
+_SURFACE_DARK = "#242833"
+_PAGE_DARK = "#16181d"
+
+_THEME_CSS = f"""
+<style>
+  /* Content + drawer are one white surface; also stops the header colour
+     bleeding into the page on browsers that leave .q-page transparent. */
+  .q-layout, .q-page-container, .q-page, .nicegui-content {{ background: #fff; }}
+  .q-drawer {{ background: #fff; border-right: 1px solid #e8eaed; }}
+  .q-header {{ background: {_PRIMARY}; }}
+
+  .body--dark .q-layout,
+  .body--dark .q-page-container,
+  .body--dark .q-page,
+  .body--dark .nicegui-content {{ background: {_PAGE_DARK}; }}
+  .body--dark .q-drawer {{ background: #1c1f26; border-right-color: #2a2e38; }}
+  .body--dark .q-header {{ background: #222834; }}
+  .body--dark .q-card {{ background: {_SURFACE_DARK}; }}
+  /* Lift the accent so it stays legible on the dark surface. */
+  .body--dark .text-primary {{ color: {_PRIMARY_DARK}; }}
+</style>
+"""
+
+ui.add_head_html(_THEME_CSS, shared=True)
+
 
 def _create_layout() -> None:
     """Create the shared layout elements (header, drawer, footer)."""
     settings = load_settings()
     set_locale(settings.ui_language)
+    ui.colors(
+        primary=_PRIMARY,
+        dark=_SURFACE_DARK,
+        dark_page=_PAGE_DARK,
+    )
     # Header
     with ui.header(elevated=True).classes(
-        "items-center justify-between px-4 h-14 bg-primary text-white"
+        "items-center justify-between px-4 h-14 text-white"
     ):
         ui.label("ankinote").classes("text-lg font-bold text-white")
 
@@ -60,35 +96,35 @@ def _create_layout() -> None:
                         )
 
     # Left drawer (navigation)
-    with ui.left_drawer(value=True).classes("bg-gray-50 dark:bg-gray-900"):
+    with ui.left_drawer(value=True):
         ui.label(t("nav.navigation")).classes(
             "text-sm font-semibold text-gray-500 dark:text-slate-300 px-4 pt-4 pb-2"
         )
 
         with ui.column().classes("w-full gap-1 px-2"):
             ui.link(t("nav.word_cards"), "/").classes(
-                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-200 "
-                "dark:hover:bg-gray-700"
+                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-100 "
+                "dark:hover:bg-gray-700/40"
             )
             ui.link(t("nav.phrase_cards"), "/phrases").classes(
-                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-200 "
-                "dark:hover:bg-gray-700"
+                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-100 "
+                "dark:hover:bg-gray-700/40"
             )
             ui.link(t("nav.sentence_cards"), "/sentences").classes(
-                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-200 "
-                "dark:hover:bg-gray-700"
+                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-100 "
+                "dark:hover:bg-gray-700/40"
             )
             ui.link(t("nav.stem_cards"), "/stem").classes(
-                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-200 "
-                "dark:hover:bg-gray-700"
+                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-100 "
+                "dark:hover:bg-gray-700/40"
             )
             ui.link(t("nav.card_types"), "/notetypes").classes(
-                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-200 "
-                "dark:hover:bg-gray-700"
+                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-100 "
+                "dark:hover:bg-gray-700/40"
             )
             ui.link(t("nav.settings"), "/settings").classes(
-                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-200 "
-                "dark:hover:bg-gray-700"
+                "w-full px-3 py-2 rounded dark:text-slate-200 hover:bg-gray-100 "
+                "dark:hover:bg-gray-700/40"
             )
 
 
