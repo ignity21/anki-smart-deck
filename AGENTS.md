@@ -1,5 +1,9 @@
 # Repository Guidelines
 
+## Active Development Plans
+
+- [Direct Collection Backend and AnkiWeb Sync](docs/plans/direct-collection-backend.md): confirmed design for replacing the headless AnkiConnect sidecar with an in-process Anki collection backend.
+
 ## Project Structure & Module Organization
 Source code lives under `src/ankinote/`. Key areas include `cli/` for the command-line entrypoints, `services/` for external integrations, `utils/` for shared helpers, and `collections/` for card-generation logic, templates, prompts, and assets. Tests live in `tests/` and follow the same package layout where practical, such as `tests/utils/test_httpcli.py`. Keep generated files, caches, and virtual environments out of the tree.
 
