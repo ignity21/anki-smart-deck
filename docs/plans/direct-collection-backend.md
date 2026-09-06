@@ -112,19 +112,170 @@ complete AnkiWeb synchronization.
 - Do not publish a release, deploy containers, or migrate a real AnkiWeb account
   as part of this work.
 
+## Runtime Prerequisites
+
+Verified against PyPI before planning the stages:
+
+- `anki==26.8.1` ships `cp310-abi3` wheels with `requires-python >=3.10`, so it
+  installs on this project's Python 3.14 floor through the stable ABI.
+- Linux wheels are `manylinux_2_35`, requiring glibc 2.35 or newer. The current
+  `python:3.14-slim` base (Debian bookworm, glibc 2.36) qualifies; an Alpine or
+  other musl base would not. Keep the headless image on a glibc base.
+- Wheels exist for linux x86_64/aarch64, macOS 12+ arm64/x86_64, and Windows
+  amd64/arm64. There is no source fallback, so unsupported platforms must keep
+  using the AnkiConnect backend.
+
 ## Implementation Order
 
-1. Add backend selection, the collection worker runtime, and lifecycle ownership;
-   prove the existing AnkiConnect path remains unchanged.
-2. Implement and test direct model, deck, note, tag, and media operations using
-   a temporary real collection.
-3. Implement the synchronization service, credential persistence, full-sync
-   decision flow, backups, and recovery behavior.
-4. Connect all UI pages and CLI commands; ensure concurrent generation and
-   synchronization are serialized without duplicate cards.
-5. Update Docker images, Compose stacks, configuration docs, and migration docs.
+Each stage is a separately committable change that leaves `main` green
+(`make test`, `make lint`, `make check` — the one known pre-existing
+`basedpyright` error in `ui/main.py` stays the only allowed failure). "Verified
+when" lists the observable state that proves the stage landed; a stage is not
+done without it.
 
-## Test and Acceptance Plan
+### Stage 0 — Dependency spike
+
+Prove `anki` coexists with the current dependency set before any code depends
+on it. Throwaway work; nothing but findings is committed.
+
+- Resolve `anki==26.8.1` alongside `litellm`, `httpx`, `protobuf`, and
+  `nicegui`; record any pin conflicts.
+- Open, write, and close a throwaway collection in a temp directory.
+
+Verified when: `uv run --with anki==26.8.1 python -c "from anki.collection
+import Collection; ..."` creates a temp collection and adds a note; `uv lock`
+with the extra resolves with no conflict; the same import succeeds inside a
+`python:3.14-slim` container.
+
+**Findings (done 2026-09-06):**
+
+- `anki==26.8.1` resolves cleanly alongside the full dependency set with
+  `--all-extras`; no pins conflict. Its transitive deps: `decorator`,
+  `distro`, `markdown`, `orjson`, `protobuf<8.0,>=6.0`, `requests[socks]`,
+  `typing-extensions`. Only `protobuf` overlaps existing deps
+  (`google-cloud-texttospeech`); resolved version 6.33.5 satisfies both.
+- `anki.version` does not exist; the version string is
+  `anki.buildinfo.version` (reports `26.08.1`).
+- Temp-collection create + `models.by_name("Basic")` + `new_note` /
+  `add_note(note, decks.id(...))` + `note_count` + `close` all work; `media`
+  is `col.media`, store is `col.media.write_data(name, bytes)` returning the
+  stored filename. Reopening the same file after `close()` succeeds, so the
+  lock is released on close.
+- Verified in a clean `python:3.14-slim` container: `pip install anki==26.8.1`
+  then open a collection and add a note — works. glibc/abi3 assumptions hold.
+
+### Stage 1 — Backend selection seam (no behavior change)
+
+- Add `ANKI_BACKEND` (`connect` default) and `ANKI_COLLECTION_PATH` to
+  `EnvVars`.
+- Add a backend factory and route every construction site through it:
+  `cli/factory.py`, `ui/pages/word.py`, `ui/pages/phrase.py`,
+  `ui/pages/sentence.py`, `ui/pages/stem.py` (two sites), and
+  `ui/pages/notetypes.py` (two sites).
+
+Verified when: no module outside the factory and its tests imports
+`AnkiConnectClient`, provable with a grep-style test; the factory returns an
+`AnkiConnectClient` under default env; `ANKI_BACKEND=collection` without
+`ANKI_COLLECTION_PATH` raises a configuration error naming the missing
+variable; the existing suite passes unchanged.
+
+### Stage 2 — Collection worker runtime
+
+- Add a runtime owning one dedicated worker thread, an asyncio submit bridge,
+  and open/close lifecycle. Raw Anki objects never leave the thread.
+- Detect an already-locked collection and raise a distinct "collection in use"
+  error.
+
+Verified when: submitted work runs on one non-event-loop thread and results
+cross back as plain values, tested through an injected fake opener; a real
+second open of the same collection file raises the in-use error naming the
+path; closing the runtime joins the thread within a timeout; an exception in
+submitted work propagates to the awaiting coroutine without killing the
+worker.
+
+### Stage 3 — Direct collection operations
+
+- Add `DirectCollectionClient` implementing the model, deck, note, and media
+  protocols against the runtime.
+
+Verified when: a shared backend-contract test suite, parametrized over the
+AnkiConnect fake and a real temp collection, passes for both — covering note
+type create/reload, field addition, template add/rename/update, CSS update,
+deck create/exists, note find/add/update, tag replacement, and media store.
+Additionally: a stored file returns its actual normalized filename and the
+rendered field references that name; a second `sync` of the same note type is a
+no-op; two matching notes raise rather than pick one; a note type carrying an
+extra user field and a review-history card keeps both after sync.
+
+### Stage 4 — Lifecycle ownership
+
+- Web app creates one runtime at startup and closes it at shutdown; pages and
+  generation tasks borrow it. CLI creates one per command context.
+
+Verified when: two concurrent page flows observe the same runtime instance; the
+CLI context closes the runtime on both success and exception paths; a
+generation task awaiting the AI service does not block another task's
+collection call.
+
+### Stage 5 — Sync state machine (no network)
+
+- Implement the state machine (`not_logged_in`, `initializing`, `idle`,
+  `syncing`, `pending`, `needs_full_sync_choice`, `error`), request coalescing,
+  the five-minute timer, and network backoff, behind an injected sync driver.
+
+Verified when: unit tests with a fake driver cover each transition; three
+overlapping requests produce one driver call; a network error backs off and
+retries while a credential error stops retrying; `needs_full_sync_choice`
+rejects writes and note type changes while still serving status reads; a
+temporary network outage still permits local writes.
+
+### Stage 6 — Real sync driver, credentials, backups
+
+- Wire Anki's login, normal sync, full upload/download, and media sync. Persist
+  the credential in a separate `0600` file; env config wins. Back up before a
+  full sync; reopen and invalidate caches after a sync that replaces the
+  collection.
+
+Verified when: the credential file is created mode `0600` and never appears in
+log output or any browser-facing payload; env-provided credentials take
+precedence and are reported as externally configured; a simulated backup
+failure aborts the full sync leaving the collection untouched; after a full
+download, cached note type objects are invalidated and refetched; logout
+removes the credential file, pauses sync, and leaves the collection on disk.
+Media sync failures surface distinctly from collection sync failures.
+
+### Stage 7 — UI and CLI surfaces
+
+- Settings panel: login/logout, status, last result, manual sync, interval,
+  and the upload/download choice. Separate local-write from sync reporting.
+- Add `ankinote anki login|logout|status|sync`, with
+  `sync --direction upload|download`.
+- Add English and Simplified Chinese strings distinguishing note type sync from
+  AnkiWeb sync.
+
+Verified when: page tests in the style of `tests/ui/test_settings_page.py`
+render every sync state including the full-sync prompt; a card write whose
+media sync failed still reports the local write as successful; `ankinote anki
+status` exits nonzero on an unresolved full sync and zero on `idle`;
+`sync --direction upload` resolves it non-interactively; no user-facing string
+is missing from either locale.
+
+### Stage 8 — Packaging, deployment, migration docs
+
+- Add the `ankinote-ai[headless]` extra pinning `anki==26.8.1`; keep the
+  standard image on AnkiConnect and install the extra in the headless image.
+- Reduce `deploy/headless/compose.yaml` to one ankinote service plus the
+  collection volume; leave `deploy/standard/compose.yaml` alone.
+- Document configuration and the migration procedure.
+
+Verified when: the standard image still boots with `ANKI_CONNECT_URL` and no
+`anki` package installed; the headless image boots against a fresh empty
+collection volume with no AnkiWeb account configured and serves the GUI;
+`docker compose config` succeeds for both stacks and the headless stack no
+longer references `anki-connect-server`; the migration doc's steps are walked
+end to end against a copied throwaway data directory.
+
+## Global Acceptance
 
 - Test Word, Phrase, Sentence, and STEM collection flows through the direct
   backend: first creation, repeated setup, missing fields, multiple templates,
