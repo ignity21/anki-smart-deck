@@ -452,6 +452,7 @@ class Settings:
     image_size: int = 512
     api_keys: dict[str, str] = field(default_factory=dict)
     defaults: DefaultsConfig = field(default_factory=DefaultsConfig)
+    ui_language: str = "en"
 
 
 def _get_config_dir() -> Path:
@@ -494,6 +495,7 @@ def _settings_from_current_shape(data: dict) -> Settings:
         image_size=data.get("image_size", 512),
         api_keys=data.get("api_keys", {}),
         defaults=DefaultsConfig(**data.get("defaults", {})),
+        ui_language=data.get("ui_language", "en"),
     )
 
 
@@ -590,6 +592,7 @@ def _settings_from_legacy_shape(data: dict) -> Settings:
         image_size=data.get("image_size", 512),
         api_keys={"GOOGLE_TTS_KEY": old_api_keys.get("GOOGLE_TTS_KEY", "")},
         defaults=DefaultsConfig(**data.get("defaults", {})),
+        ui_language=data.get("ui_language", "en"),
     )
 
 
@@ -628,6 +631,7 @@ def save_settings(settings: Settings) -> None:
         "image_size": settings.image_size,
         "api_keys": settings.api_keys,
         "defaults": asdict(settings.defaults),
+        "ui_language": settings.ui_language,
     }
     path = _get_config_path()
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")

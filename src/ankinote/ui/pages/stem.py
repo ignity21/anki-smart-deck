@@ -22,6 +22,7 @@ from ankinote.ui.config import (
     get_image_provider_models,
     load_settings,
 )
+from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.image_service import build_image_service
 from ankinote.ui.pages.word import format_error
 
@@ -77,6 +78,7 @@ def stem_page() -> None:
     """Render the STEM card generation page."""
 
     settings = load_settings()
+    set_locale(settings.ui_language)
     apply_env(settings)
     client = ui.context.client
 
@@ -98,19 +100,20 @@ def stem_page() -> None:
         return models
 
     with ui.column().classes("w-full max-w-2xl mx-auto p-6 gap-4"):
-        ui.label("STEM Cards").classes("text-2xl font-bold")
-        ui.label(
-            "Generate a card, review and edit its content, then save it to Anki."
-        ).classes("text-sm text-gray-500")
+        ui.label(t("stem.title")).classes("text-2xl font-bold")
+        ui.label(t("stem.description")).classes("text-sm text-gray-500")
 
         topic_input = ui.input(
-            label="Topic",
-            placeholder="e.g. What is entropy?  /  解释贝叶斯定理",
+            label=t("stem.topic"),
+            placeholder=t("stem.topic_placeholder"),
         ).classes("w-full")
 
         type_select = ui.select(
-            label="Card type",
-            options={"auto": "Auto", **{kind: kind.title() for kind in CardType}},
+            label=t("stem.card_type"),
+            options={
+                "auto": t("stem.auto"),
+                **{kind: kind.title() for kind in CardType},
+            },
             value="auto",
         ).classes("w-full")
 
@@ -119,11 +122,11 @@ def stem_page() -> None:
         async def _on_reference_image_upload(e: events.UploadEventArguments) -> None:
             reference_image["bytes"] = await e.file.read()
             reference_image["mime"] = e.file.content_type or "image/png"
-            _notify(f"Reference image attached: {e.file.name}", "positive")
+            _notify(t("stem.reference_attached", name=e.file.name), "positive")
 
         with ui.row().classes("w-full items-center gap-2"):
             ui.upload(
-                label="Reference image (optional)",
+                label=t("stem.reference"),
                 on_upload=_on_reference_image_upload,
                 auto_upload=True,
                 max_files=1,
@@ -131,20 +134,17 @@ def stem_page() -> None:
             ui.button(
                 icon="close",
                 on_click=lambda: reference_image.clear(),
-            ).props("flat round dense").tooltip("Clear reference image")
-        ui.label(
-            "Used as source material (e.g. a photographed problem) when the "
-            "AI generates an example card. Requires a vision-capable text model."
-        ).classes("text-xs text-gray-500")
+            ).props("flat round dense").tooltip(t("stem.clear_reference"))
+        ui.label(t("stem.reference_help")).classes("text-xs text-gray-500")
 
         thinking_select = ui.select(
-            label="Thinking",
+            label=t("stem.thinking"),
             options=_THINKING_OPTIONS,
             value="default",
         ).classes("w-full")
 
         generate_image_switch = ui.switch(
-            "Generate diagram",
+            t("stem.generate_diagram"),
             value=settings.defaults.generate_image,
         )
 
@@ -159,12 +159,12 @@ def stem_page() -> None:
             .bind_visibility_from(generate_image_switch, "value")
         ):
             image_profile_select = ui.select(
-                label="Image Provider",
+                label=t("stem.image_provider"),
                 options=list(settings.image_providers.keys()),
                 value=settings.active_image_provider,
             ).classes("flex-1")
             image_model_select = ui.select(
-                label="Image Model",
+                label=t("stem.image_model"),
                 options=_image_model_options(active_image_profile),
                 value=active_image_profile.model,
                 with_input=True,
@@ -190,7 +190,7 @@ def stem_page() -> None:
 
         generate_btn = (
             ui.button(
-                "Generate",
+                t("stem.generate"),
                 on_click=lambda: asyncio.ensure_future(_generate()),
                 icon="auto_awesome",
             )
@@ -304,7 +304,7 @@ def stem_page() -> None:
         ) -> None:
             results_container.clear()
             with results_container, ui.card().classes("w-full p-4 gap-3"):
-                ui.label(f"{model.card_type.title()} card — review and edit").classes(
+                ui.label(t("stem.review", card_type=model.card_type.title())).classes(
                     "text-sm font-semibold"
                 )
                 fields: dict[str, ui.input | ui.textarea] = {}
@@ -322,7 +322,7 @@ def stem_page() -> None:
                         label += " (one step per line)"
                         value = "\n".join(value)
                     elif name == "variables":
-                        ui.label("Variables").classes("text-sm font-semibold")
+                        ui.label(t("stem.variables")).classes("text-sm font-semibold")
                         variable_rows = ui.column().classes("w-full")
                         row_ids = count()
 

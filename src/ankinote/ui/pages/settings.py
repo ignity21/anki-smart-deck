@@ -25,6 +25,7 @@ from ankinote.ui.config import (
     save_settings,
     unique_name,
 )
+from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.pages.word import format_error
 
 # The vendor options offered by each rack's "Add provider" dialog: the
@@ -170,10 +171,10 @@ class RouteRack:
 
     def _confirm_remove(self, route: RouteDraft, index: int) -> None:
         with ui.dialog() as dialog, ui.card().classes("w-96 gap-2"):
-            ui.label(f'Remove "{route.name}"?').classes("text-lg font-semibold")
-            ui.label(
-                "Its endpoint, model, and API key are removed from this app."
-            ).classes("text-sm text-slate-600")
+            ui.label(t("settings.remove_confirm", name=route.name)).classes(
+                "text-lg font-semibold"
+            )
+            ui.label(t("settings.remove_help")).classes("text-sm text-slate-600")
 
             def _confirm() -> None:
                 self.routes.pop(index)
@@ -181,11 +182,11 @@ class RouteRack:
                 self.on_removed()
                 dialog.close()
                 self.workspace.refresh()
-                ui.notify(f'Removed "{route.name}"', type="positive")
+                ui.notify(t("settings.removed", name=route.name), type="positive")
 
             with ui.row().classes("w-full justify-end gap-2 mt-2"):
-                ui.button("Cancel", on_click=dialog.close).props("flat")
-                ui.button("Remove", on_click=_confirm, icon="delete").props(
+                ui.button(t("common.cancel"), on_click=dialog.close).props("flat")
+                ui.button(t("common.remove"), on_click=_confirm, icon="delete").props(
                     "color=negative"
                 )
         dialog.open()
@@ -195,15 +196,18 @@ class RouteRack:
         last_vendor = {"value": vendor_options[0]}
 
         with ui.dialog() as dialog, ui.card().classes("w-96 gap-3 route-dialog"):
-            ui.label("Add provider").classes("text-lg font-semibold")
+            ui.label(t("settings.add_provider")).classes("text-lg font-semibold")
             vendor_select = ui.select(
-                label="Vendor", options=vendor_options, value=vendor_options[0]
+                label=t("settings.vendor"),
+                options=vendor_options,
+                value=vendor_options[0],
             ).classes("w-full")
             name_input = ui.input(
-                label="Name", value=_suggest_name(vendor_options[0], self.routes)
+                label=t("settings.name"),
+                value=_suggest_name(vendor_options[0], self.routes),
             ).classes("w-full")
             base_input = ui.input(
-                label="Base URL",
+                label=t("settings.base_url"),
                 value=self.vendor_templates.get(vendor_options[0], {}).get(
                     "api_base", ""
                 ),
@@ -224,12 +228,10 @@ class RouteRack:
             def _create() -> None:
                 name = (name_input.value or "").strip()
                 if not name:
-                    ui.notify("Name this provider first", type="warning")
+                    ui.notify(t("settings.name_first"), type="warning")
                     return
                 if any(r.name == name for r in self.routes):
-                    ui.notify(
-                        f'A provider named "{name}" already exists', type="warning"
-                    )
+                    ui.notify(t("settings.duplicate", name=name), type="warning")
                     return
                 self.add_profile(
                     name=name,
@@ -240,8 +242,10 @@ class RouteRack:
                 self.workspace.refresh()
 
             with ui.row().classes("w-full justify-end gap-2 mt-2"):
-                ui.button("Cancel", on_click=dialog.close).props("flat")
-                ui.button("Create", on_click=_create).props("unelevated no-caps")
+                ui.button(t("common.cancel"), on_click=dialog.close).props("flat")
+                ui.button(t("common.create"), on_click=_create).props(
+                    "unelevated no-caps"
+                )
         dialog.open()
 
     @ui.refreshable_method
@@ -273,9 +277,9 @@ class RouteRack:
                     ui.icon("dns" if item.vendor == CUSTOM_VENDOR else "hub").classes(
                         "text-sm"
                     )
-                    ui.label(item.name or "New provider")
+                    ui.label(item.name or t("settings.new_provider"))
                     if not item.saved:
-                        ui.label("draft").classes("route-pill__tag")
+                        ui.label(t("settings.draft")).classes("route-pill__tag")
 
             add_btn = (
                 ui.button(icon="add", on_click=self._open_add_dialog)
@@ -283,18 +287,18 @@ class RouteRack:
                 .classes("route-add")
             )
             with add_btn:
-                ui.tooltip("Add provider")
+                ui.tooltip(t("settings.add_provider"))
 
         with ui.column().classes("route-editor"):
             name_input = ui.input(
-                label="Name",
+                label=t("settings.name"),
                 value=route.name,
             ).classes("w-full")
             name_input.on_value_change(
                 lambda e: setattr(route, "name", (e.value or "").strip())
             )
             base_input = ui.input(
-                label="Base URL",
+                label=t("settings.base_url"),
                 placeholder="https://your-endpoint.example.com/v1",
                 value=route.base_url,
             ).classes("w-full")
@@ -316,7 +320,7 @@ class RouteRack:
 
             with ui.row().classes("route-model-row w-full items-center gap-2"):
                 model_select = ui.select(
-                    label="Model",
+                    label=t("settings.model"),
                     options=model_options,
                     value=route.model or (model_options[0] if model_options else None),
                     with_input=True,
@@ -333,10 +337,10 @@ class RouteRack:
                         .classes("route-fetch-btn")
                     )
                     with fetch_btn:
-                        ui.tooltip("Fetch the model list from the provider")
+                        ui.tooltip(t("settings.fetch_models"))
 
             key_input = ui.input(
-                label=vendor_info["env_key"] if vendor_info else "API key",
+                label=vendor_info["env_key"] if vendor_info else t("settings.api_key"),
                 placeholder="sk-…",
                 password=True,
                 password_toggle_button=True,
@@ -353,14 +357,14 @@ class RouteRack:
                     info = self.vendor_templates.get(_route.vendor)
                     provider = info["litellm_provider"] if info else "openai"
                     if not key and provider != "fal_ai":
-                        ui.notify("Enter the API key first", type="warning")
+                        ui.notify(t("settings.enter_key"), type="warning")
                         return
                     api_base = (base_input.value or "").strip()
                     model_api_base = (
                         info.get("model_api_base", api_base) if info else api_base
                     )
                     if not model_api_base:
-                        ui.notify("Enter the Base URL first", type="warning")
+                        ui.notify(t("settings.enter_base"), type="warning")
                         return
                     prefix = info["model_prefix"] if info else None
 
@@ -375,7 +379,7 @@ class RouteRack:
                         )
                     except (httpx.HTTPError, ValueError) as exc:
                         ui.notify(
-                            f"Couldn't fetch models: {format_error(exc)}",
+                            t("settings.fetch_failed", message=format_error(exc)),
                             type="negative",
                         )
                         return
@@ -385,7 +389,7 @@ class RouteRack:
 
                     if not ids:
                         ui.notify(
-                            f"The provider returned no {self.fetched_noun}",
+                            t("settings.no_models", noun=self.fetched_noun),
                             type="warning",
                         )
                         return
@@ -393,7 +397,10 @@ class RouteRack:
                     options = ids if not current or current in ids else [current, *ids]
                     model_select.set_options(options, value=current or ids[0])
                     _route.model = model_select.value or ""
-                    ui.notify(f"Loaded {len(ids)} {self.fetched_noun}", type="positive")
+                    ui.notify(
+                        t("settings.loaded", count=len(ids), noun=self.fetched_noun),
+                        type="positive",
+                    )
 
                 fetch_btn.on("click", _fetch)
 
@@ -402,11 +409,13 @@ class RouteRack:
             )
             with ui.row().classes("w-full justify-between items-center"):
                 ui.button(
-                    "Remove", icon="delete", on_click=lambda: self.remove(selected)
+                    t("common.remove"),
+                    icon="delete",
+                    on_click=lambda: self.remove(selected),
                 ).props("flat dense no-caps color=negative")
-                ui.button("Save provider", icon="save", on_click=self.on_save).props(
-                    "unelevated no-caps"
-                ).classes("route-save-btn")
+                ui.button(
+                    t("settings.save_provider"), icon="save", on_click=self.on_save
+                ).props("unelevated no-caps").classes("route-save-btn")
 
 
 def settings_page() -> None:
@@ -420,6 +429,7 @@ def settings_page() -> None:
         if isinstance(cached, Settings) and hasattr(cached, "text_providers")
         else load_settings()
     )
+    set_locale(settings.ui_language)
 
     def _build_settings() -> Settings | None:
         """Collect every field into a Settings, or notify and return None."""
@@ -437,11 +447,11 @@ def settings_page() -> None:
             name = route.name.strip()
             if not name:
                 if route is active_text_route:
-                    ui.notify("Name this provider first", type="warning")
+                    ui.notify(t("settings.name_first"), type="warning")
                     return None
                 continue  # unnamed draft the user left behind — skip it
             if name in text_providers:
-                ui.notify(f'Two providers are both named "{name}"', type="warning")
+                ui.notify(t("settings.two_named", name=name), type="warning")
                 return None
             text_providers[name] = ProviderProfile(
                 vendor=route.vendor,
@@ -455,11 +465,11 @@ def settings_page() -> None:
             name = route.name.strip()
             if not name:
                 if route is active_image_route:
-                    ui.notify("Name this provider first", type="warning")
+                    ui.notify(t("settings.name_first"), type="warning")
                     return None
                 continue
             if name in image_providers:
-                ui.notify(f'Two providers are both named "{name}"', type="warning")
+                ui.notify(t("settings.two_named", name=name), type="warning")
                 return None
             image_providers[name] = ProviderProfile(
                 vendor=route.vendor,
@@ -484,6 +494,7 @@ def settings_page() -> None:
                 target_language=target_select.value or "",
                 generate_image=bool(generate_image_switch.value),
             ),
+            ui_language=settings.ui_language,
         )
 
     def _persist(new_settings: Settings) -> None:
@@ -502,7 +513,7 @@ def settings_page() -> None:
             route.saved = bool(route.name.strip())
         text_rack.workspace.refresh()
         image_rack.workspace.refresh()
-        ui.notify("Settings saved", type="positive")
+        ui.notify(t("common.settings_saved"), type="positive")
 
     def _persist_after_removal() -> None:
         new_settings = _build_settings()
@@ -548,65 +559,59 @@ def settings_page() -> None:
     )
 
     with ui.column().classes("w-full max-w-3xl mx-auto p-6 md:p-8 gap-7"):
-        ui.label("Settings").classes("settings-title")
+        ui.label(t("settings.title")).classes("settings-title")
 
         with ui.column().classes("gap-1"):
-            ui.label("Generation route").classes("settings-eyebrow")
-            ui.label("Where card text is generated").classes("settings-h2")
-            ui.label(
-                "Pick the active provider. Add as many accounts as you like — "
-                "each keeps its own model and key."
-            ).classes("text-sm text-slate-500")
+            ui.label(t("settings.generation_route")).classes("settings-eyebrow")
+            ui.label(t("settings.text_where")).classes("settings-h2")
+            ui.label(t("settings.route_help")).classes("text-sm text-slate-500")
 
         text_rack.workspace()
 
         # -- Image Model ------------------------------------------------------------
         with ui.column().classes("gap-1 mt-2"):
-            ui.label("Image route").classes("settings-eyebrow")
-            ui.label("Where card images are generated").classes("settings-h2")
-            ui.label(
-                "Pick the active provider. Add as many accounts as you like — "
-                "each keeps its own model and key."
-            ).classes("text-sm text-slate-500")
+            ui.label(t("settings.image_route")).classes("settings-eyebrow")
+            ui.label(t("settings.image_where")).classes("settings-h2")
+            ui.label(t("settings.route_help")).classes("text-sm text-slate-500")
 
         image_rack.workspace()
 
         # -- TTS (Google Cloud) -----------------------------------------------------
-        _section("Text-to-Speech (Google Cloud)")
+        _section(t("settings.tts"))
 
         tts_key_input = ui.input(
-            label="Google TTS API Key",
-            placeholder="Your Google Cloud API key for TTS",
+            label=t("settings.tts_key"),
+            placeholder=t("settings.tts_placeholder"),
             password=True,
             password_toggle_button=True,
             value=settings.api_keys.get("GOOGLE_TTS_KEY", ""),
         ).classes("w-full")
 
         # -- Defaults ---------------------------------------------------------------
-        _section("Defaults")
+        _section(t("settings.defaults"))
 
         language_options = [lang.value for lang in Language]
 
         native_select = ui.select(
-            label="Native Language",
+            label=t("settings.native"),
             options=language_options,
             value=settings.defaults.native_language,
         ).classes("w-full")
 
         target_select = ui.select(
-            label="Target Language",
+            label=t("settings.target"),
             options=language_options,
             value=settings.defaults.target_language,
         ).classes("w-full")
 
         generate_image_switch = ui.switch(
-            "Generate images by default",
+            t("settings.images_default"),
             value=settings.defaults.generate_image,
         )
 
         # -- Save -----------------------------------------------------------------
         ui.separator()
-        ui.button("Save settings", on_click=_save, icon="save").props(
+        ui.button(t("settings.save"), on_click=_save, icon="save").props(
             "unelevated"
         ).classes("w-full settings-save")
 

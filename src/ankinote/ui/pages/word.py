@@ -17,6 +17,7 @@ from ankinote.ui.config import (
     apply_env,
     load_settings,
 )
+from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.image_service import build_image_service
 
 _ERROR_MESSAGE_RE = re.compile(r'"message"\s*:\s*"([^"]+)"')
@@ -36,6 +37,7 @@ def word_page() -> None:
     """Render the word card generation page."""
 
     settings = load_settings()
+    set_locale(settings.ui_language)
     apply_env(settings)
     client = ui.context.client
 
@@ -51,39 +53,39 @@ def word_page() -> None:
 
     # -- Form ----------------------------------------------------------------
     with ui.column().classes("w-full max-w-2xl mx-auto p-6 gap-4"):
-        ui.label("Word Cards").classes("text-2xl font-bold")
+        ui.label(t("word.title")).classes("text-2xl font-bold")
 
         word_input = ui.input(
-            label="Word",
-            placeholder="Enter a single word (e.g. apple)",
+            label=t("word.word"),
+            placeholder=t("word.word_placeholder"),
         ).classes("w-full")
 
         batch_textarea = ui.textarea(
-            label="Batch Words (optional)",
-            placeholder="One word per line:\napple\nbanana\ncherry",
+            label=t("word.batch"),
+            placeholder=t("word.batch_placeholder"),
         ).classes("w-full")
         batch_textarea.props("autogrow")
 
         with ui.row().classes("w-full gap-4"):
             native_select = ui.select(
-                label="Native Language",
+                label=t("settings.native"),
                 options=language_options,
                 value=settings.defaults.native_language,
             ).classes("flex-1")
 
             target_select = ui.select(
-                label="Target Language",
+                label=t("settings.target"),
                 options=language_options,
                 value=settings.defaults.target_language,
             ).classes("flex-1")
 
         generate_image_switch = ui.switch(
-            "Generate images",
+            t("settings.images_default"),
             value=settings.defaults.generate_image,
         )
 
         parallelism_select = ui.select(
-            label="Parallel words",
+            label=t("word.parallel"),
             options={
                 1: "1 at a time",
                 2: "2 at a time",
@@ -92,9 +94,7 @@ def word_page() -> None:
             },
             value=1,
         ).classes("w-full")
-        ui.label(
-            "Higher values finish batches sooner but use more provider capacity."
-        ).classes("text-xs text-gray-500 -mt-3")
+        ui.label(t("common.higher_parallelism")).classes("text-xs text-gray-500 -mt-3")
 
         # -- Results area ----------------------------------------------------
         results_container = ui.column().classes("w-full gap-2")
@@ -103,7 +103,7 @@ def word_page() -> None:
         # -- Generate button -------------------------------------------------
         generate_btn = (
             ui.button(
-                "Generate",
+                t("word.generate"),
                 on_click=lambda: asyncio.ensure_future(_generate()),
                 icon="auto_awesome",
             )
@@ -125,7 +125,7 @@ def word_page() -> None:
             if batch_text:
                 words.extend(w.strip() for w in batch_text.splitlines() if w.strip())
             if not words:
-                _notify("Enter at least one word", "warning")
+                _notify(t("word.enter"), "warning")
                 return
 
             native = native_select.value
@@ -144,11 +144,11 @@ def word_page() -> None:
                 for word in words:
                     card = ui.card().classes("w-full p-2 text-sm")
                     with card:
-                        lbl = ui.label(f"⏳ {word} — generating...")
+                        lbl = ui.label(f"⏳ {word} — {t('common.generating')}")
                     placeholders.append((card, lbl))
 
-            status_label.text = (
-                f"Generating {len(words)} word(s), up to {parallelism} at a time…"
+            status_label.text = t(
+                "word.generating", count=len(words), parallelism=parallelism
             )
 
             image_service = None
@@ -207,7 +207,7 @@ def word_page() -> None:
                             card, lbl = placeholders[index]
                             word = words[index]
                             if error is None:
-                                lbl.set_text(f"✓ {word} — added to Anki")
+                                lbl.set_text(f"✓ {word} — {t('common.added_to_anki')}")
                                 lbl.classes("text-green-700 dark:text-green-400")
                                 card.classes(add="bg-green-50 dark:bg-green-900/20")
                                 success_count += 1
@@ -219,10 +219,8 @@ def word_page() -> None:
 
                     total = len(words)
                     if fail_count == 0:
-                        status_label.text = (
-                            f"✅ All {total} word(s) generated successfully!"
-                        )
-                        _notify("All done!", "positive")
+                        status_label.text = t("word.success", total=total)
+                        _notify(t("common.all_done"), "positive")
                     else:
                         status_label.text = (
                             f"✅ {success_count}/{total} succeeded, "
@@ -231,8 +229,8 @@ def word_page() -> None:
 
             except Exception as exc:
                 message = format_error(exc)
-                _notify(f"Error: {message}", "negative")
-                status_label.text = f"Error: {message}"
+                _notify(t("common.error", message=message), "negative")
+                status_label.text = t("common.error", message=message)
             finally:
                 generate_btn.props(remove="loading")
                 generate_btn.update()

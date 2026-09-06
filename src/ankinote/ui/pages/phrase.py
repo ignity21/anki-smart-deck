@@ -16,6 +16,7 @@ from ankinote.ui.config import (
     apply_env,
     load_settings,
 )
+from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.pages.word import format_error
 
 
@@ -23,6 +24,7 @@ def phrase_page() -> None:
     """Render the phrase and idiom card generation page."""
 
     settings = load_settings()
+    set_locale(settings.ui_language)
     apply_env(settings)
     client = ui.context.client
 
@@ -38,38 +40,36 @@ def phrase_page() -> None:
 
     with ui.column().classes("w-full max-w-2xl mx-auto p-6 gap-4"):
         with ui.row().classes("items-center gap-2"):
-            ui.badge("Expression", color="indigo").props("outline")
-            ui.label("Phrase & Idiom Cards").classes("text-2xl font-bold")
-        ui.label(
-            "Capture reusable expressions and idioms with meanings, examples, and audio."
-        ).classes("text-sm text-gray-500 -mt-3")
+            ui.badge(t("phrase.expression"), color="indigo").props("outline")
+            ui.label(t("phrase.title")).classes("text-2xl font-bold")
+        ui.label(t("phrase.description")).classes("text-sm text-gray-500 -mt-3")
 
         phrase_input = ui.input(
-            label="Phrase or idiom",
-            placeholder="Enter one expression (e.g. look forward to)",
+            label=t("phrase.input"),
+            placeholder=t("phrase.input_placeholder"),
         ).classes("w-full")
 
         batch_textarea = ui.textarea(
-            label="Batch phrases and idioms (optional)",
-            placeholder="One expression per line:\nlook forward to\nonce in a blue moon",
+            label=t("phrase.batch"),
+            placeholder=t("phrase.batch_placeholder"),
         ).classes("w-full")
         batch_textarea.props("autogrow")
 
         with ui.row().classes("w-full gap-4"):
             native_select = ui.select(
-                label="Native Language",
+                label=t("settings.native"),
                 options=language_options,
                 value=settings.defaults.native_language,
             ).classes("flex-1")
 
             target_select = ui.select(
-                label="Target Language",
+                label=t("settings.target"),
                 options=language_options,
                 value=settings.defaults.target_language,
             ).classes("flex-1")
 
         parallelism_select = ui.select(
-            label="Parallel expressions",
+            label=t("phrase.parallel"),
             options={
                 1: "1 at a time",
                 2: "2 at a time",
@@ -78,16 +78,14 @@ def phrase_page() -> None:
             },
             value=1,
         ).classes("w-full")
-        ui.label(
-            "Higher values finish batches sooner but use more provider capacity."
-        ).classes("text-xs text-gray-500 -mt-3")
+        ui.label(t("common.higher_parallelism")).classes("text-xs text-gray-500 -mt-3")
 
         results_container = ui.column().classes("w-full gap-2")
         status_label = ui.label("").classes("text-sm text-gray-500")
 
         generate_btn = (
             ui.button(
-                "Generate expression cards",
+                t("phrase.generate"),
                 on_click=lambda: asyncio.ensure_future(_generate()),
                 icon="auto_awesome",
             )
@@ -111,7 +109,7 @@ def phrase_page() -> None:
                     if expression.strip()
                 )
             if not expressions:
-                _notify("Enter at least one phrase or idiom", "warning")
+                _notify(t("phrase.enter"), "warning")
                 return
 
             native = native_select.value
@@ -128,12 +126,11 @@ def phrase_page() -> None:
                 for expression in expressions:
                     card = ui.card().classes("w-full p-2 text-sm")
                     with card:
-                        label = ui.label(f"⏳ {expression} — generating...")
+                        label = ui.label(f"⏳ {expression} — {t('common.generating')}")
                     placeholders.append((card, label))
 
-            status_label.text = (
-                f"Generating {len(expressions)} expression(s), "
-                f"up to {parallelism} at a time…"
+            status_label.text = t(
+                "phrase.generating", count=len(expressions), parallelism=parallelism
             )
 
             text_profile = (
@@ -180,7 +177,9 @@ def phrase_page() -> None:
                             card, label = placeholders[index]
                             expression = expressions[index]
                             if error is None:
-                                label.set_text(f"✓ {expression} — added to Anki")
+                                label.set_text(
+                                    f"✓ {expression} — {t('common.added_to_anki')}"
+                                )
                                 label.classes("text-green-700 dark:text-green-400")
                                 card.classes(add="bg-green-50 dark:bg-green-900/20")
                                 success_count += 1
@@ -194,10 +193,8 @@ def phrase_page() -> None:
 
                     total = len(expressions)
                     if fail_count == 0:
-                        status_label.text = (
-                            f"✅ All {total} expression(s) generated successfully!"
-                        )
-                        _notify("All done!", "positive")
+                        status_label.text = t("phrase.success", total=total)
+                        _notify(t("common.all_done"), "positive")
                     else:
                         status_label.text = (
                             f"✅ {success_count}/{total} succeeded, "
@@ -206,8 +203,8 @@ def phrase_page() -> None:
 
             except Exception as exc:
                 message = format_error(exc)
-                _notify(f"Error: {message}", "negative")
-                status_label.text = f"Error: {message}"
+                _notify(t("common.error", message=message), "negative")
+                status_label.text = t("common.error", message=message)
             finally:
                 generate_btn.props(remove="loading")
                 generate_btn.update()

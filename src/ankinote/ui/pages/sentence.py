@@ -16,6 +16,7 @@ from ankinote.ui.config import (
     apply_env,
     load_settings,
 )
+from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.pages.word import format_error
 
 
@@ -23,6 +24,7 @@ def sentence_page() -> None:
     """Render the sentence production-card generation page."""
 
     settings = load_settings()
+    set_locale(settings.ui_language)
     apply_env(settings)
     client = ui.context.client
 
@@ -38,38 +40,36 @@ def sentence_page() -> None:
 
     with ui.column().classes("w-full max-w-2xl mx-auto p-6 gap-4"):
         with ui.row().classes("items-center gap-2"):
-            ui.badge("Production", color="teal").props("outline")
-            ui.label("Sentence Cards").classes("text-2xl font-bold")
-        ui.label(
-            "Add a target-language sentence; AI creates a native-language prompt, notes, and phrase breakdown."
-        ).classes("text-sm text-gray-500 -mt-3")
+            ui.badge(t("sentence.production"), color="teal").props("outline")
+            ui.label(t("sentence.title")).classes("text-2xl font-bold")
+        ui.label(t("sentence.description")).classes("text-sm text-gray-500 -mt-3")
 
         sentence_input = ui.input(
-            label="Target-language sentence",
-            placeholder="Enter one sentence (e.g. I overslept this morning.)",
+            label=t("sentence.input"),
+            placeholder=t("sentence.input_placeholder"),
         ).classes("w-full")
 
         batch_textarea = ui.textarea(
-            label="Batch target-language sentences (optional)",
-            placeholder="One target-language sentence per line:\nI overslept this morning.\nI need to leave earlier tomorrow.",
+            label=t("sentence.batch"),
+            placeholder=t("sentence.batch_placeholder"),
         ).classes("w-full")
         batch_textarea.props("autogrow")
 
         with ui.row().classes("w-full gap-4"):
             native_select = ui.select(
-                label="Native Language",
+                label=t("settings.native"),
                 options=language_options,
                 value=settings.defaults.native_language,
             ).classes("flex-1")
 
             target_select = ui.select(
-                label="Target Language",
+                label=t("settings.target"),
                 options=language_options,
                 value=settings.defaults.target_language,
             ).classes("flex-1")
 
         parallelism_select = ui.select(
-            label="Parallel sentences",
+            label=t("sentence.parallel"),
             options={
                 1: "1 at a time",
                 2: "2 at a time",
@@ -78,16 +78,14 @@ def sentence_page() -> None:
             },
             value=1,
         ).classes("w-full")
-        ui.label(
-            "Higher values finish batches sooner but use more provider capacity."
-        ).classes("text-xs text-gray-500 -mt-3")
+        ui.label(t("common.higher_parallelism")).classes("text-xs text-gray-500 -mt-3")
 
         results_container = ui.column().classes("w-full gap-2")
         status_label = ui.label("").classes("text-sm text-gray-500")
 
         generate_btn = (
             ui.button(
-                "Generate sentence cards",
+                t("sentence.generate"),
                 on_click=lambda: asyncio.ensure_future(_generate()),
                 icon="auto_awesome",
             )
@@ -111,7 +109,7 @@ def sentence_page() -> None:
                     if sentence.strip()
                 )
             if not sentences:
-                _notify("Enter at least one target-language sentence", "warning")
+                _notify(t("sentence.enter"), "warning")
                 return
 
             native = native_select.value
@@ -128,12 +126,11 @@ def sentence_page() -> None:
                 for sentence in sentences:
                     card = ui.card().classes("w-full p-2 text-sm")
                     with card:
-                        label = ui.label(f"⏳ {sentence} — generating...")
+                        label = ui.label(f"⏳ {sentence} — {t('common.generating')}")
                     placeholders.append((card, label))
 
-            status_label.text = (
-                f"Generating {len(sentences)} sentence(s), "
-                f"up to {parallelism} at a time…"
+            status_label.text = t(
+                "sentence.generating", count=len(sentences), parallelism=parallelism
             )
 
             text_profile = (
@@ -180,7 +177,9 @@ def sentence_page() -> None:
                             card, label = placeholders[index]
                             sentence = sentences[index]
                             if error is None:
-                                label.set_text(f"✓ {sentence} — added to Anki")
+                                label.set_text(
+                                    f"✓ {sentence} — {t('common.added_to_anki')}"
+                                )
                                 label.classes("text-green-700 dark:text-green-400")
                                 card.classes(add="bg-green-50 dark:bg-green-900/20")
                                 success_count += 1
@@ -192,10 +191,8 @@ def sentence_page() -> None:
 
                     total = len(sentences)
                     if fail_count == 0:
-                        status_label.text = (
-                            f"✅ All {total} sentence(s) generated successfully!"
-                        )
-                        _notify("All done!", "positive")
+                        status_label.text = t("sentence.success", total=total)
+                        _notify(t("common.all_done"), "positive")
                     else:
                         status_label.text = (
                             f"✅ {success_count}/{total} succeeded, "
@@ -204,8 +201,8 @@ def sentence_page() -> None:
 
             except Exception as exc:
                 message = format_error(exc)
-                _notify(f"Error: {message}", "negative")
-                status_label.text = f"Error: {message}"
+                _notify(t("common.error", message=message), "negative")
+                status_label.text = t("common.error", message=message)
             finally:
                 generate_btn.props(remove="loading")
                 generate_btn.update()

@@ -44,6 +44,8 @@ from ankinote.collections.word.templates import (
 from ankinote.consts import Language
 from ankinote.services.ai import LiteLLMTextService
 from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
+from ankinote.ui.config import load_settings
+from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.pages.word import format_error
 
 # ---------------------------------------------------------------------------
@@ -529,7 +531,7 @@ def _render_panel(status: TypeStatus, busy: bool, on_sync) -> None:
                 ui.label(_STATE_LABEL[state]).classes(f"nt-stamp {stamp_class}")
                 if state == "missing":
                     ui.button(
-                        "Create in Anki",
+                        t("notetypes.create"),
                         on_click=lambda: asyncio.ensure_future(on_sync(spec)),
                         icon="add_circle_outline",
                     ).props("unelevated no-caps").classes("nt-btn nt-btn-accent").style(
@@ -537,7 +539,9 @@ def _render_panel(status: TypeStatus, busy: bool, on_sync) -> None:
                     )
                 else:
                     ui.button(
-                        "Sync again" if state == "synced" else "Update",
+                        t("notetypes.sync_again")
+                        if state == "synced"
+                        else t("notetypes.update"),
                         on_click=lambda: asyncio.ensure_future(on_sync(spec)),
                         icon="sync",
                     ).props("outline no-caps").classes("nt-btn nt-btn-ghost")
@@ -571,9 +575,7 @@ def _render_panel(status: TypeStatus, busy: bool, on_sync) -> None:
         # -- footer: drift / reassurance -------------------------------------
         with ui.element("div").classes("nt-foot"):
             if state == "missing":
-                ui.label("Not in Anki yet — create it to start adding notes.").classes(
-                    "nt-foot-note"
-                )
+                ui.label(t("notetypes.not_in_anki")).classes("nt-foot-note")
             elif state == "update":
                 if status.missing_fields:
                     ui.label(
@@ -584,21 +586,15 @@ def _render_panel(status: TypeStatus, busy: bool, on_sync) -> None:
                         f"{len(status.missing_templates)} card template(s) will be added"
                     ).classes("nt-diff nt-diff-bad")
                 if status.css_differs:
-                    ui.label("Card styling changed in the app").classes(
+                    ui.label(t("notetypes.styling_changed")).classes(
                         "nt-diff nt-diff-warn"
                     )
-                ui.label(
-                    "Existing notes are preserved — only definitions refresh."
-                ).classes("nt-foot-note")
+                    ui.label(t("notetypes.notes_preserved")).classes("nt-foot-note")
             else:
                 if status.deck_exists:
-                    ui.label("Fields, cards and styling match the app.").classes(
-                        "nt-foot-note"
-                    )
+                    ui.label(t("notetypes.match")).classes("nt-foot-note")
                 else:
-                    ui.label(
-                        "Note type matches — deck will be recreated on sync."
-                    ).classes("nt-foot-note")
+                    ui.label(t("notetypes.deck_recreated")).classes("nt-foot-note")
                 ui.label(
                     f"{spec.css_size_kb} styling · AINote::… deck ready"
                     if status.deck_exists
@@ -636,7 +632,7 @@ def _render_summary(statuses: list[TypeStatus], busy_all: bool, on_rescan, on_sy
             if busy_all:
                 with ui.element("span").classes("nt-stat"):
                     ui.spinner(size="1em")
-                    ui.label("Syncing…").classes("text-slate-500")
+                    ui.label(t("notetypes.syncing")).classes("text-slate-500")
             else:
                 ui.button(
                     "Sync all",
@@ -650,6 +646,7 @@ def _render_summary(statuses: list[TypeStatus], busy_all: bool, on_rescan, on_sy
 def notetypes_page() -> None:
     """Render the Card Types management page."""
     _inject_styles()
+    set_locale(load_settings().ui_language)
     specs = _build_specs()
 
     # Mutable state shared by the refreshable workspace below.
@@ -669,14 +666,11 @@ def notetypes_page() -> None:
             "nt-workspace w-full max-w-5xl mx-auto px-6 py-8 md:px-10 gap-5"
         ):
             with ui.column().classes("gap-1"):
-                ui.label("Anki setup").classes("nt-eyebrow")
-                ui.label("Card Types").classes(
+                ui.label(t("notetypes.setup")).classes("nt-eyebrow")
+                ui.label(t("notetypes.title")).classes(
                     "text-3xl font-bold tracking-tight text-slate-900"
                 )
-                ui.label(
-                    "Create or refresh the note types that power each deck. "
-                    "Safe to run any time — your existing notes are never touched."
-                ).classes("nt-lede")
+                ui.label(t("notetypes.description")).classes("nt-lede")
 
             if state["error"]:
                 _render_error(state["error"], on_retry=_load)
@@ -684,7 +678,7 @@ def notetypes_page() -> None:
             if state["statuses"] is None:
                 with ui.row().classes("w-full items-center gap-3 py-10 justify-center"):
                     ui.spinner(size="1.6em").classes("text-slate-400")
-                    ui.label("Scanning Anki…").classes("text-slate-500 text-sm")
+                    ui.label(t("notetypes.scanning")).classes("text-slate-500 text-sm")
                 return
 
             _render_summary(
@@ -708,15 +702,13 @@ def notetypes_page() -> None:
         ):
             ui.icon("wifi_off").classes("text-2xl text-rose-500")
             with ui.column().classes("gap-1 flex-1"):
-                ui.label("Can't reach Anki").classes(
+                ui.label(t("notetypes.cant_reach")).classes(
                     "text-base font-bold text-slate-900"
                 )
                 ui.label(message).classes("text-sm text-slate-500")
-                ui.label(
-                    "Open Anki with the AnkiConnect add-on running, then rescan."
-                ).classes("text-sm text-slate-500")
+                ui.label(t("notetypes.open_anki")).classes("text-sm text-slate-500")
             ui.button(
-                "Retry",
+                t("notetypes.retry"),
                 on_click=lambda: asyncio.ensure_future(on_retry()),
                 icon="refresh",
             ).props("outline no-caps").classes("nt-btn nt-btn-ghost")
