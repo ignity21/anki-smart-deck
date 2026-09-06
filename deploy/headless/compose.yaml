@@ -32,6 +32,9 @@ services:
     image: glechic/anki-connect-server:latest
     environment:
       ANKICONNECT_COLLECTION_PATH: /data/collection.anki2
+      # Defaults to 127.0.0.1 — must be 0.0.0.0 so the ankinote container can
+      # reach it over the compose network.
+      ANKICONNECT_BIND: 0.0.0.0
       ANKICONNECT_ANKIWEB_USER: ${ANKIWEB_USER:?set ANKIWEB_USER in .env}
       ANKICONNECT_ANKIWEB_PASS: ${ANKIWEB_PASS:?set ANKIWEB_PASS in .env}
     volumes:
