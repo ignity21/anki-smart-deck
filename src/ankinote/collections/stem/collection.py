@@ -2,6 +2,7 @@
 
 import dataclasses
 import hashlib
+from collections.abc import Callable
 from typing import Self
 
 from loguru import logger
@@ -191,6 +192,7 @@ class StemCollection:
         topic: str | None = None,
         image_bytes: bytes | None = None,
         tags: list[str] | None = None,
+        on_image_error: Callable[[Exception], None] | None = None,
     ) -> int:
         """Add or update an Anki note from a (possibly edited) ``StemModel``.
 
@@ -202,6 +204,7 @@ class StemCollection:
                 diagram is generated from ``stem_model.image_description`` if that
                 is set and an image service is configured.
             tags: Optional additional tags to apply.
+            on_image_error: Optional callback for a non-fatal diagram failure.
 
         Returns:
             Note ID
@@ -217,8 +220,10 @@ class StemCollection:
                 image_bytes = await self._generator.generate_image(
                     stem_model.image_description
                 )
-            except Exception as e:
-                logger.warning(f"Image generation failed: {e}")
+            except Exception as exc:
+                logger.warning(f"Image generation failed: {exc}")
+                if on_image_error is not None:
+                    on_image_error(exc)
         if image_bytes is not None:
             card_hash = hashlib.md5(image_key.encode()).hexdigest()[:12]
             image_filename = f"stem_{card_hash}.png"

@@ -13,7 +13,18 @@ from ankinote.utils.img import resize_to_max_edge
 
 TextMessageContent = str | list[dict[str, object]]
 TextMessage = dict[str, TextMessageContent]
-REQUEST_TIMEOUT_SECONDS = 60
+TEXT_GENERATION_TIMEOUT_SECONDS = 60
+IMAGE_GENERATION_TIMEOUT_SECONDS = 180
+
+
+class GenerationTimeoutError(RuntimeError):
+    """A generation request exceeded its operation-specific timeout."""
+
+    def __init__(self, operation: str, timeout_seconds: int) -> None:
+        self.operation = operation
+        self.timeout_seconds = timeout_seconds
+        super().__init__(f"{operation} timed out after {timeout_seconds} seconds")
+
 
 # Sentinel ``reasoning_effort`` value that turns a model's extended "thinking"
 # pass off.  Language card types produce short, tightly-specified JSON where
@@ -158,7 +169,7 @@ class LiteLLMTextService:
             "stream": False,
             "temperature": temperature,
             "drop_params": True,
-            "timeout": REQUEST_TIMEOUT_SECONDS,
+            "timeout": TEXT_GENERATION_TIMEOUT_SECONDS,
             "num_retries": 0,
         }
         if reasoning_effort == DISABLE_REASONING:
@@ -174,11 +185,11 @@ class LiteLLMTextService:
             completion_kwargs["api_key"] = self._api_key
 
         try:
-            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+            async with asyncio.timeout(TEXT_GENERATION_TIMEOUT_SECONDS):
                 response = await acompletion(**completion_kwargs)  # type: ignore[arg-type]
         except TimeoutError as exc:
-            raise RuntimeError(
-                f"Text generation timed out after {REQUEST_TIMEOUT_SECONDS} seconds"
+            raise GenerationTimeoutError(
+                "Card content generation", TEXT_GENERATION_TIMEOUT_SECONDS
             ) from exc
         content = response.choices[0].message.content  # pyright: ignore[reportAttributeAccessIssue]
         if not isinstance(content, str):
@@ -228,7 +239,7 @@ class LiteLLMImageService:
         image_kwargs: dict[str, object] = {
             "model": self._resolve_model(self._model),
             "prompt": prompt,
-            "timeout": REQUEST_TIMEOUT_SECONDS,
+            "timeout": IMAGE_GENERATION_TIMEOUT_SECONDS,
             "num_retries": 0,
         }
         if self._api_base is not None:
@@ -236,11 +247,11 @@ class LiteLLMImageService:
         if self._api_key is not None:
             image_kwargs["api_key"] = self._api_key
         try:
-            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+            async with asyncio.timeout(IMAGE_GENERATION_TIMEOUT_SECONDS):
                 response = await aimage_generation(**image_kwargs)  # type: ignore[arg-type]
         except TimeoutError as exc:
-            raise RuntimeError(
-                f"Image generation timed out after {REQUEST_TIMEOUT_SECONDS} seconds"
+            raise GenerationTimeoutError(
+                "Image generation", IMAGE_GENERATION_TIMEOUT_SECONDS
             ) from exc
         data = cast(object, response.data[0])  # pyright: ignore[reportOptionalSubscript]
         b64 = getattr(data, "b64_json", None)
@@ -261,7 +272,9 @@ class LiteLLMImageService:
         Some providers (fal.ai, ``dall-e-3`` in its default mode) return a
         hosted URL instead of inline base64 data.
         """
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(
+            timeout=IMAGE_GENERATION_TIMEOUT_SECONDS
+        ) as client:
             response = await client.get(url)
             response.raise_for_status()
             return response.content
@@ -270,9 +283,12 @@ class LiteLLMImageService:
 __all__ = [
     "DEFAULT_AI_SERVICE_CONFIG",
     "DISABLE_REASONING",
+    "IMAGE_GENERATION_TIMEOUT_SECONDS",
+    "TEXT_GENERATION_TIMEOUT_SECONDS",
     "THINKING_CHOICES",
     "AIServiceConfig",
     "AIServiceConfigOverrides",
+    "GenerationTimeoutError",
     "ImageGenerationService",
     "LiteLLMImageService",
     "LiteLLMTextService",

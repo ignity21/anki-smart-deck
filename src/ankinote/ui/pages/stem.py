@@ -8,7 +8,6 @@ from nicegui import events, ui
 from ankinote.app import Application
 from ankinote.collections.stem import CardType, StemCollection, StemModel
 from ankinote.services.ai import (
-    LiteLLMImageService,
     LiteLLMTextService,
     resolve_thinking,
 )
@@ -21,6 +20,7 @@ from ankinote.ui.config import (
     get_image_provider_models,
     load_settings,
 )
+from ankinote.ui.image_service import build_image_service
 from ankinote.ui.pages.word import format_error
 
 _THINKING_OPTIONS = {
@@ -133,6 +133,7 @@ def stem_page() -> None:
                 label="Image Model",
                 options=_image_model_options(active_image_profile),
                 value=active_image_profile.model,
+                with_input=True,
                 new_value_mode="add-unique",
             ).classes("flex-1")
 
@@ -176,12 +177,10 @@ def stem_page() -> None:
                     settings.image_providers.get(image_profile_select.value)
                     or ProviderProfile()
                 )
-                image_service = LiteLLMImageService(
+                image_service = build_image_service(
+                    image_profile,
                     model=image_model_select.value or image_profile.model,
                     image_size=settings.image_size,
-                    api_key=image_profile.api_key or None,
-                    api_base=image_profile.base_url or None,
-                    force_openai_route=image_profile.vendor == CUSTOM_VENDOR,
                 )
             text_profile = (
                 settings.text_providers.get(settings.active_text_provider)
@@ -216,6 +215,17 @@ def stem_page() -> None:
             )
             save_btn.props("loading")
             save_btn.update()
+            status_label.text = (
+                "Generating diagram and saving…"
+                if with_image and edited.image_description
+                else "Saving card…"
+            )
+            image_error: Exception | None = None
+
+            def _record_image_error(exc: Exception) -> None:
+                nonlocal image_error
+                image_error = exc
+
             try:
                 settings = load_settings()
                 apply_env(settings)
@@ -227,17 +237,31 @@ def stem_page() -> None:
                         with_image=with_image,
                         reasoning_effort=reasoning_effort,
                     ) as collection:
-                        await collection.add_note(edited, topic=topic)
+                        await collection.add_note(
+                            edited,
+                            topic=topic,
+                            on_image_error=_record_image_error,
+                        )
                 results_container.clear()
-                status_label.text = f"✓ {edited.front} — saved to Anki"
-                _notify("Card saved to Anki", "positive")
+                if image_error is None:
+                    status_label.text = f"✓ {edited.front} — saved to Anki"
+                    _notify("Card saved to Anki", "positive")
+                else:
+                    message = format_error(image_error)
+                    status_label.text = (
+                        f"✓ {edited.front} — saved; diagram failed: {message}"
+                    )
+                    _notify(f"Card saved, but diagram failed: {message}", "warning")
             except Exception as exc:
                 message = format_error(exc)
                 status_label.text = f"Error: {message}"
                 _notify(f"Error: {message}", "negative")
             finally:
-                save_btn.props(remove="loading")
-                save_btn.update()
+                # Saving a concept card clears the preview, which also deletes
+                # its button. Do not update an element that no longer exists.
+                if not save_btn.is_deleted:
+                    save_btn.props(remove="loading")
+                    save_btn.update()
 
         def _render_preview(
             topic: str,
@@ -313,7 +337,7 @@ def stem_page() -> None:
             generate_btn.props("loading")
             generate_btn.update()
             results_container.clear()
-            status_label.text = "Generating…"
+            status_label.text = "Generating card content…"
 
             try:
                 async with Application():
@@ -337,12 +361,34 @@ def stem_page() -> None:
                             status_label.text = ""
                             _render_preview(topic, model, with_image, reasoning_effort)
                         else:
-                            await collection.add_note(model, topic=topic)
-                            status_label.text = (
-                                f"✓ {model.front} — {model.card_type.value} card "
-                                "added to Anki (no preview)"
+                            image_error: Exception | None = None
+
+                            def _record_image_error(exc: Exception) -> None:
+                                nonlocal image_error
+                                image_error = exc
+
+                            status_label.text = "Generating diagram and saving…"
+                            await collection.add_note(
+                                model,
+                                topic=topic,
+                                on_image_error=_record_image_error,
                             )
-                            _notify("Card added to Anki", "positive")
+                            if image_error is None:
+                                status_label.text = (
+                                    f"✓ {model.front} — {model.card_type.value} card "
+                                    "added to Anki (no preview)"
+                                )
+                                _notify("Card added to Anki", "positive")
+                            else:
+                                message = format_error(image_error)
+                                status_label.text = (
+                                    f"✓ {model.front} — card added; diagram failed: "
+                                    f"{message}"
+                                )
+                                _notify(
+                                    f"Card saved, but diagram failed: {message}",
+                                    "warning",
+                                )
             except Exception as exc:
                 message = format_error(exc)
                 status_label.text = f"Error: {message}"

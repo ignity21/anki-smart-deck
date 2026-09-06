@@ -9,7 +9,10 @@ from pytest_mock import MockerFixture
 
 from ankinote.services.ai import (
     DISABLE_REASONING,
+    IMAGE_GENERATION_TIMEOUT_SECONDS,
+    TEXT_GENERATION_TIMEOUT_SECONDS,
     THINKING_CHOICES,
+    GenerationTimeoutError,
     LiteLLMImageService,
     LiteLLMTextService,
     resolve_thinking,
@@ -54,7 +57,7 @@ async def test_litellm_text_service_forwards_completion_args(
         stream=False,
         temperature=0.2,
         drop_params=True,
-        timeout=60,
+        timeout=TEXT_GENERATION_TIMEOUT_SECONDS,
         num_retries=0,
     )
 
@@ -159,7 +162,7 @@ async def test_litellm_text_service_routes_custom_endpoint_through_openai(
         stream=False,
         temperature=0.2,
         drop_params=True,
-        timeout=60,
+        timeout=TEXT_GENERATION_TIMEOUT_SECONDS,
         num_retries=0,
         api_base="http://localhost:8000/v1",
         api_key="test-key",
@@ -264,7 +267,7 @@ async def test_litellm_image_service_decodes_and_resizes(
     image_generation.assert_awaited_once_with(
         model="gemini/gemini-2.5-flash-image",
         prompt="draw a cat",
-        timeout=60,
+        timeout=IMAGE_GENERATION_TIMEOUT_SECONDS,
         num_retries=0,
     )
 
@@ -296,7 +299,7 @@ async def test_litellm_image_service_forwards_api_base_and_key(
     image_generation.assert_awaited_once_with(
         model="gemini/gemini-2.5-flash-image",
         prompt="draw a cat",
-        timeout=60,
+        timeout=IMAGE_GENERATION_TIMEOUT_SECONDS,
         num_retries=0,
         api_base="https://generativelanguage.googleapis.com/v1beta",
         api_key="sk-g",
@@ -361,4 +364,42 @@ async def test_litellm_image_service_raises_when_no_b64_or_url(
     service = LiteLLMImageService(model="fal_ai/fal-ai/flux/schnell", image_size=128)
 
     with pytest.raises(RuntimeError, match="neither a base64 payload nor a URL"):
+        await service.generate_image(prompt="draw a cat")
+
+
+@pytest.mark.asyncio
+async def test_litellm_text_service_reports_card_content_timeout(
+    mocker: MockerFixture,
+) -> None:
+    async def timeout(**_: object) -> None:
+        raise TimeoutError
+
+    mocker.patch("ankinote.services.ai.acompletion", side_effect=timeout)
+    service = LiteLLMTextService()
+
+    with pytest.raises(
+        GenerationTimeoutError,
+        match="Card content generation timed out after 60 seconds",
+    ):
+        await service.generate_text(
+            model="test",
+            messages=[{"role": "user", "content": "hello"}],
+            temperature=0.2,
+        )
+
+
+@pytest.mark.asyncio
+async def test_litellm_image_service_reports_its_180_second_timeout(
+    mocker: MockerFixture,
+) -> None:
+    async def timeout(**_: object) -> None:
+        raise TimeoutError
+
+    mocker.patch("ankinote.services.ai.aimage_generation", side_effect=timeout)
+    service = LiteLLMImageService(model="test", image_size=128)
+
+    with pytest.raises(
+        GenerationTimeoutError,
+        match="Image generation timed out after 180 seconds",
+    ):
         await service.generate_image(prompt="draw a cat")

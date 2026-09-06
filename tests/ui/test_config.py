@@ -10,6 +10,7 @@ from ankinote.ui.config import (
     IMAGE_PROVIDERS,
     ProviderProfile,
     Settings,
+    fetch_image_model_ids,
     fetch_model_ids,
     get_image_provider_models,
     image_provider_for,
@@ -98,6 +99,7 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, handler) -> None:
         ("gpt-image-1", "OpenAI"),
         ("dall-e-3", "OpenAI"),
         ("fal_ai/fal-ai/flux/schnell", "Fal"),
+        ("fal-ai/z-image/turbo", "Fal"),
         ("no-such-provider/whatever", "Gemini"),
     ],
 )
@@ -129,11 +131,66 @@ def test_fal_image_models_are_discovered_from_litellm_catalog() -> None:
     assert "fal_ai/fal-ai/flux-pro/v1.1" in models
 
 
-def test_fal_does_not_support_live_model_fetch() -> None:
-    """fal.ai has no OpenAI-style `GET /models` endpoint; the settings page
-    uses this flag to hide its "fetch models" button rather than surfacing
-    a 404."""
-    assert IMAGE_PROVIDERS["Fal"]["supports_fetch"] is False
+async def test_fetch_image_model_ids_uses_fal_platform_api_and_pagination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.headers["Authorization"] == "Key fal-key"
+        assert request.url.params["category"] == "text-to-image"
+        assert request.url.params["status"] == "active"
+        if request.url.params.get("cursor") == "next-page":
+            return httpx.Response(
+                200,
+                json={
+                    "models": [{"endpoint_id": "fal-ai/z-image/turbo"}],
+                    "next_cursor": None,
+                    "has_more": False,
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "models": [
+                    {"endpoint_id": "fal-ai/flux/dev"},
+                    {"endpoint_id": "fal-ai/flux/dev"},
+                    {"endpoint_id": None},
+                ],
+                "next_cursor": "next-page",
+                "has_more": True,
+            },
+        )
+
+    _patch_client(monkeypatch, handler)
+    ids = await fetch_image_model_ids(
+        litellm_provider="fal_ai",
+        api_base="https://api.fal.ai/v1",
+        api_key="fal-key",
+        model_prefix="fal_ai/",
+    )
+    assert ids == ["fal-ai/flux/dev", "fal-ai/z-image/turbo"]
+    assert [str(request.url) for request in requests] == [
+        "https://api.fal.ai/v1/models?category=text-to-image&status=active&limit=100",
+        "https://api.fal.ai/v1/models?category=text-to-image&status=active&limit=100&cursor=next-page",
+    ]
+
+
+async def test_fetch_fal_models_allows_an_empty_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "Authorization" not in request.headers
+        return httpx.Response(200, json={"models": [], "next_cursor": None})
+
+    _patch_client(monkeypatch, handler)
+    ids = await fetch_image_model_ids(
+        litellm_provider="fal_ai",
+        api_base="https://api.fal.ai/v1",
+        api_key="",
+    )
+    assert ids == []
 
 
 def test_openai_image_models_include_gpt_image_1() -> None:

@@ -303,9 +303,6 @@ class RouteRack:
             )
 
             vendor_info = self.vendor_templates.get(route.vendor)
-            # A vendor with no live model-listing endpoint (e.g. fal.ai) opts
-            # out via ``supports_fetch: False``; its models are instead fully
-            # populated from ``get_model_options`` (litellm's catalog).
             supports_fetch = vendor_info is None or vendor_info.get(
                 "supports_fetch", True
             )
@@ -353,15 +350,18 @@ class RouteRack:
 
                 async def _fetch(*, _route: RouteDraft = route) -> None:
                     key = (key_input.value or "").strip()
-                    if not key:
+                    info = self.vendor_templates.get(_route.vendor)
+                    provider = info["litellm_provider"] if info else "openai"
+                    if not key and provider != "fal_ai":
                         ui.notify("Enter the API key first", type="warning")
                         return
                     api_base = (base_input.value or "").strip()
-                    if not api_base:
+                    model_api_base = (
+                        info.get("model_api_base", api_base) if info else api_base
+                    )
+                    if not model_api_base:
                         ui.notify("Enter the Base URL first", type="warning")
                         return
-                    info = self.vendor_templates.get(_route.vendor)
-                    provider = info["litellm_provider"] if info else "openai"
                     prefix = info["model_prefix"] if info else None
 
                     fetch_btn.props("loading")
@@ -369,7 +369,7 @@ class RouteRack:
                     try:
                         ids = await self.fetch_ids(
                             litellm_provider=provider,
-                            api_base=api_base,
+                            api_base=model_api_base,
                             api_key=key,
                             model_prefix=prefix,
                         )

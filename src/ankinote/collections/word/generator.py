@@ -190,12 +190,15 @@ class WordGenerator:
                         if sense.is_visualizable
                     }
         except* Exception as exc_group:
+            messages = [str(sub_exc) for sub_exc in exc_group.exceptions]
             for sub_exc in exc_group.exceptions:
                 logger.error(
                     f"Error during media generation for '{word_model.lemma}': {sub_exc}",
                     exc_info=sub_exc,
                 )
-            raise RuntimeError(f"Media generation failed: {exc_group}") from exc_group
+            raise RuntimeError(
+                f"Media generation failed: {'; '.join(messages)}"
+            ) from exc_group
 
         example_audios = [task.result() for task in example_tasks]
         images: dict[int, bytes] = {}

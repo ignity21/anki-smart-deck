@@ -9,7 +9,7 @@ from nicegui import ui
 from ankinote.app import Application
 from ankinote.collections.word import WordCollection
 from ankinote.consts import Language
-from ankinote.services.ai import LiteLLMImageService, LiteLLMTextService
+from ankinote.services.ai import LiteLLMTextService
 from ankinote.services.anki import AnkiConnectClient
 from ankinote.ui.config import (
     CUSTOM_VENDOR,
@@ -17,6 +17,7 @@ from ankinote.ui.config import (
     apply_env,
     load_settings,
 )
+from ankinote.ui.image_service import build_image_service
 
 _ERROR_MESSAGE_RE = re.compile(r'"message"\s*:\s*"([^"]+)"')
 
@@ -156,12 +157,9 @@ def word_page() -> None:
                     settings.image_providers.get(settings.active_image_provider)
                     or ProviderProfile()
                 )
-                image_service = LiteLLMImageService(
-                    model=image_profile.model,
+                image_service = build_image_service(
+                    image_profile,
                     image_size=settings.image_size,
-                    api_key=image_profile.api_key or None,
-                    api_base=image_profile.base_url or None,
-                    force_openai_route=image_profile.vendor == CUSTOM_VENDOR,
                 )
 
             text_profile = (

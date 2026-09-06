@@ -10,6 +10,7 @@ from ankinote.collections.stem.collection import StemCollection
 from ankinote.collections.stem.generator import StemGenerator
 from ankinote.collections.stem.models import StemModel, Variable
 from ankinote.services.ai import (
+    GenerationTimeoutError,
     ImageGenerationService,
     TextGenerationService,
 )
@@ -394,6 +395,34 @@ async def test_add_note_generates_image_from_description():
 
     assert image_service.prompts and "a diagram" in image_service.prompts[0]
     assert anki._stored and anki._stored[0][1] == b"generated-bytes"
+
+
+@pytest.mark.asyncio
+async def test_add_note_reports_non_fatal_diagram_failure() -> None:
+    class TimeoutImageService:
+        async def generate_image(self, *, prompt: str) -> bytes:
+            raise GenerationTimeoutError("Image generation", 180)
+
+    anki = _recording_anki_client()
+    collection = StemCollection(
+        cast(AnkiCollectionClient, anki),
+        text_model="stem-model",
+        text_service=cast(TextGenerationService, object()),
+        image_service=cast(ImageGenerationService, TimeoutImageService()),
+    )
+    errors: list[Exception] = []
+    model = StemModel.model_validate(
+        {**json.loads(_CONCEPT_PAYLOAD), "image_description": "a diagram"}
+    )
+
+    note_id = await collection.add_note(
+        model, topic="entropy", on_image_error=errors.append
+    )
+
+    assert note_id == 42
+    assert len(errors) == 1
+    assert str(errors[0]) == "Image generation timed out after 180 seconds"
+    assert anki._stored == []
 
 
 @pytest.mark.asyncio

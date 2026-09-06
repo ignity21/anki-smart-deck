@@ -66,6 +66,19 @@ GOOGLE_TTS_KEY=your_tts_api_key
 ANKI_CONNECT_URL=http://localhost:8765
 ```
 
+### Fal images in the web UI
+
+For Word and STEM cards, select a `Fal` image provider profile with base URL
+`https://fal.run` and your Fal API key (or set `FAL_AI_API_KEY`). These profiles
+call Fal's model endpoints directly. Use a full endpoint such as
+`fal-ai/z-image/turbo`; `z-image/turbo` and the LiteLLM-style
+`fal_ai/fal-ai/z-image/turbo` are also accepted. `image_size` controls the maximum
+edge of the downloaded image, preserving its aspect ratio.
+
+The provider editor's refresh button lists active `text-to-image` endpoint IDs
+from Fal's Platform API. It works without a key and uses the saved Fal key for a
+higher rate limit when one is available; inference still uses `https://fal.run`.
+
 # ankinote CLI - Usage Guide
 
 ## Overview

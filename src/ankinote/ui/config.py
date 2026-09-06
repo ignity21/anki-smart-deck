@@ -5,6 +5,7 @@ import json
 import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import cast
 
 # Vendor templates — the ones the GUI offers directly in the "Add provider"
 # dialog (autofills Base URL + drives model discovery/fetch heuristics for a
@@ -164,6 +165,9 @@ async def fetch_image_model_ids(
     """
     import httpx
 
+    if litellm_provider == "fal_ai":
+        return await fetch_fal_image_model_ids(api_base=api_base, api_key=api_key)
+
     url = f"{api_base.rstrip('/')}/models"
     headers: dict[str, str] = {}
     params: dict[str, str] = {}
@@ -216,6 +220,56 @@ async def fetch_image_model_ids(
     )
 
 
+async def fetch_fal_image_model_ids(*, api_base: str, api_key: str) -> list[str]:
+    """List active text-to-image endpoint IDs through Fal's Platform API.
+
+    Fal's inference base (``https://fal.run``) is intentionally separate from
+    this discovery base (``https://api.fal.ai/v1``). The API key is optional
+    for this endpoint, although supplying it provides a higher rate limit.
+    """
+    import httpx
+
+    headers = {"Authorization": f"Key {api_key}"} if api_key else {}
+    params: dict[str, str] = {
+        "category": "text-to-image",
+        "status": "active",
+        "limit": "100",
+    }
+    endpoint_ids: set[str] = set()
+    cursor: str | None = None
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        while True:
+            if cursor is None:
+                params.pop("cursor", None)
+            else:
+                params["cursor"] = cursor
+            response = await client.get(
+                f"{api_base.rstrip('/')}/models",
+                headers=headers,
+                params=params,
+            )
+            response.raise_for_status()
+            payload = cast(dict[str, object], response.json())
+            models = payload.get("models", [])
+            if not isinstance(models, list):
+                raise TypeError("Fal model search returned an invalid models list")
+            endpoint_ids.update(
+                endpoint_id
+                for entry in models
+                if isinstance(entry, dict)
+                and isinstance((endpoint_id := entry.get("endpoint_id")), str)
+                and endpoint_id
+            )
+            next_cursor = payload.get("next_cursor")
+            if not isinstance(next_cursor, str) or not next_cursor:
+                break
+            if next_cursor == cursor:
+                raise ValueError("Fal model search returned a repeated cursor")
+            cursor = next_cursor
+    return sorted(endpoint_ids)
+
+
 DEFAULT_IMAGE_MODELS: list[str] = [
     "gemini/gemini-3.1-flash-lite-image",
     "gemini/gemini-2.0-flash-exp-image",
@@ -250,11 +304,7 @@ IMAGE_PROVIDERS: dict[str, dict] = {
         "litellm_provider": "fal_ai",
         "model_prefix": "fal_ai/",
         "api_base": "https://fal.run",
-        # fal.ai has no OpenAI-style `GET /models` endpoint; its model list
-        # is instead fully populated from litellm's catalog (see
-        # `_discover_image_models`), so the settings page's "fetch models"
-        # button is hidden for it rather than surfacing a 404.
-        "supports_fetch": False,
+        "model_api_base": "https://api.fal.ai/v1",
     },
 }
 
@@ -312,6 +362,8 @@ def image_provider_for(model: str) -> str:
     for name, info in IMAGE_PROVIDERS.items():
         prefix = info["model_prefix"]
         if prefix and model.startswith(prefix):
+            return name
+        if name == "Fal" and model.startswith("fal-ai/"):
             return name
     try:
         import litellm
