@@ -45,8 +45,16 @@ path = "src/ankinote/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/ankinote"]
 
+[project.optional-dependencies]
+# In-process Anki collection backend (ANKI_BACKEND=collection). Ships abi3
+# wheels for Python >=3.10 on glibc Linux / macOS 12+ / Windows.
+headless = [
+    "anki==26.8.1",
+]
+
 [dependency-groups]
 dev = [
+    "anki==26.8.1",
     "pytest>=8.4.1",
     "rich>=14.1.0",
     "pytest-cov>=6.1.1",
