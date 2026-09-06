@@ -85,16 +85,17 @@ class TestModelClient:
     """Contract tests for model lookup behavior."""
 
     @pytest.mark.asyncio
-    async def test_exists_returns_true_for_one_match(self):
-        invoke = AsyncMock(return_value=[_build_model_payload()])
+    async def test_exists_uses_model_names_and_returns_true(self):
+        invoke = AsyncMock(return_value=["AINote Word", "Basic"])
         stub = StubInvoker(invoke)
         client = ModelClient(stub)
 
         assert await client.exists("AINote Word") is True
+        invoke.assert_awaited_once_with("modelNames", params=None)
 
     @pytest.mark.asyncio
-    async def test_exists_returns_false_for_zero_matches(self):
-        invoke = AsyncMock(return_value=[])
+    async def test_exists_returns_false_when_absent(self):
+        invoke = AsyncMock(return_value=["Basic"])
         stub = StubInvoker(invoke)
         client = ModelClient(stub)
 
@@ -107,20 +108,6 @@ class TestModelClient:
         client = ModelClient(stub)
 
         with pytest.raises(AnkiConnectError, match="boom"):
-            await client.exists("AINote Word")
-
-    @pytest.mark.asyncio
-    async def test_exists_raises_on_multiple_matches(self):
-        invoke = AsyncMock(
-            return_value=[
-                _build_model_payload("AINote Word"),
-                _build_model_payload("AINote Word"),
-            ]
-        )
-        stub = StubInvoker(invoke)
-        client = ModelClient(stub)
-
-        with pytest.raises(AnkiResponseError, match="at most one model"):
             await client.exists("AINote Word")
 
     @pytest.mark.asyncio

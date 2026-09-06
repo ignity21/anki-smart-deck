@@ -243,10 +243,14 @@ class ModelClient:
     async def exists(self, model_name: str) -> bool:
         """Check whether a model exists.
 
+        Uses ``modelNames`` rather than fetching the full model payload — it is
+        cheaper and keeps this working against AnkiConnect servers that do not
+        implement ``findModelsByName`` (e.g. headless anki-connect-server).
+
         Raises:
             AnkiServiceError: If AnkiConnect cannot answer the request cleanly.
         """
-        return await self.get(model_name) is not None
+        return model_name in await self.list_names()
 
     async def get(self, model_name: str) -> NoteModel | None:
         """Get details of a note type (model) by name.
