@@ -1,6 +1,7 @@
 """CLI commands for STEM card generation."""
 
 import asyncio
+import mimetypes
 from pathlib import Path
 
 import click
@@ -90,13 +91,27 @@ def init(llm, image_model, image_size, thinking):
 
 @stem.command("add")
 @click.argument("topic")
+@click.option(
+    "--image",
+    "image_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help=(
+        "Reference image (e.g. a photographed problem) for the AI to solve "
+        "from. Requires a vision-capable --llm model."
+    ),
+)
 @collection_options
-def add(topic, llm, image_model, image_size, thinking):
+def add(topic, image_path, llm, image_model, image_size, thinking):
     """Generate and push a single STEM card.
 
     TOPIC is any question or concept (e.g. "What is a derivative?",
     "请解释平行线的概念", "State Bayes' theorem").
     """
+    reference_image = image_path.read_bytes() if image_path else None
+    reference_image_mime = (
+        image_path and mimetypes.guess_type(image_path.name)[0]
+    ) or "image/png"
 
     async def _run():
         options = build_options(llm, image_model, image_size, thinking)
@@ -109,7 +124,11 @@ def add(topic, llm, image_model, image_size, thinking):
                 task = progress.add_task(
                     f"Generating STEM card for: {topic[:50]}...", total=None
                 )
-                note_id = await collection.generate_and_add_note(topic)
+                note_id = await collection.generate_and_add_note(
+                    topic,
+                    reference_image=reference_image,
+                    reference_image_mime=reference_image_mime,
+                )
                 progress.update(task, completed=True)
 
             console.print(f"[green]\u2713[/green] Created/updated note {note_id}")

@@ -29,7 +29,7 @@ cards.
   rule, escaped LaTeX in JSON, English Title Case tags, every new key optional
   so older outputs still validate.
 
-### Worked-example card type
+### Worked-example card type (shipped)
 
 The highest-value gap. Worked examples train *production* (solve this problem)
 rather than *recognition*, and are general to STEM problem-solving, not
@@ -37,20 +37,25 @@ math-specific. The old `math` collection modelled 1–3 examples as a sub-list o
 a single note, which cannot be reviewed or scheduled independently — the
 replacement is one card per problem.
 
-- Add `CardType.EXAMPLE`:
-  - `front` = the problem statement.
-  - `back_brief` = the final answer only.
-  - `back_detail` = the fully worked solution; reuse the `steps` field and its
-    numbered-list rendering for the solution steps.
-  - `image_description` = optional figure (geometry, function graph, circuit).
-- Add `prompts/example.md`: problem difficulty matched to the topic, no trivial
-  restatement of a definition, one self-contained problem per card. Register
-  the type in the generator's auto-detection instruction.
-- Badge token pair (`--badge-example-*`) and a template branch consistent with
-  the other types.
-- Focused tests mirroring `test_stem_collection.py`: model validation with and
-  without the new keys, `_build_note_data()` HTML, one end-to-end mocked
-  generation.
+`CardType.EXAMPLE` is added: `front` is the problem statement, `back_brief` is
+the final answer only, `back_detail` is the reasoning that doesn't fit a step,
+and the solution steps reuse the existing `steps` field and numbered-list
+rendering — no new model fields or template branches were needed since
+`front.html`/`back.html` already key off `card_type` generically. Guidance
+lives in `_system.md` rather than a new `prompts/example.md`: the per-type
+prompt files (`concept.md`, `formula.md`, `procedure.md`) turned out to never
+be loaded by `generator.py` (dead code, now removed along with the unused
+files) — all card types are actually driven by the single `_system.md`
+prompt, so `example` guidance was added there instead of introducing another
+unused file. Badge token pair `--badge-example-*` added.
+
+Also added, beyond the original scope: optional reference-image input.
+`StemGenerator.generate` / `StemCollection.generate_model` /
+`generate_and_add_note` now accept `reference_image: bytes | None` (source
+material such as a photographed problem, sent as a vision content part —
+requires a vision-capable text model), exposed via `stem add --image PATH` in
+the CLI and an upload control on the STEM GUI page. `TextMessage` in
+`services/ai.py` was widened to allow list-of-parts content for this.
 
 ### Comparison card type
 
@@ -81,9 +86,9 @@ populate it.
 ### Rough delivery order
 
 The worked-example and comparison types are independent of each other and each
-sized for one focused session. Progressive disclosure is independent of both.
-The misconception callout folds into whichever session touches the templates
-last.
+sized for one focused session. Worked-example shipped first (see above).
+Progressive disclosure is independent of both. The misconception callout
+folds into whichever session touches the templates last.
 
 ## Thinking control (shipped; follow-ups)
 

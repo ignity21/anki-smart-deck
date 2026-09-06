@@ -10,6 +10,7 @@ class CardType(StrEnum):
     CONCEPT = "concept"
     FORMULA = "formula"
     PROCEDURE = "procedure"
+    EXAMPLE = "example"
 
 
 class Variable(BaseModel):

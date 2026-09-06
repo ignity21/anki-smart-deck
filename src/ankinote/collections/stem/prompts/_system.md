@@ -14,6 +14,14 @@ Generate 2-4 tags in English. Use consistent casing (Title Case):
 - Sub-tags like "Calculus", "Linear Algebra", "Probability" are welcome
 - Never mix case variants (e.g. "Math" and "math" should not both appear)
 
+# Reference Image
+
+The user may attach a reference image (e.g. a photographed textbook problem or
+diagram) alongside the topic text. Treat it as source material to read and
+solve from, not as a request to draw something — it is unrelated to
+`image_description` below, which is your own request for a *generated* diagram
+on the output side.
+
 # Image Description
 
 If a diagram, graph, or visual would significantly aid understanding of the concept,
@@ -55,9 +63,9 @@ After JSON parsing, the double backslashes become single backslashes, which is w
 
 Return **only** a valid JSON object. No markdown, no code fences, no comments, no extra keys or text.
 
-The base schema below applies to every card. Type-specific prompts may require
-additional structured keys (`latex`, `variables`, `steps`) or mark some base
-fields optional — follow the type-specific prompt when present.
+The base schema below applies to every card. Some card types require
+additional structured keys (`latex`, `variables`, `steps`) — see Card Type
+Guidelines below for which keys apply to which type.
 
 ```json
 {
@@ -72,7 +80,7 @@ fields optional — follow the type-specific prompt when present.
 
 ## Field Rules
 
-- `card_type` — must be one of: "concept" (definitions, explanations), "formula" (theorems, laws, equations), or "procedure" (algorithms, step-by-step methods). Choose based on the topic.
+- `card_type` — must be one of: "concept" (definitions, explanations), "formula" (theorems, laws, equations), "procedure" (algorithms, step-by-step methods), or "example" (a specific worked problem to solve). Choose based on the topic.
 - `front` — keep the exact user question or phrase as a clear prompt.
 - `back_brief` — minimal recall answer, one breath. No examples, no derivations. MathJax allowed for essential notation.
 - `back_detail` — deepen the brief with intuition, analogies, scope, and significance. Use MathJax for all mathematical notation.
@@ -86,3 +94,5 @@ fields optional — follow the type-specific prompt when present.
 **formula** — for theorems, laws, equations. back_brief leads with the formula in LaTeX plus one-line statement. back_detail defines variables, assumptions, and meaning.
 
 **procedure** — for algorithms, methods, "how to X" questions. back_brief is 2-4 numbered steps. back_detail expands each step with reasoning and conditions.
+
+**example** — for one concrete, self-contained problem to solve (not a general method or definition). `front` is the full problem statement. `back_brief` is the final answer only, no derivation. `back_detail` is the full worked solution; put the ordered solution steps in `steps` (same rendering as procedure cards) and use `back_detail` only for reasoning that doesn't fit a step, such as why an approach was chosen. Pick a difficulty that matches the topic — not a trivial restatement of a definition. If a reference image was attached, solve the problem shown in it and do not restate it as generic advice.

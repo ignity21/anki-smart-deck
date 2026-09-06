@@ -11,7 +11,8 @@ from litellm import acompletion, aimage_generation
 
 from ankinote.utils.img import resize_to_max_edge
 
-TextMessage = dict[str, str]
+TextMessageContent = str | list[dict[str, object]]
+TextMessage = dict[str, TextMessageContent]
 REQUEST_TIMEOUT_SECONDS = 60
 
 # Sentinel ``reasoning_effort`` value that turns a model's extended "thinking"
@@ -277,5 +278,6 @@ __all__ = [
     "LiteLLMTextService",
     "TextGenerationService",
     "TextMessage",
+    "TextMessageContent",
     "resolve_thinking",
 ]

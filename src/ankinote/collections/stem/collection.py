@@ -124,6 +124,8 @@ class StemCollection:
         self,
         topic: str,
         tags: list[str] | None = None,
+        reference_image: bytes | None = None,
+        reference_image_mime: str = "image/png",
     ) -> int:
         """Generate a STEM card and add/update note in Anki.
 
@@ -135,23 +137,43 @@ class StemCollection:
         Args:
             topic: The user's question or concept (e.g. "What is a derivative?")
             tags: Optional additional tags to apply
+            reference_image: Optional source material (e.g. a photographed
+                problem) for the AI to read and solve from; requires a
+                vision-capable text model.
+            reference_image_mime: MIME type of ``reference_image``.
 
         Returns:
             Note ID
         """
         logger.info(f"Starting generation for STEM card: {topic[:50]}...")
-        stem_model = await self.generate_model(topic)
+        stem_model = await self.generate_model(
+            topic,
+            reference_image=reference_image,
+            reference_image_mime=reference_image_mime,
+        )
         return await self.add_note(stem_model, topic=topic, tags=tags)
 
-    async def generate_model(self, topic: str) -> StemModel:
+    async def generate_model(
+        self,
+        topic: str,
+        reference_image: bytes | None = None,
+        reference_image_mime: str = "image/png",
+    ) -> StemModel:
         """Generate structured STEM card data via the LLM (no Anki write).
 
-        The card type (concept, formula, procedure) is auto-detected. Callers
-        that want a preview/edit step run this, let the user adjust the result,
-        then pass the model to :meth:`add_note`.
+        The card type (concept, formula, procedure, example) is auto-detected.
+        Callers that want a preview/edit step run this, let the user adjust
+        the result, then pass the model to :meth:`add_note`.
+
+        ``reference_image``, when supplied, is source material for the AI to
+        solve from (e.g. a photographed problem); it requires a
+        vision-capable text model.
         """
         return await self._generator.generate(
-            topic, reasoning_effort=self._reasoning_effort
+            topic,
+            reasoning_effort=self._reasoning_effort,
+            reference_image=reference_image,
+            reference_image_mime=reference_image_mime,
         )
 
     async def generate_diagram(self, description: str) -> bytes:

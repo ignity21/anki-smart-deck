@@ -45,6 +45,22 @@ def test_stem_model_validates_without_structured_fields():
     assert model.steps is None
 
 
+def test_stem_model_validates_example_card_type():
+    """The example card type reuses the steps field for the solution."""
+    model = StemModel.model_validate(
+        {
+            "card_type": "example",
+            "front": "Solve for x: 2x + 3 = 11",
+            "back_brief": "x = 4",
+            "back_detail": "Isolate x by undoing addition then multiplication.",
+            "tags": ["Math", "Algebra"],
+            "steps": ["Subtract 3 from both sides: 2x = 8.", "Divide by 2: x = 4."],
+        }
+    )
+    assert model.card_type.value == "example"
+    assert model.steps is not None and len(model.steps) == 2
+
+
 def test_stem_model_validates_with_structured_fields():
     model = StemModel.model_validate(
         {
@@ -118,6 +134,26 @@ def test_build_note_data_renders_step_list():
     )
 
 
+def test_build_note_data_renders_example_card_with_steps():
+    collection = _make_collection()
+    model = StemModel.model_validate(
+        {
+            "card_type": "example",
+            "front": "Solve for x: 2x + 3 = 11",
+            "back_brief": "x = 4",
+            "back_detail": "Standard linear equation.",
+            "tags": ["Math", "Algebra"],
+            "steps": ["Subtract 3 from both sides: 2x = 8.", "Divide by 2: x = 4."],
+        }
+    )
+
+    fields = collection._build_note_data(model, image_filename=None)
+
+    assert fields["card_type"] == "example"
+    assert "<ol class='step-list'>" in fields["back_detail"]
+    assert "<li>Divide by 2: x = 4.</li>" in fields["back_detail"]
+
+
 def test_build_note_data_concept_card_unchanged():
     """Concept cards without structured fields keep plain back_detail."""
     collection = _make_collection()
@@ -169,6 +205,62 @@ async def test_generator_parses_structured_fields_from_ai_response():
     assert model.card_type.value == "formula"
     assert model.latex is not None and "frac" in model.latex
     assert model.variables is not None and len(model.variables) == 1
+
+
+@pytest.mark.asyncio
+async def test_generator_attaches_reference_image_to_user_message():
+    """A reference image is sent as a vision content part, not lost as text."""
+    payload = _CONCEPT_PAYLOAD
+
+    class FakeTextService:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        async def generate_text(self, **kwargs):
+            self.calls.append(kwargs)
+            return payload
+
+    text_service = FakeTextService()
+    generator = StemGenerator(
+        text_service=cast(TextGenerationService, text_service),
+        text_model="stem-model",
+    )
+
+    await generator.generate(
+        "solve the problem in the photo",
+        reference_image=b"fake-png-bytes",
+        reference_image_mime="image/png",
+    )
+
+    user_message = text_service.calls[0]["messages"][1]
+    assert user_message["role"] == "user"
+    content = user_message["content"]
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+@pytest.mark.asyncio
+async def test_generator_without_reference_image_sends_plain_text():
+    class FakeTextService:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        async def generate_text(self, **kwargs):
+            self.calls.append(kwargs)
+            return _CONCEPT_PAYLOAD
+
+    text_service = FakeTextService()
+    generator = StemGenerator(
+        text_service=cast(TextGenerationService, text_service),
+        text_model="stem-model",
+    )
+
+    await generator.generate("what is entropy")
+
+    user_message = text_service.calls[0]["messages"][1]
+    assert isinstance(user_message["content"], str)
 
 
 # -- generate_model / add_note split ---------------------------------------------
@@ -241,6 +333,24 @@ async def test_generate_model_threads_reasoning_effort():
 
     assert model.card_type.value == "concept"
     assert text_service.calls[0]["reasoning_effort"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_generate_model_threads_reference_image():
+    text_service = _RecordingTextService(_CONCEPT_PAYLOAD)
+    collection = StemCollection(
+        cast(AnkiCollectionClient, object()),
+        text_model="stem-model",
+        text_service=cast(TextGenerationService, text_service),
+    )
+
+    await collection.generate_model(
+        "solve this", reference_image=b"bytes", reference_image_mime="image/jpeg"
+    )
+
+    user_message = text_service.calls[0]["messages"][1]
+    content = user_message["content"]
+    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
 
 @pytest.mark.asyncio

@@ -1,9 +1,9 @@
 """STEM card page — generate a STEM card via AI, preview, and push to Anki."""
 
 import asyncio
-from typing import Literal
+from typing import Literal, cast
 
-from nicegui import ui
+from nicegui import events, ui
 
 from ankinote.app import Application
 from ankinote.collections.stem import CardType, StemCollection, StemModel
@@ -79,6 +79,29 @@ def stem_page() -> None:
             label="Topic",
             placeholder="e.g. What is entropy?  /  解释贝叶斯定理",
         ).classes("w-full")
+
+        reference_image: dict[str, bytes | str] = {}
+
+        async def _on_reference_image_upload(e: events.UploadEventArguments) -> None:
+            reference_image["bytes"] = await e.file.read()
+            reference_image["mime"] = e.file.content_type or "image/png"
+            _notify(f"Reference image attached: {e.file.name}", "positive")
+
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.upload(
+                label="Reference image (optional)",
+                on_upload=_on_reference_image_upload,
+                auto_upload=True,
+                max_files=1,
+            ).props("accept=image/*").classes("flex-1")
+            ui.button(
+                icon="close",
+                on_click=lambda: reference_image.clear(),
+            ).props("flat round dense").tooltip("Clear reference image")
+        ui.label(
+            "Used as source material (e.g. a photographed problem) when the "
+            "AI generates an example card. Requires a vision-capable text model."
+        ).classes("text-xs text-gray-500")
 
         thinking_select = ui.select(
             label="Thinking",
@@ -301,7 +324,15 @@ def stem_page() -> None:
                         with_image=with_image,
                         reasoning_effort=reasoning_effort,
                     ) as collection:
-                        model = await collection.generate_model(topic)
+                        model = await collection.generate_model(
+                            topic,
+                            reference_image=cast(
+                                bytes | None, reference_image.get("bytes")
+                            ),
+                            reference_image_mime=cast(
+                                str, reference_image.get("mime", "image/png")
+                            ),
+                        )
                         if model.card_type == CardType.CONCEPT:
                             status_label.text = ""
                             _render_preview(topic, model, with_image, reasoning_effort)

@@ -22,6 +22,8 @@ body {
   --badge-formula-color: var(--accent-deep);
   --badge-procedure-bg: rgba(29, 131, 72, 0.12);
   --badge-procedure-color: var(--success);
+  --badge-example-bg: rgba(29, 78, 216, 0.12);
+  --badge-example-color: #1d4ed8;
 }
 
 body.nightMode {
@@ -44,6 +46,8 @@ body.nightMode {
   --badge-formula-color: var(--accent-soft);
   --badge-procedure-bg: rgba(29, 131, 72, 0.25);
   --badge-procedure-color: var(--success);
+  --badge-example-bg: rgba(96, 165, 250, 0.25);
+  --badge-example-color: #93c5fd;
 }
 
 .card {
@@ -114,6 +118,7 @@ body.nightMode {
 .badge-concept  { background: var(--badge-concept-bg);   color: var(--badge-concept-color); }
 .badge-formula  { background: var(--badge-formula-bg);   color: var(--badge-formula-color); }
 .badge-procedure{ background: var(--badge-procedure-bg); color: var(--badge-procedure-color); }
+.badge-example  { background: var(--badge-example-bg);   color: var(--badge-example-color); }
 
 .section-title {
   font-size: 0.72rem;
