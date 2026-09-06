@@ -1,18 +1,22 @@
-# ankinote web GUI.
+# ankinote web GUI, talking to an AnkiConnect you already run (the Anki desktop
+# app on the host, or one elsewhere).
 #
-#   docker compose up -d      # pull the published image and run
+#   cd deploy/standard
+#   cp .env.example .env      # then fill it in
+#   docker compose up -d      # http://localhost:8080
 #
-# The GUI talks to the Anki desktop app on the host via AnkiConnect. In the
-# AnkiConnect add-on config set "webBindAddress": "0.0.0.0" and add the container
-# origin to "webCorsOriginList" (or use "*"), then restart Anki.
+# In the AnkiConnect add-on config set "webBindAddress": "0.0.0.0" and add the
+# container origin to "webCorsOriginList" (or use "*"), then restart Anki.
+#
+# For a self-contained stack with no Anki desktop app, use ../headless instead.
 
 services:
   ankinote:
     image: ${ANKINOTE_IMAGE:-ghcr.io/ignity21/ankinote-ai:latest}
-    # Build locally instead of pulling:
+    # Build from a PyPI release instead of pulling:
     #   ANKINOTE_VERSION=0.3.1 docker compose build
     # build:
-    #   context: .
+    #   context: ../..
     #   args:
     #     ANKINOTE_VERSION: ${ANKINOTE_VERSION:?set ANKINOTE_VERSION}
     ports:
@@ -22,7 +26,6 @@ services:
         required: false
     environment:
       ANKI_CONNECT_URL: ${ANKI_CONNECT_URL:-http://host.docker.internal:8765}
-      # Generate one: openssl rand -hex 32
       ANKINOTE_STORAGE_SECRET: ${ANKINOTE_STORAGE_SECRET:-ankinote-ui-session-key}
     extra_hosts:
       # Lets the container reach the host on Linux too (Docker Desktop provides

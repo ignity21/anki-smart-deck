@@ -1,0 +1,43 @@
+# Self-contained ankinote stack: the web GUI plus a headless AnkiConnect server
+# (no Anki desktop app needed). The GUI reaches AnkiConnect over the compose
+# network, so nothing is published for it.
+#
+#   cd deploy/headless
+#   cp .env.example .env             # then fill in ANKIWEB_USER / ANKIWEB_PASS
+#   docker compose up -d             # http://localhost:8080
+#
+# anki-connect-server syncs with AnkiWeb using the credentials below and keeps
+# the collection in the anki-data volume.
+
+services:
+  ankinote:
+    image: ${ANKINOTE_IMAGE:-ghcr.io/ignity21/ankinote-ai:latest}
+    ports:
+      - "127.0.0.1:8080:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ANKI_CONNECT_URL: http://anki-connect-server:8765
+      ANKINOTE_STORAGE_SECRET: ${ANKINOTE_STORAGE_SECRET:-ankinote-ui-session-key}
+    depends_on:
+      - anki-connect-server
+    restart: unless-stopped
+    volumes:
+      - ankinote-config:/config
+
+  anki-connect-server:
+    image: glechic/anki-connect-server:latest
+    environment:
+      ANKICONNECT_COLLECTION_PATH: /data/collection.anki2
+      ANKICONNECT_ANKIWEB_USER: ${ANKIWEB_USER:?set ANKIWEB_USER in .env}
+      ANKICONNECT_ANKIWEB_PASS: ${ANKIWEB_PASS:?set ANKIWEB_PASS in .env}
+    volumes:
+      - anki-data:/data
+      # Or bring your own collection instead of the named volume:
+      #   - ./collection.anki2:/data/collection.anki2
+    restart: unless-stopped
+
+volumes:
+  ankinote-config:
+  anki-data:

@@ -81,42 +81,30 @@ higher rate limit when one is available; inference still uses `https://fal.run`.
 
 ### Run the web GUI with Docker
 
-Published images: `ghcr.io/ignity21/ankinote-ai` and `ignity21/ankinote-ai`
-(Docker Hub), tags `latest`, `<major>.<minor>`, and the exact version. `amd64`
-and `arm64`.
+Published images (multi-arch `amd64` + `arm64`): `ghcr.io/ignity21/ankinote-ai`
+and `ignity21/ankinote-ai` (Docker Hub), tags `latest`, `<major>.<minor>`, and the
+exact version.
+
+Two ready-made compose stacks under [`deploy/`](deploy/):
 
 ```bash
-# create a .env next to docker-compose.yml with your provider keys, e.g.
-#   GEMINI_API_KEY=...
-#   GOOGLE_TTS_KEY=...
-#   ANKINOTE_STORAGE_SECRET=$(openssl rand -hex 32)
-
-docker compose up -d
-# open http://localhost:8080
+cd deploy/standard        # GUI + an AnkiConnect you already run
+# or: cd deploy/headless  # GUI + a headless AnkiConnect that syncs with AnkiWeb
+cp .env.example .env      # then fill it in
+docker compose up -d      # http://localhost:8080
 ```
 
-Or without compose:
+See [`deploy/README.md`](deploy/README.md) for the difference, the AnkiConnect
+host setup, and building locally.
 
-```bash
-docker run -d --name ankinote -p 127.0.0.1:8080:8080 \
-  --add-host host.docker.internal:host-gateway \
-  -v ankinote-config:/config --env-file .env \
-  ghcr.io/ignity21/ankinote-ai:latest
-```
-
-The Settings page writes provider profiles and API keys to `/config` — keep it on
-a volume (the compose file does). Container env vars:
+Container env vars:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ANKI_CONNECT_URL` | `http://host.docker.internal:8765` | Where Anki's AnkiConnect lives |
+| `ANKI_CONNECT_URL` | `http://host.docker.internal:8765` | Where AnkiConnect lives |
 | `ANKINOTE_STORAGE_SECRET` | (built-in) | NiceGUI session-signing key — set a random value |
 | `ANKINOTE_HOST` / `ANKINOTE_PORT` | `0.0.0.0` / `8080` | Bind address inside the container |
 | `ANKINOTE_SHOW` | `false` in the image | Whether to open a browser on start |
-
-**AnkiConnect must accept the container.** In the AnkiConnect add-on config
-(Tools → Add-ons → AnkiConnect → Config) set `"webBindAddress": "0.0.0.0"` and add
-the container origin to `"webCorsOriginList"` (or use `"*"`), then restart Anki.
 
 `ANKI_CONNECT_URL` is also honoured when running ankinote outside Docker (e.g. a
 remote Anki).
