@@ -8,7 +8,7 @@ from typing import Protocol
 from ankinote.app import Application
 from ankinote.collections.phrase import PhraseCollection
 from ankinote.collections.sentence import SentenceCollection
-from ankinote.collections.stem import StemCollection
+from ankinote.collections.stem import CardType, StemCollection
 from ankinote.collections.word import WordCollection
 from ankinote.consts import Language
 from ankinote.services.ai import (
@@ -65,6 +65,7 @@ class StemCollectionOptions:
     image_model: str | None = None
     image_size: int | None = None
     reasoning_effort: str | None = None
+    card_type: CardType | None = None
 
 
 def build_word_collection(
@@ -145,6 +146,7 @@ def build_stem_collection(
         )
     return StemCollection(
         client,
+        card_type=options.card_type,
         text_model=config.text_model,
         text_service=LiteLLMTextService(),
         image_service=image_service,

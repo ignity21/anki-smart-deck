@@ -1,94 +1,52 @@
 # Roadmap
 
-Unscheduled product directions. Nothing here is a commitment to a date, a
-framework, or an API. Detailed design is intentionally deferred to the session
-that picks the item up.
+Unscheduled product directions. Nothing here is a commitment to a date,
+framework, or API.
 
-## STEM card expansion
+## STEM architecture (shipped)
 
-The STEM collection (`src/ankinote/collections/stem/`) now covers three card
-types — `concept`, `formula`, `procedure` — with structured schema fields
-(`latex`, `variables`, `steps`) rendered into the stored `back_detail` HTML.
-The legacy `math` collection was removed once STEM superseded it: `concept` and
-`formula` cards cover explanatory and formula content better than the old
-all-in-one `MathModel`, and its remaining extras (`key_points`,
-`related_concepts`, `difficulty`, multi-image example lists) were judged to be
-prose or metadata that belong in `back_detail`, in Anki tags, or on their own
-cards.
+The unified STEM schema has been replaced by four independent generation models,
+prompts, field sets, and Anki note types:
 
-### Design constraints (carried over from the completed schema work)
+- `AINote STEM Concept`: front, brief answer, detailed explanation, image.
+- `AINote STEM Formula`: front, formula, meaning, variables, conditions, derivation, image.
+- `AINote STEM Procedure`: front, summary, steps, conditions, image.
+- `AINote STEM Example`: front, answer, solution steps, explanation, image.
 
-- `StemNoteType` stays all-string. New structured AI output is rendered to HTML
-  in `_build_note_data()` before storage, so no note-type migration is needed
-  and existing notes keep rendering.
-- New visual elements only extend the existing token set in
-  `stem/card_templates/style.css` (`--badge-<type>-*`, `--accent*`, `--paper*`).
-  No new fonts, layouts, or themes; keep the paper-card / amber-accent / serif
-  look.
-- New prompts follow the current contract: JSON-only output, same-language
-  rule, escaped LaTeX in JSON, English Title Case tags, every new key optional
-  so older outputs still validate.
+All use `front` as the first field (Anki's default sort field), native Anki
+tags, and the shared `AINote::STEM` deck and paper-card visual theme.
+Structured variable/step lists render into their own storage fields.
+There is no stored `card_type` field and no V2 suffix.
 
-### Worked-example card type (shipped)
+The common STEM entrypoint accepts automatic classification or an explicit type.
+Automatic mode classifies first and then loads the selected type's prompt/schema;
+explicit selection skips classification. All four GUI flows offer editable
+previews before saving. Reference-image input and optional generated diagrams
+remain available. Upserts are scoped by note type as well as front and deck.
 
-The highest-value gap. Worked examples train *production* (solve this problem)
-rather than *recognition*, and are general to STEM problem-solving, not
-math-specific. The old `math` collection modelled 1–3 examples as a sub-list on
-a single note, which cannot be reviewed or scheduled independently — the
-replacement is one card per problem.
+The legacy `AINote STEM` is no longer created or updated. Existing legacy notes
+are left alone; there is no automatic migration or deletion.
 
-`CardType.EXAMPLE` is added: `front` is the problem statement, `back_brief` is
-the final answer only, `back_detail` is the reasoning that doesn't fit a step,
-and the solution steps reuse the existing `steps` field and numbered-list
-rendering — no new model fields or template branches were needed since
-`front.html`/`back.html` already key off `card_type` generically. Guidance
-lives in `_system.md` rather than a new `prompts/example.md`: the per-type
-prompt files (`concept.md`, `formula.md`, `procedure.md`) turned out to never
-be loaded by `generator.py` (dead code, now removed along with the unused
-files) — all card types are actually driven by the single `_system.md`
-prompt, so `example` guidance was added there instead of introducing another
-unused file. Badge token pair `--badge-example-*` added.
+## Comparison card type (next)
 
-Also added, beyond the original scope: optional reference-image input.
-`StemGenerator.generate` / `StemCollection.generate_model` /
-`generate_and_add_note` now accept `reference_image: bytes | None` (source
-material such as a photographed problem, sent as a vision content part —
-requires a vision-capable text model), exposed via `stem add --image PATH` in
-the CLI and an upload control on the STEM GUI page. `TextMessage` in
-`services/ai.py` was widened to allow list-of-parts content for this.
+Add `AINote STEM Comparison` with its own model, prompt, field set, and templates.
+Contrast pairs such as L1 vs L2 regularization, bias vs variance, or TCP vs UDP.
 
-### Comparison card type
+- Structured `items` (name + definition) and `aspects` (aspect + per-item values).
+- Render an aspect-by-aspect table, stacking vertically on narrow screens.
+- Register the type in classification, CLI selection, and GUI management/preview.
+- Reuse shared styling with `--badge-comparison-*` tokens.
 
-Contrast pairs (L1 vs L2 regularization, bias vs variance, TCP vs UDP) — a
-common study need with no current home.
+## Progressive disclosure and rendering polish
 
-- Add `CardType.COMPARISON` with structured fields: `items` (name + definition)
-  and `aspects` (aspect + per-item values) so the back renders as a real
-  aspect-by-aspect table that stacks vertically on narrow screens.
-- Add `prompts/comparison.md`; include the type in auto-detection.
-- `--badge-comparison-*` token pair following the existing badge pattern.
-
-### Progressive disclosure and rendering polish
-
-- Wrap the `back_detail` section of `back.html` in `<details>/<summary>` so
-  recall practice sees the brief answer first, with detail one tap away. Verify
-  `<details>` behaviour on Anki desktop and AnkiDroid before committing;
-  fall back to always-visible detail where unsupported.
+- Allow detailed explanations/derivations to expand on demand. Verify
+  `<details>` on Anki desktop and AnkiDroid before shipping; keep a visible
+  fallback where unsupported.
 - Shared MathJax macro configuration for common notation.
+- Optional `common_mistakes` callout where appropriate, added to the relevant
+  type's schema and template rather than a new card type.
 
-### Misconception callout (optional, small)
-
-Rather than a new type, an optional `common_mistakes: list[str]` field rendered
-as a small warning-styled callout at the bottom of `back_detail`, reusing
-existing `--error` / muted tones. Update `_system.md` guidance on when to
-populate it.
-
-### Rough delivery order
-
-The worked-example and comparison types are independent of each other and each
-sized for one focused session. Worked-example shipped first (see above).
-Progressive disclosure is independent of both. The misconception callout
-folds into whichever session touches the templates last.
+Comparison is the next feature; rendering polish can be delivered independently.
 
 ## Thinking control (shipped; follow-ups)
 

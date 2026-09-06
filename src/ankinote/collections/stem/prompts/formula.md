@@ -1,0 +1,1 @@
+Generate a formula card. front asks for the named law or relationship without revealing the answer. latex is the core formula without delimiters. meaning explains it briefly. variables defines each symbol. conditions states assumptions and scope. derivation gives the supporting reasoning, or an empty string when unnecessary.

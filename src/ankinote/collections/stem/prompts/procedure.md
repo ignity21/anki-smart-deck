@@ -1,0 +1,1 @@
+Generate a procedure card. front asks how to accomplish a specific goal. summary gives a compact overview for recall. steps contains the ordered actionable method with reasons where useful. conditions states prerequisites, limitations, and when to use the method.

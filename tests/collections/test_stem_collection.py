@@ -1,14 +1,26 @@
-"""Tests for the STEM collection: structured schema and note building."""
+"""STEM type isolation, rendering, generation, and media contracts."""
 
 import json
+import re
 from types import SimpleNamespace
-from typing import ClassVar, cast
+from typing import cast
+from unittest.mock import AsyncMock
 
 import pytest
+from pydantic import ValidationError
 
 from ankinote.collections.stem.collection import StemCollection
 from ankinote.collections.stem.generator import StemGenerator
-from ankinote.collections.stem.models import StemModel, Variable
+from ankinote.collections.stem.models import (
+    CARD_ADAPTER,
+    NOTE_FIELDS,
+    CardType,
+    ConceptModel,
+    ExampleModel,
+    FormulaModel,
+    ProcedureModel,
+)
+from ankinote.collections.stem.templates import load_template
 from ankinote.services.ai import (
     GenerationTimeoutError,
     ImageGenerationService,
@@ -16,196 +28,158 @@ from ankinote.services.ai import (
 )
 from ankinote.services.anki import AnkiCollectionClient
 
+CARDS = [
+    ConceptModel(
+        front="Entropy?",
+        back_brief="Uncertainty.",
+        back_detail="An explanation.",
+        tags=["Physics"],
+    ),
+    FormulaModel(
+        front="Newton's law?",
+        latex="F=ma",
+        meaning="Force.",
+        variables=[{"symbol": "F", "description": "Force"}],
+        conditions="Inertial frame.",
+        derivation="",
+        tags=["Physics"],
+    ),
+    ProcedureModel(
+        front="Solve a linear equation?",
+        summary="Isolate x.",
+        steps=["Subtract constant.", "Divide coefficient."],
+        conditions="Nonzero coefficient.",
+        tags=["Math"],
+    ),
+    ExampleModel(
+        front="Solve 2x+3=11.",
+        answer="x=4",
+        steps=["Subtract 3.", "Divide by 2."],
+        explanation="Inverse operations.",
+        tags=["Math"],
+    ),
+]
 
-def _make_collection() -> StemCollection:
-    """Build a StemCollection backed by a minimal fake Anki client."""
 
-    class FakeAnkiClient:
-        pass
-
+def _make_collection(**kwargs) -> StemCollection:
     return StemCollection(
-        cast(AnkiCollectionClient, FakeAnkiClient()),
-        text_model="stem-model",
+        cast(AnkiCollectionClient, object()),
+        text_model="test",
+        text_service=cast(TextGenerationService, object()),
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize("model", CARDS)
+def test_storage_fields_and_templates_are_type_specific(model):
+    fields = _make_collection()._build_note_data(model, "diagram.png")
+    assert list(fields) == list(NOTE_FIELDS[model.card_type])
+    assert next(iter(fields)) == "front"
+    assert "card_type" not in fields
+    assert "tags" not in fields
+    assert all(isinstance(value, str) for value in fields.values())
+    assert "diagram.png" in fields["image"]
+    for side in ("front", "back"):
+        template = load_template(f"{model.card_type}/{side}.html")
+        refs = set(re.findall(r"{{[#/^]?([^}]+)}}", template))
+        assert refs <= set(fields) | {"FrontSide", "Tags"}
+    assert "{{card_type}}" not in load_template(f"{model.card_type}/front.html")
+
+
+def test_structured_content_stays_in_separate_fields():
+    formula = _make_collection()._build_note_data(CARDS[1], None)
+    assert formula["latex"] == "F=ma"
+    assert "symbol-table" in formula["variables"]
+    assert formula["conditions"] == "Inertial frame."
+    assert "back_detail" not in formula
+    example = _make_collection()._build_note_data(CARDS[3], None)
+    assert "step-list" in example["steps"]
+    assert example["answer"] == "x=4"
+    assert "Subtract" not in example["explanation"]
+
+
+def test_incompatible_fields_and_incomplete_solutions_are_rejected():
+    with pytest.raises(ValidationError):
+        ConceptModel.model_validate({**CARDS[0].model_dump(), "steps": ["irrelevant"]})
+    with pytest.raises(ValidationError):
+        ExampleModel.model_validate({**CARDS[3].model_dump(), "steps": []})
+    with pytest.raises(ValidationError):
+        FormulaModel.model_validate({**CARDS[1].model_dump(), "latex": ""})
+
+
+@pytest.mark.parametrize("model", CARDS)
+async def test_explicit_type_uses_one_call_and_its_own_schema(model):
+    service = SimpleNamespace(
+        generate_text=AsyncMock(return_value=model.model_dump_json())
+    )
+    generator = StemGenerator(cast(TextGenerationService, service), "test")
+    result = await generator.generate(model.front, card_type=model.card_type)
+    assert type(result) is type(model)
+    service.generate_text.assert_awaited_once()
+    system = service.generate_text.await_args.kwargs["messages"][0]["content"]
+    assert type(model).__name__ in system
+    assert (
+        f"Generate a {model.card_type}" in system or model.card_type == CardType.EXAMPLE
+    )
+
+
+async def test_auto_classifies_then_generates_with_reference_in_both_calls():
+    service = SimpleNamespace(
+        generate_text=AsyncMock(
+            side_effect=[
+                '{"card_type":"example"}',
+                CARDS[3].model_dump_json(),
+            ]
+        )
+    )
+    generator = StemGenerator(cast(TextGenerationService, service), "test")
+    result = await generator.generate("Solve this", reference_image=b"photo")
+    assert isinstance(result, ExampleModel)
+    assert service.generate_text.await_count == 2
+    for call in service.generate_text.await_args_list:
+        parts = call.kwargs["messages"][1]["content"]
+        assert parts[1]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert (
+        "ExampleModel"
+        in service.generate_text.await_args_list[1].kwargs["messages"][0]["content"]
+    )
+
+
+async def test_explicit_type_rejects_wrong_type_response():
+    service = SimpleNamespace(
+        generate_text=AsyncMock(return_value=CARDS[0].model_dump_json())
+    )
+    generator = StemGenerator(cast(TextGenerationService, service), "test")
+    with pytest.raises(ValidationError):
+        await generator.generate("topic", card_type=CardType.EXAMPLE)
+
+
+async def test_same_front_is_scoped_to_note_type_for_insert_and_update():
+    notes = SimpleNamespace(
+        find=AsyncMock(side_effect=[None, 17]),
+        add=AsyncMock(return_value=42),
+        update_fields=AsyncMock(),
+        update_tags=AsyncMock(),
+    )
+    collection = StemCollection(
+        cast(AnkiCollectionClient, SimpleNamespace(notes=notes)),
+        text_model="test",
         text_service=cast(TextGenerationService, object()),
     )
+    concept = CARDS[0]
+    example = CARDS[3].model_copy(update={"front": concept.front})
+    await collection.add_note(concept)
+    await collection.add_note(example)
+    assert notes.find.await_args_list[0].kwargs["model_name"] == "AINote STEM Concept"
+    assert notes.find.await_args_list[1].kwargs["model_name"] == "AINote STEM Example"
+    assert notes.add.await_args.kwargs["model_name"] == "AINote STEM Concept"
+    assert notes.update_fields.await_args.args[0] == 17
+    assert "answer" in notes.update_fields.await_args.args[1]
 
 
-def test_stem_model_validates_without_structured_fields():
-    """Old-style payloads without latex/variables/steps still validate."""
-    model = StemModel.model_validate(
-        {
-            "card_type": "concept",
-            "front": "What is entropy?",
-            "back_brief": "A measure of disorder.",
-            "back_detail": "Entropy quantifies uncertainty.",
-            "tags": ["Physics"],
-        }
-    )
-    assert model.latex is None
-    assert model.variables is None
-    assert model.steps is None
-
-
-def test_stem_model_validates_example_card_type():
-    """The example card type reuses the steps field for the solution."""
-    model = StemModel.model_validate(
-        {
-            "card_type": "example",
-            "front": "Solve for x: 2x + 3 = 11",
-            "back_brief": "x = 4",
-            "back_detail": "Isolate x by undoing addition then multiplication.",
-            "tags": ["Math", "Algebra"],
-            "steps": ["Subtract 3 from both sides: 2x = 8.", "Divide by 2: x = 4."],
-        }
-    )
-    assert model.card_type.value == "example"
-    assert model.steps is not None and len(model.steps) == 2
-
-
-def test_stem_model_validates_with_structured_fields():
-    model = StemModel.model_validate(
-        {
-            "card_type": "formula",
-            "front": "Newton's second law",
-            "back_brief": "$F = ma$: acceleration follows force.",
-            "back_detail": "Valid in inertial frames.",
-            "tags": ["Physics"],
-            "latex": "F = m \\cdot a",
-            "variables": [
-                {"symbol": "F", "description": "Net force (N)"},
-                {"symbol": "m", "description": "Mass (kg)"},
-            ],
-            "steps": ["Step one.", "Step two."],
-        }
-    )
-    assert model.latex == "F = m \\cdot a"
-    assert model.variables is not None
-    assert model.variables[0] == Variable(symbol="F", description="Net force (N)")
-    assert model.steps == ["Step one.", "Step two."]
-
-
-def test_build_note_data_renders_formula_block_and_symbol_table():
-    collection = _make_collection()
-    model = StemModel.model_validate(
-        {
-            "card_type": "formula",
-            "front": "Newton's second law",
-            "back_brief": "$F = ma$.",
-            "back_detail": "Valid in inertial frames.",
-            "tags": ["Physics"],
-            "latex": "F = m \\cdot a",
-            "variables": [
-                {"symbol": "F", "description": "Net force (N)"},
-                {"symbol": "m", "description": "Mass (kg)"},
-            ],
-        }
-    )
-
-    fields = collection._build_note_data(model, image_filename=None)
-
-    assert (
-        "<div class='formula-block'>\\[F = m \\cdot a\\]</div>" in fields["back_detail"]
-    )
-    assert "<table class='symbol-table'>" in fields["back_detail"]
-    assert "\\(F\\)</td><td>Net force (N)" in fields["back_detail"]
-    assert fields["back_detail"].endswith("<p>Valid in inertial frames.</p>") or (
-        "Valid in inertial frames." in fields["back_detail"]
-    )
-
-
-def test_build_note_data_renders_step_list():
-    collection = _make_collection()
-    model = StemModel.model_validate(
-        {
-            "card_type": "procedure",
-            "front": "How to invert a matrix?",
-            "back_brief": "1. Check square. 2. Determinant. 3. Row-reduce.",
-            "back_detail": "Row-reduction costs O(n^3).",
-            "tags": ["Math"],
-            "steps": ["Check square.", "Determinant nonzero.", "Row-reduce."],
-        }
-    )
-
-    fields = collection._build_note_data(model, image_filename=None)
-
-    assert "<ol class='step-list'>" in fields["back_detail"]
-    assert "<li>Check square.</li>" in fields["back_detail"]
-    assert fields["back_detail"].index("step-list") < fields["back_detail"].index(
-        "Row-reduction costs"
-    )
-
-
-def test_build_note_data_renders_example_card_with_steps():
-    collection = _make_collection()
-    model = StemModel.model_validate(
-        {
-            "card_type": "example",
-            "front": "Solve for x: 2x + 3 = 11",
-            "back_brief": "x = 4",
-            "back_detail": "Standard linear equation.",
-            "tags": ["Math", "Algebra"],
-            "steps": ["Subtract 3 from both sides: 2x = 8.", "Divide by 2: x = 4."],
-        }
-    )
-
-    fields = collection._build_note_data(model, image_filename=None)
-
-    assert fields["card_type"] == "example"
-    assert "<ol class='step-list'>" in fields["back_detail"]
-    assert "<li>Divide by 2: x = 4.</li>" in fields["back_detail"]
-
-
-def test_build_note_data_concept_card_unchanged():
-    """Concept cards without structured fields keep plain back_detail."""
-    collection = _make_collection()
-    model = StemModel.model_validate(
-        {
-            "card_type": "concept",
-            "front": "What is entropy?",
-            "back_brief": "A measure of disorder.",
-            "back_detail": "Entropy quantifies uncertainty.",
-            "tags": ["Physics"],
-        }
-    )
-
-    fields = collection._build_note_data(model, image_filename=None)
-
-    assert fields["back_detail"] == "Entropy quantifies uncertainty."
-    assert fields["card_type"] == "concept"
-
-
-@pytest.mark.asyncio
-async def test_generator_parses_structured_fields_from_ai_response():
-    """End-to-end mocked generation with the new structured keys."""
-    payload = json.dumps(
-        {
-            "card_type": "formula",
-            "front": "Quadratic formula",
-            "back_brief": "$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$ solves $ax^2+bx+c=0$.",
-            "back_detail": "Derived by completing the square.",
-            "latex": "x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}",
-            "variables": [{"symbol": "a", "description": "Leading coefficient"}],
-            "tags": ["Math", "Algebra"],
-            "image_description": None,
-        }
-    )
-
-    class FakeTextService:
-        calls: ClassVar[list[dict[str, object]]] = []
-
-        async def generate_text(self, **kwargs):
-            type(self).calls.append(kwargs)
-            return payload
-
-    generator = StemGenerator(
-        text_service=cast(TextGenerationService, FakeTextService()),
-        text_model="stem-model",
-    )
-    model = await generator.generate("quadratic formula")
-
-    assert model.card_type.value == "formula"
-    assert model.latex is not None and "frac" in model.latex
-    assert model.variables is not None and len(model.variables) == 1
+async def test_selected_collection_rejects_other_type_before_writing():
+    with pytest.raises(ValueError, match="does not match"):
+        await _make_collection(card_type=CardType.CONCEPT).add_note(CARDS[3])
 
 
 @pytest.mark.asyncio
@@ -294,7 +268,9 @@ def _recording_anki_client() -> SimpleNamespace:
         stored.append((filename, data))
         return filename
 
-    async def find(*, deck_name: str, unique_fields: dict[str, str]) -> int | None:
+    async def find(
+        *, deck_name: str, unique_fields: dict[str, str], model_name: str
+    ) -> int | None:
         return None
 
     async def add(**kwargs: object) -> int:
@@ -364,7 +340,7 @@ async def test_add_note_stores_supplied_image_without_calling_service():
         text_service=cast(TextGenerationService, object()),
         image_service=cast(ImageGenerationService, image_service),
     )
-    model = StemModel.model_validate(json.loads(_CONCEPT_PAYLOAD))
+    model = CARD_ADAPTER.validate_python(json.loads(_CONCEPT_PAYLOAD))
 
     note_id = await collection.add_note(model, topic="entropy", image_bytes=b"png")
 
@@ -374,7 +350,7 @@ async def test_add_note_stores_supplied_image_without_calling_service():
     assert name.startswith("stem_") and name.endswith(".png") and data == b"png"
     assert image_service.prompts == []
     fields = anki._added[0]["fields"]
-    assert "<img src='" in fields["back_detail"]
+    assert "<img src='" in fields["image"]
 
 
 @pytest.mark.asyncio
@@ -387,7 +363,7 @@ async def test_add_note_generates_image_from_description():
         text_service=cast(TextGenerationService, object()),
         image_service=cast(ImageGenerationService, image_service),
     )
-    model = StemModel.model_validate(
+    model = CARD_ADAPTER.validate_python(
         {**json.loads(_CONCEPT_PAYLOAD), "image_description": "a diagram"}
     )
 
@@ -411,7 +387,7 @@ async def test_add_note_reports_non_fatal_diagram_failure() -> None:
         image_service=cast(ImageGenerationService, TimeoutImageService()),
     )
     errors: list[Exception] = []
-    model = StemModel.model_validate(
+    model = CARD_ADAPTER.validate_python(
         {**json.loads(_CONCEPT_PAYLOAD), "image_description": "a diagram"}
     )
 

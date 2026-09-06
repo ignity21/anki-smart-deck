@@ -32,7 +32,7 @@ from ankinote.collections.sentence.templates import (
     load_card_style as _sentence_style,
 )
 from ankinote.collections.stem import StemCollection
-from ankinote.collections.stem.models import StemNoteType
+from ankinote.collections.stem.models import NOTE_FIELDS, CardType, note_type_name
 from ankinote.collections.stem.templates import (
     load_card_style as _stem_style,
 )
@@ -133,15 +133,13 @@ def _build_specs() -> list[NoteTypeSpec]:
 
         return _sync
 
-    def sync_simple(clazz, notetype_name: str, deck_name: str):
+    def sync_stem(card_type: CardType):
         async def _sync(client: AnkiCollectionClient) -> None:
-            collection = clazz(
+            collection = StemCollection(
                 client,
-                notetype_name=notetype_name,
-                deck_name=deck_name,
+                card_type=card_type,
                 text_model="",
                 text_service=LiteLLMTextService(),
-                image_service=None,
             )
             await collection.ensure_in_anki()
 
@@ -186,18 +184,21 @@ def _build_specs() -> list[NoteTypeSpec]:
                 SentenceCollection, "AINote Sentence V2", "AINote::Sentences"
             ),
         ),
-        NoteTypeSpec(
-            key="stem",
-            icon="science",
-            accent="#7c3aed",
-            title="STEM cards",
-            notetype_name="AINote STEM",
-            deck_name="AINote::STEM",
-            fields=_field_names(StemNoteType),
-            templates=("Card 1",),
-            css=_stem_style(),
-            sync=sync_simple(StemCollection, "AINote STEM", "AINote::STEM"),
-        ),
+        *[
+            NoteTypeSpec(
+                key=f"stem_{kind}",
+                icon="science",
+                accent="#7c3aed",
+                title=f"STEM {kind.title()} cards",
+                notetype_name=note_type_name(kind),
+                deck_name="AINote::STEM",
+                fields=NOTE_FIELDS[kind],
+                templates=("Card 1",),
+                css=_stem_style(),
+                sync=sync_stem(kind),
+            )
+            for kind in CardType
+        ],
     ]
 
 

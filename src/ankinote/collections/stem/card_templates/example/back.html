@@ -1,0 +1,17 @@
+{{FrontSide}}
+<section class="panel">
+  {{#answer}}
+  <div class="section-title">Answer</div>
+  <div class="brief">{{answer}}</div>
+  {{/answer}}
+  {{#steps}}
+  <div class="section-title">Solution</div>
+  <div class="detail">{{steps}}</div>
+  {{/steps}}
+  {{#explanation}}
+  <div class="section-title">Explanation</div>
+  <div class="detail">{{explanation}}</div>
+  {{/explanation}}
+  {{#image}}<div class="diagram-container">{{image}}</div>{{/image}}
+  {{#Tags}}<div class="section-title">Tags</div><div class="tags">{{Tags}}</div>{{/Tags}}
+</section>

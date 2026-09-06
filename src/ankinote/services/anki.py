@@ -158,7 +158,13 @@ class AnkiDeckService(Protocol):
 class AnkiNoteService(Protocol):
     """Subset of note operations required by collections."""
 
-    async def find(self, deck_name: str, unique_fields: dict[str, str]) -> int | None:
+    async def find(
+        self,
+        deck_name: str,
+        unique_fields: dict[str, str],
+        *,
+        model_name: str | None = None,
+    ) -> int | None:
         """Find a note by deck and unique fields."""
         ...
 
@@ -617,7 +623,13 @@ class NoteClient:
         """
         self._client = client
 
-    async def find(self, deck_name: str, unique_fields: dict[str, str]) -> int | None:
+    async def find(
+        self,
+        deck_name: str,
+        unique_fields: dict[str, str],
+        *,
+        model_name: str | None = None,
+    ) -> int | None:
         """Query for a note ID based on unique field values.
 
         Args:
@@ -636,9 +648,20 @@ class NoteClient:
             ...     unique_fields={"Front": "hello"}
             ... )
         """
-        query_parts = [f'deck:"{deck_name}"']
+
+        def escape(value: str) -> str:
+            return (
+                value.replace("\\", "\\\\")
+                .replace('"', '\\"')
+                .replace("*", "\\*")
+                .replace("_", "\\_")
+            )
+
+        query_parts = [f'deck:"{escape(deck_name)}"']
+        if model_name is not None:
+            query_parts.append(f'note:"{escape(model_name)}"')
         for field_, value in unique_fields.items():
-            query_parts.append(f'{field_}:"{value}"')
+            query_parts.append(f'{field_}:"{escape(value)}"')
         query_str = " ".join(query_parts)
 
         note_ids = await self._client._invoke("findNotes", params={"query": query_str})

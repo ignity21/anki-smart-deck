@@ -13,8 +13,24 @@ from ankinote.services.anki import (
     AnkiTransportError,
     ModelClient,
     ModelNotFound,
+    NoteClient,
     TemplateUpsert,
 )
+
+
+async def test_note_lookup_scopes_model_and_escapes_literal_front():
+    invoke = AsyncMock(return_value=[123])
+    client = NoteClient(StubInvoker(invoke))
+    result = await client.find(
+        "AINote::STEM",
+        {"front": 'What is "x*y_1"?'},
+        model_name="AINote STEM Formula",
+    )
+    assert result == 123
+    query = invoke.await_args.kwargs["params"]["query"]
+    assert 'note:"AINote STEM Formula"' in query
+    assert r"x\*y\_1" in query
+    assert r"\"x" in query
 
 
 class StubInvoker:

@@ -265,6 +265,7 @@ async def test_sentence_generator_uses_unified_text_service():
 async def test_stem_generator_uses_unified_text_service():
     text_service = FakeTextService(
         [
+            '{"card_type": "concept"}',
             """
             {
               "card_type": "concept",
@@ -274,7 +275,7 @@ async def test_stem_generator_uses_unified_text_service():
               "tags": ["Math", "Linear Algebra"],
               "image_description": null
             }
-            """
+            """,
         ]
     )
     generator = StemGenerator(

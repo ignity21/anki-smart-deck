@@ -16,6 +16,7 @@ from ankinote.cli.factory import (
     collection_context,
     resolve_thinking,
 )
+from ankinote.collections.stem import CardType
 from ankinote.services.ai import DEFAULT_AI_SERVICE_CONFIG
 
 console = Console()
@@ -51,6 +52,13 @@ def collection_options(f):
             "(default: provider default, thinking on for STEM cards)."
         ),
     )(f)
+    f = click.option(
+        "--type",
+        "card_type",
+        type=click.Choice(["auto", *(str(kind) for kind in CardType)]),
+        default="auto",
+        show_default=True,
+    )(f)
     return f
 
 
@@ -59,6 +67,7 @@ def build_options(
     image_model: str | None,
     image_size: int | None,
     thinking: str | None = None,
+    card_type: str = "auto",
 ) -> StemCollectionOptions:
     """Convert CLI parameters to typed collection options."""
     return StemCollectionOptions(
@@ -66,6 +75,7 @@ def build_options(
         image_model=image_model,
         image_size=image_size,
         reasoning_effort=resolve_thinking(thinking, unset=None),
+        card_type=None if card_type == "auto" else CardType(card_type),
     )
 
 
@@ -76,11 +86,11 @@ def stem():
 
 @stem.command("init")
 @collection_options
-def init(llm, image_model, image_size, thinking):
+def init(llm, image_model, image_size, thinking, card_type):
     """Create note type and deck in Anki."""
 
     async def _run():
-        options = build_options(llm, image_model, image_size, thinking)
+        options = build_options(llm, image_model, image_size, thinking, card_type)
         async with collection_context(build_stem_collection, options) as collection:
             console.print(
                 f"[green]\u2713[/green] Initialized STEM collection: {collection.deck_name}"
@@ -102,7 +112,7 @@ def init(llm, image_model, image_size, thinking):
     ),
 )
 @collection_options
-def add(topic, image_path, llm, image_model, image_size, thinking):
+def add(topic, image_path, llm, image_model, image_size, thinking, card_type):
     """Generate and push a single STEM card.
 
     TOPIC is any question or concept (e.g. "What is a derivative?",
@@ -114,7 +124,7 @@ def add(topic, image_path, llm, image_model, image_size, thinking):
     ) or "image/png"
 
     async def _run():
-        options = build_options(llm, image_model, image_size, thinking)
+        options = build_options(llm, image_model, image_size, thinking, card_type)
         async with collection_context(build_stem_collection, options) as collection:
             with Progress(
                 SpinnerColumn(),
@@ -150,7 +160,7 @@ def add(topic, image_path, llm, image_model, image_size, thinking):
     type=int,
     help="Requests per minute limit",
 )
-def batch(topics, file, llm, image_model, image_size, rpm, thinking):
+def batch(topics, file, llm, image_model, image_size, rpm, thinking, card_type):
     """Generate and push multiple STEM cards.
 
     Topics can be passed as arguments, read from a file (one per line),
@@ -179,7 +189,7 @@ def batch(topics, file, llm, image_model, image_size, rpm, thinking):
 
     async def _run():
         nonlocal success
-        options = build_options(llm, image_model, image_size, thinking)
+        options = build_options(llm, image_model, image_size, thinking, card_type)
 
         async with collection_context(build_stem_collection, options) as collection:
             delay = 60.0 / rpm if rpm > 0 else 0

@@ -1,12 +1,14 @@
 """STEM card page — generate a STEM card via AI, preview, and push to Anki."""
 
 import asyncio
+from itertools import count
 from typing import Literal, cast
 
 from nicegui import events, ui
 
 from ankinote.app import Application
-from ankinote.collections.stem import CardType, StemCollection, StemModel
+from ankinote.collections.stem import CardType, StemCard, StemCollection
+from ankinote.collections.stem.models import NOTE_FIELDS, FormulaModel
 from ankinote.services.ai import (
     LiteLLMTextService,
     resolve_thinking,
@@ -44,6 +46,33 @@ def _build_text_service(settings: Settings) -> LiteLLMTextService:
     )
 
 
+def _edited_card(model: StemCard, fields: dict[str, str]) -> StemCard:
+    """Validate all edited fields before a save can reach Anki."""
+    values = model.model_dump()
+    for name, value in fields.items():
+        value = value.strip()
+        if name.startswith("variable_"):
+            continue
+        if name == "tags":
+            values[name] = [tag.strip() for tag in value.split(",") if tag.strip()]
+        elif name == "steps":
+            values[name] = [step.strip() for step in value.splitlines() if step.strip()]
+        elif name == "image_description":
+            values[name] = value or None
+        else:
+            values[name] = value
+    if isinstance(model, FormulaModel):
+        values["variables"] = [
+            {
+                "symbol": value.strip(),
+                "description": fields[name.replace("_symbol", "_description")].strip(),
+            }
+            for name, value in fields.items()
+            if name.startswith("variable_") and name.endswith("_symbol")
+        ]
+    return type(model).model_validate(values)
+
+
 def stem_page() -> None:
     """Render the STEM card generation page."""
 
@@ -71,13 +100,18 @@ def stem_page() -> None:
     with ui.column().classes("w-full max-w-2xl mx-auto p-6 gap-4"):
         ui.label("STEM Cards").classes("text-2xl font-bold")
         ui.label(
-            "One card per topic. Concept cards open an editable preview before "
-            "they are saved; formula and procedure cards are added directly."
+            "Generate a card, review and edit its content, then save it to Anki."
         ).classes("text-sm text-gray-500")
 
         topic_input = ui.input(
             label="Topic",
             placeholder="e.g. What is entropy?  /  解释贝叶斯定理",
+        ).classes("w-full")
+
+        type_select = ui.select(
+            label="Card type",
+            options={"auto": "Auto", **{kind: kind.title() for kind in CardType}},
+            value="auto",
         ).classes("w-full")
 
         reference_image: dict[str, bytes | str] = {}
@@ -170,6 +204,7 @@ def stem_page() -> None:
             *,
             with_image: bool,
             reasoning_effort: str | None,
+            card_type: CardType | None = None,
         ) -> StemCollection:
             image_service = None
             if with_image:
@@ -188,6 +223,7 @@ def stem_page() -> None:
             )
             return StemCollection(
                 anki_client,
+                card_type=card_type,
                 text_model=text_profile.model,
                 text_service=_build_text_service(settings),
                 image_service=image_service,
@@ -196,23 +232,19 @@ def stem_page() -> None:
 
         async def _save_edited(
             topic: str,
-            model: StemModel,
+            model: StemCard,
             with_image: bool,
             reasoning_effort: str | None,
             fields: dict[str, ui.input | ui.textarea],
             save_btn: ui.button,
         ) -> None:
-            tags = [
-                t.strip() for t in (fields["tags"].value or "").split(",") if t.strip()
-            ]
-            edited = model.model_copy(
-                update={
-                    "front": (fields["front"].value or "").strip(),
-                    "back_brief": (fields["back_brief"].value or "").strip(),
-                    "back_detail": (fields["back_detail"].value or "").strip(),
-                    "tags": tags,
-                }
-            )
+            try:
+                edited = _edited_card(
+                    model, {name: field.value or "" for name, field in fields.items()}
+                )
+            except ValueError as exc:
+                _notify(f"Invalid card: {format_error(exc)}", "negative")
+                return
             save_btn.props("loading")
             save_btn.update()
             status_label.text = (
@@ -236,6 +268,7 @@ def stem_page() -> None:
                         settings,
                         with_image=with_image,
                         reasoning_effort=reasoning_effort,
+                        card_type=model.card_type,
                     ) as collection:
                         await collection.add_note(
                             edited,
@@ -257,7 +290,7 @@ def stem_page() -> None:
                 status_label.text = f"Error: {message}"
                 _notify(f"Error: {message}", "negative")
             finally:
-                # Saving a concept card clears the preview, which also deletes
+                # Saving a card clears the preview, which also deletes
                 # its button. Do not update an element that no longer exists.
                 if not save_btn.is_deleted:
                     save_btn.props(remove="loading")
@@ -265,44 +298,75 @@ def stem_page() -> None:
 
         def _render_preview(
             topic: str,
-            model: StemModel,
+            model: StemCard,
             with_image: bool,
             reasoning_effort: str | None,
         ) -> None:
             results_container.clear()
             with results_container, ui.card().classes("w-full p-4 gap-3"):
-                ui.label("Concept card — review and edit").classes(
+                ui.label(f"{model.card_type.title()} card — review and edit").classes(
                     "text-sm font-semibold"
                 )
-                front = ui.input(label="Front", value=model.front).classes("w-full")
-                back_brief = (
-                    ui.textarea(label="Back (brief)", value=model.back_brief)
-                    .classes("w-full")
-                    .props("autogrow")
-                )
-                back_detail = (
-                    ui.textarea(label="Back (detail)", value=model.back_detail)
-                    .classes("w-full")
-                    .props("autogrow")
-                )
-                tags = ui.input(
-                    label="Tags (comma-separated)",
-                    value=", ".join(model.tags),
-                ).classes("w-full")
-                if model.image_description:
-                    ui.label(
-                        "A diagram will be generated on save."
-                        if with_image
-                        else "The model suggested a diagram; enable "
-                        '"Generate diagram" to include one.'
-                    ).classes("text-xs text-gray-500")
+                fields: dict[str, ui.input | ui.textarea] = {}
+                values = model.model_dump(mode="json")
+                names = [
+                    name for name in NOTE_FIELDS[model.card_type] if name != "image"
+                ]
+                for name in [*names, "tags", "image_description"]:
+                    value = values[name]
+                    label = name.replace("_", " ").title()
+                    if name == "tags":
+                        label += " (comma-separated)"
+                        value = ", ".join(model.tags)
+                    elif name == "steps":
+                        label += " (one step per line)"
+                        value = "\n".join(value)
+                    elif name == "variables":
+                        ui.label("Variables").classes("text-sm font-semibold")
+                        variable_rows = ui.column().classes("w-full")
+                        row_ids = count()
 
-                fields: dict[str, ui.input | ui.textarea] = {
-                    "front": front,
-                    "back_brief": back_brief,
-                    "back_detail": back_detail,
-                    "tags": tags,
-                }
+                        def add_variable(
+                            symbol: str = "",
+                            description: str = "",
+                            *,
+                            rows: ui.column = variable_rows,
+                            ids: count = row_ids,
+                        ) -> None:
+                            index = next(ids)
+                            symbol_key = f"variable_{index}_symbol"
+                            description_key = f"variable_{index}_description"
+                            with (
+                                rows,
+                                ui.row().classes("w-full items-center") as row,
+                            ):
+                                fields[symbol_key] = ui.input(
+                                    label="Symbol", value=symbol
+                                ).classes("w-28")
+                                fields[description_key] = ui.input(
+                                    label="Description", value=description
+                                ).classes("flex-1")
+
+                                def remove_variable() -> None:
+                                    fields.pop(symbol_key)
+                                    fields.pop(description_key)
+                                    row.delete()
+
+                                ui.button(icon="close", on_click=remove_variable).props(
+                                    "flat round"
+                                )
+
+                        for variable in value:
+                            add_variable(variable["symbol"], variable["description"])
+                        ui.button(
+                            "Add variable", on_click=lambda: add_variable()
+                        ).props("flat")
+                        continue
+                    fields[name] = (
+                        ui.textarea(label=label, value=value or "")
+                        .classes("w-full")
+                        .props("autogrow")
+                    )
                 with ui.row().classes("w-full justify-end gap-2"):
                     ui.button(
                         "Discard", icon="close", on_click=results_container.clear
@@ -347,6 +411,9 @@ def stem_page() -> None:
                         settings,
                         with_image=with_image,
                         reasoning_effort=reasoning_effort,
+                        card_type=None
+                        if type_select.value == "auto"
+                        else CardType(type_select.value),
                     ) as collection:
                         model = await collection.generate_model(
                             topic,
@@ -357,38 +424,8 @@ def stem_page() -> None:
                                 str, reference_image.get("mime", "image/png")
                             ),
                         )
-                        if model.card_type == CardType.CONCEPT:
-                            status_label.text = ""
-                            _render_preview(topic, model, with_image, reasoning_effort)
-                        else:
-                            image_error: Exception | None = None
-
-                            def _record_image_error(exc: Exception) -> None:
-                                nonlocal image_error
-                                image_error = exc
-
-                            status_label.text = "Generating diagram and saving…"
-                            await collection.add_note(
-                                model,
-                                topic=topic,
-                                on_image_error=_record_image_error,
-                            )
-                            if image_error is None:
-                                status_label.text = (
-                                    f"✓ {model.front} — {model.card_type.value} card "
-                                    "added to Anki (no preview)"
-                                )
-                                _notify("Card added to Anki", "positive")
-                            else:
-                                message = format_error(image_error)
-                                status_label.text = (
-                                    f"✓ {model.front} — card added; diagram failed: "
-                                    f"{message}"
-                                )
-                                _notify(
-                                    f"Card saved, but diagram failed: {message}",
-                                    "warning",
-                                )
+                        status_label.text = ""
+                        _render_preview(topic, model, with_image, reasoning_effort)
             except Exception as exc:
                 message = format_error(exc)
                 status_label.text = f"Error: {message}"

@@ -87,7 +87,7 @@ The ankinote CLI is a powerful command-line tool for generating AI-powered Anki 
 
 ## Commands
 
-The CLI currently provides four card types. Run `ankinote <type> --help` or
+The CLI currently provides four collection entrypoints. Run `ankinote <type> --help` or
 `ankinote <type> <command> --help` for the complete, current option list.
 
 ### Word cards
@@ -129,8 +129,28 @@ ankinote sentence batch --file sentences.txt
 ```bash
 ankinote stem init
 ankinote stem add "What is a derivative?"
+ankinote stem add "State Newton's second law" --type formula
+ankinote stem add "How do I invert a matrix?" --type procedure
+ankinote stem add "Solve the problem in this photo" --type example --image problem.png
 ankinote stem batch --file topics.txt
+ankinote stem batch --file problems.txt --type example
 ```
+
+STEM uses four independent note types: `AINote STEM Concept`, `AINote STEM
+Formula`, `AINote STEM Procedure`, and `AINote STEM Example`, all in the
+`AINote::STEM` deck. Each has its own fields and templates, with `front` first
+for duplicate detection and default sorting. Formula variables, solution steps,
+and images are stored in dedicated fields; tags use Anki's native tag store.
+
+`--type auto` (the default) first classifies the request, then generates with the
+selected type's schema and prompt. Choosing a type skips that extra AI request.
+`stem init` initializes all four types; `stem init --type concept` initializes
+only Concept. The GUI supports the same type selection and previews every type
+for editing before saving, including variables, steps, tags, and diagram prompts.
+
+The old `AINote STEM` type is no longer managed. Existing test notes are left
+untouched; this change does not migrate or delete them. Initialize the new types
+using `ankinote stem init` or the GUI's Card Types page.
 
 ### Common options
 
