@@ -78,8 +78,9 @@ setup batch, and every five minutes. A fresh collection blocks writes until its
 initial collection sync completes. An initialized collection remains writable
 when offline; collection and media sync outcomes are tracked separately. A
 required full sync blocks writes until an explicit upload/download choice is
-resolved. The Settings and CLI controls for login and that choice are planned in
-Stage 7; the service APIs are currently available to application code.
+resolved. The Settings page has an **AnkiWeb sync** panel for login/logout,
+status, manual sync, the sync interval, and the upload/download choice; the
+`ankinote anki login|logout|status|sync` commands cover the same from the CLI.
 
 Beside the collection file, `.sync.json` stores credential-free status,
 `.credentials.json` stores saved login credentials with mode `0600`, `.account`
@@ -112,7 +113,7 @@ Two ready-made compose stacks under [`deploy/`](deploy/):
 
 ```bash
 cd deploy/standard        # GUI + an AnkiConnect you already run
-# or: cd deploy/headless  # GUI + a headless AnkiConnect that syncs with AnkiWeb
+# or: cd deploy/headless  # GUI with the in-process Anki backend, syncs to AnkiWeb
 cp .env.example .env      # set ANKINOTE_STORAGE_SECRET (+ AnkiWeb login for headless)
 docker compose up -d      # http://localhost:8080
 ```
@@ -125,13 +126,17 @@ Container env vars:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ANKI_CONNECT_URL` | `http://host.docker.internal:8765` | Where AnkiConnect lives |
+| `ANKI_BACKEND` | `connect` | `connect` (AnkiConnect) or `collection` (in-process, used by `deploy/headless`) |
+| `ANKI_CONNECT_URL` | `http://host.docker.internal:8765` | Where AnkiConnect lives (`connect` backend) |
+| `ANKI_COLLECTION_PATH` | – | Collection file to open; required for `ANKI_BACKEND=collection` |
+| `ANKIWEB_USERNAME` / `ANKIWEB_PASSWORD` | – | Optional AnkiWeb login for the `collection` backend; overrides a UI login, password never stored |
 | `ANKINOTE_STORAGE_SECRET` | (built-in) | NiceGUI session-signing key — set a random value |
 | `ANKINOTE_HOST` / `ANKINOTE_PORT` | `0.0.0.0` / `8080` | Bind address inside the container |
 | `ANKINOTE_SHOW` | `false` in the image | Whether to open a browser on start |
 
-`ANKI_CONNECT_URL` is also honoured when running ankinote outside Docker (e.g. a
-remote Anki).
+The published image bundles the `anki` library, so both backends work without a
+custom build. `ANKI_CONNECT_URL` is also honoured when running ankinote outside
+Docker (e.g. a remote Anki).
 
 # ankinote CLI - Usage Guide
 

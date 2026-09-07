@@ -1,46 +1,43 @@
-# Self-contained ankinote stack: the web GUI plus a headless AnkiConnect server
-# (no Anki desktop app needed). The GUI reaches AnkiConnect over the compose
-# network, so nothing is published for it.
+# Self-contained ankinote stack: the web GUI with the in-process Anki collection
+# backend. No Anki desktop app and no AnkiConnect — the GUI keeps its own
+# collection in the anki-data volume and syncs it straight with AnkiWeb.
 #
 #   cd deploy/headless
-#   cp .env.example .env             # then fill in ANKIWEB_USER / ANKIWEB_PASS
+#   cp .env.example .env             # set ANKINOTE_STORAGE_SECRET; add AnkiWeb login
 #   docker compose up -d             # http://localhost:8080
 #
-# anki-connect-server syncs with AnkiWeb using the credentials below and keeps
-# the collection in the anki-data volume.
+# ANKIWEB_USERNAME / ANKIWEB_PASSWORD are optional: leave them blank and log in
+# from the Settings page instead. A brand-new collection cannot save cards until
+# its first AnkiWeb sync finishes.
 
 services:
   ankinote:
     image: ${ANKINOTE_IMAGE:-ghcr.io/ignity21/ankinote-ai:latest}
+    # Build from a PyPI release instead of pulling:
+    #   ANKINOTE_VERSION=0.3.1 docker compose build
+    # build:
+    #   context: ../..
+    #   args:
+    #     ANKINOTE_VERSION: ${ANKINOTE_VERSION:?set ANKINOTE_VERSION}
     ports:
       # Change the published address/port via ANKINOTE_PUBLISH in .env, e.g.
       # "8080" (all interfaces) or "127.0.0.1:9000".
       - "${ANKINOTE_PUBLISH:-127.0.0.1:8080}:8080"
     env_file:
+      # ANKIWEB_USERNAME / ANKIWEB_PASSWORD are read from here when present.
       - path: .env
         required: false
     environment:
-      ANKI_CONNECT_URL: http://anki-connect-server:8765
+      ANKI_BACKEND: collection
+      ANKI_COLLECTION_PATH: /data/collection.anki2
       ANKINOTE_STORAGE_SECRET: ${ANKINOTE_STORAGE_SECRET:-ankinote-ui-session-key}
-    depends_on:
-      - anki-connect-server
-    restart: unless-stopped
     volumes:
+      # Provider profiles and API keys entered on the Settings page.
       - ankinote-config:/config
-
-  anki-connect-server:
-    image: glechic/anki-connect-server:latest
-    environment:
-      ANKICONNECT_COLLECTION_PATH: /data/collection.anki2
-      # Defaults to 127.0.0.1 — must be 0.0.0.0 so the ankinote container can
-      # reach it over the compose network.
-      ANKICONNECT_BIND: 0.0.0.0
-      ANKICONNECT_ANKIWEB_USER: ${ANKIWEB_USER:?set ANKIWEB_USER in .env}
-      ANKICONNECT_ANKIWEB_PASS: ${ANKIWEB_PASS:?set ANKIWEB_PASS in .env}
-    volumes:
+      # The Anki collection, media, sync state, and pre-full-sync backups.
+      # Or bring your own collection directory instead of the named volume:
+      #   - ./anki-data:/data
       - anki-data:/data
-      # Or bring your own collection instead of the named volume:
-      #   - ./collection.anki2:/data/collection.anki2
     restart: unless-stopped
 
 volumes:

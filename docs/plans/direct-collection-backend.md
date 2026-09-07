@@ -337,6 +337,27 @@ collection volume with no AnkiWeb account configured and serves the GUI;
 longer references `anki-connect-server`; the migration doc's steps are walked
 end to end against a copied throwaway data directory.
 
+**Done 2026-09-07:** The `ankinote-ai[headless]` extra pins `anki==26.8.1`.
+Rather than two image variants, the single published image installs
+`ankinote-ai[headless]` — the `anki` library adds a few MB, both backends work
+unmodified, and the tag scheme and `docker.yml` are untouched. The image keeps
+`ANKI_BACKEND` unset (AnkiConnect default) and adds an appuser-owned `/data`.
+
+`deploy/headless/` is now one `ankinote` service with `ANKI_BACKEND=collection`,
+`ANKI_COLLECTION_PATH=/data/collection.anki2`, an `anki-data` volume, and
+optional `ANKIWEB_USERNAME` / `ANKIWEB_PASSWORD`; the `glechic/anki-connect-server`
+sidecar and the `deploy/connect/` draft are removed. `deploy/standard/` is
+unchanged. `deploy/README.md` documents the split, the headless env vars, and a
+"Migrating to the headless stack" procedure (sync source to AnkiWeb → stop old
+stack → start headless and choose download → verify → drop old volumes), with a
+throwaway-copy rehearsal via a bind-mounted collection file. `README.md` gains
+`ANKI_BACKEND` / `ANKI_COLLECTION_PATH` / `ANKIWEB_*` rows.
+
+Verified: `docker compose config` succeeds for `deploy/standard` and
+`deploy/headless`; the headless config resolves to a single service with no
+`anki-connect-server`. `make test` / `make lint` / `make check` stay green.
+Image build and the fresh-volume boot are checked in CI/on release, not here.
+
 ## Global Acceptance
 
 - Test Word, Phrase, Sentence, and STEM collection flows through the direct
