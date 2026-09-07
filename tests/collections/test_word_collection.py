@@ -326,6 +326,13 @@ async def test_ensure_note_type_exists_registers_v2_templates():
     ]
     assert ".lemma-stage" in cast(str, created["css"])
 
+    spelling_front = next(t for t in templates if t["Name"] == "Spelling")["Front"]
+    # The Spelling prompt is audio + meaning; the example sentence spells the
+    # word out, so it must not appear on the front.
+    assert "core_meaning" in spelling_front
+    assert "headword_audio" in spelling_front
+    assert "examples" not in spelling_front
+
 
 @pytest.mark.asyncio
 async def test_ensure_note_type_exists_updates_existing_model():
