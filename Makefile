@@ -6,7 +6,7 @@
 
 .PHONY: test clean-test clean lint check format pre-commit help \
         build clean-dist bump-version \
-        release release-check docker-backfill \
+        release release-check _release-guard docker-backfill \
         install install-dev
 
 clean-test:
@@ -82,8 +82,10 @@ release-check:
 	uv run ty check
 	uv run pytest -q
 
-release: release-check
+_release-guard:
 	@test -n "$(part)" || { echo "Usage: make release part=<major|minor|patch>"; exit 1; }
+
+release: _release-guard release-check
 	@set -e; \
 	uvx hatch version "$(part)"; \
 	version="$$(uvx hatch version)"; \
