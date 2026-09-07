@@ -14,6 +14,12 @@ from ankinote.services.anki_factory import (
     create_anki_client,
     get_shared_runtime,
 )
+from ankinote.services.anki_sync import (
+    SyncSnapshot,
+    SyncState,
+    SyncStateStore,
+    SyncWriteBlocked,
+)
 
 _SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "ankinote"
 _FACTORY_MODULE = _SRC_ROOT / "services" / "anki_factory.py"
@@ -58,6 +64,8 @@ class TestBackendSelection:
 @pytest.fixture
 def collection_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr("ankinote.config.envs.ANKI_BACKEND", "collection")
+    monkeypatch.setattr("ankinote.config.envs.ANKIWEB_USERNAME", "")
+    monkeypatch.setattr("ankinote.config.envs.ANKIWEB_PASSWORD", "")
     monkeypatch.setattr(
         "ankinote.config.envs.ANKI_COLLECTION_PATH",
         str(tmp_path / "collection.anki2"),
@@ -108,6 +116,12 @@ class TestBackendScope:
     ) -> None:
         import asyncio
 
+        from ankinote.config import envs
+
+        # An initialized collection remains writable while logged out/offline.
+        SyncStateStore(Path(f"{envs.ANKI_COLLECTION_PATH}.sync.json")).save(
+            SyncSnapshot(initialized=True)
+        )
         async with anki_backend_scope():
             client = create_anki_client()
             await client.decks.create("D")
@@ -118,6 +132,19 @@ class TestBackendScope:
             )
         assert results[0] == results[1]
         assert results[2] is False
+
+    async def test_fresh_collection_starts_logged_out_and_blocks_writes(
+        self, collection_env: None
+    ) -> None:
+        async with anki_backend_scope():
+            runtime = get_shared_runtime()
+            assert runtime is not None
+            assert runtime.sync_service is not None
+            assert runtime.sync_service.status.state == SyncState.NOT_LOGGED_IN
+            client = create_anki_client()
+            assert await client.models.exists("Basic")
+            with pytest.raises(SyncWriteBlocked):
+                await client.decks.create("D")
 
 
 def test_no_direct_backend_construction_outside_factory() -> None:

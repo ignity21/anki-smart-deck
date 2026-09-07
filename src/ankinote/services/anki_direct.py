@@ -112,7 +112,7 @@ class _DirectModelService(AnkiModelService):
         css: str = "",
         is_cloze: bool = False,
     ) -> NoteModel:
-        return await self._runtime.submit(
+        return await self._runtime.submit_write(
             lambda col: self._create(col, model_name, fields, templates, css, is_cloze)
         )
 
@@ -148,7 +148,7 @@ class _DirectModelService(AnkiModelService):
     async def update_templates(
         self, model_name: str, templates: list[TemplateUpsert]
     ) -> None:
-        await self._runtime.submit(
+        await self._runtime.submit_write(
             lambda col: self._update_templates(col, model_name, templates)
         )
 
@@ -181,7 +181,7 @@ class _DirectModelService(AnkiModelService):
         mm.update_dict(model)
 
     async def update_styling(self, model_name: str, css: str) -> None:
-        await self._runtime.submit(
+        await self._runtime.submit_write(
             lambda col: self._update_styling(col, model_name, css)
         )
 
@@ -195,7 +195,7 @@ class _DirectModelService(AnkiModelService):
         mm.update_dict(model)
 
     async def add_field(self, model_name: str, field_name: str) -> None:
-        await self._runtime.submit(
+        await self._runtime.submit_write(
             lambda col: self._add_field(col, model_name, field_name)
         )
 
@@ -211,7 +211,7 @@ class _DirectModelService(AnkiModelService):
         mm.update_dict(model)
 
     async def ensure_fields(self, model_name: str, field_names: list[str]) -> None:
-        await self._runtime.submit(
+        await self._runtime.submit_write(
             lambda col: self._ensure_fields(col, model_name, field_names)
         )
 
@@ -236,7 +236,7 @@ class _DirectDeckService(AnkiDeckService):
         self._runtime = runtime
 
     async def create(self, deck_name: str) -> int:
-        return await self._runtime.submit(lambda col: col.decks.id(deck_name))
+        return await self._runtime.submit_write(lambda col: col.decks.id(deck_name))
 
     async def exists(self, deck_name: str) -> bool:
         return await self._runtime.submit(
@@ -274,7 +274,7 @@ class _DirectNoteService(AnkiNoteService):
         tags: list[str] | None = None,
         allow_duplicate: bool = False,
     ) -> int:
-        return await self._runtime.submit(
+        return await self._runtime.submit_write(
             lambda col: self._add(col, deck_name, model_name, fields, tags)
         )
 
@@ -299,7 +299,7 @@ class _DirectNoteService(AnkiNoteService):
         return note.id
 
     async def update_fields(self, note_id: int, fields: dict[str, str]) -> None:
-        await self._runtime.submit(
+        await self._runtime.submit_write(
             lambda col: self._update_fields(col, note_id, fields)
         )
 
@@ -311,7 +311,9 @@ class _DirectNoteService(AnkiNoteService):
         col.update_note(note)
 
     async def update_tags(self, note_id: int, tags: list[str]) -> None:
-        await self._runtime.submit(lambda col: self._update_tags(col, note_id, tags))
+        await self._runtime.submit_write(
+            lambda col: self._update_tags(col, note_id, tags)
+        )
 
     @staticmethod
     def _update_tags(col: Any, note_id: int, tags: list[str]) -> None:
@@ -325,7 +327,7 @@ class _DirectMediaService(AnkiMediaService):
         self._runtime = runtime
 
     async def store_file(self, filename: str, data: bytes) -> str:
-        return await self._runtime.submit(
+        return await self._runtime.submit_write(
             lambda col: col.media.write_data(filename, data)
         )
 

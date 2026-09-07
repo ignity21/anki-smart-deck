@@ -17,6 +17,7 @@ from ankinote.services.ai import (
     TextGenerationService,
 )
 from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
+from ankinote.services.anki_batch import anki_write_batch
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import WordGenerator, WordMediaFiles
@@ -93,8 +94,9 @@ class WordCollection:
         then ensures the deck is present. Does not start TTS or LLM services,
         so it is safe to call from the GUI setup flow.
         """
-        await self._ensure_note_type_exists()
-        await self._ensure_deck_exists()
+        async with anki_write_batch(self._anki_client):
+            await self._ensure_note_type_exists()
+            await self._ensure_deck_exists()
 
     async def _ensure_note_type_exists(self) -> None:
         fields = [field.name for field in dataclasses.fields(WordNoteType)]
@@ -187,37 +189,38 @@ class WordCollection:
         card_data: WordCardData,
         tags: list[str],
     ) -> int:
-        word_model = card_data.model
-        logger.info(
-            f"Adding/updating note {word_model.lemma} "
-            f"({word_model.part_of_speech}) to {self.deck_name}"
-        )
+        async with anki_write_batch(self._anki_client):
+            word_model = card_data.model
+            logger.info(
+                f"Adding/updating note {word_model.lemma} "
+                f"({word_model.part_of_speech}) to {self.deck_name}"
+            )
 
-        media_refs = await self._store_media_files(card_data)
-        note_data = self._convert_to_note_type(word_model, media_refs)
-        note_id = await self._anki_client.notes.find(
-            deck_name=self.deck_name,
-            unique_fields={
-                "lemma": word_model.lemma,
-                "part_of_speech": word_model.part_of_speech,
-            },
-        )
+            media_refs = await self._store_media_files(card_data)
+            note_data = self._convert_to_note_type(word_model, media_refs)
+            note_id = await self._anki_client.notes.find(
+                deck_name=self.deck_name,
+                unique_fields={
+                    "lemma": word_model.lemma,
+                    "part_of_speech": word_model.part_of_speech,
+                },
+            )
 
-        if note_id is not None:
-            await self._anki_client.notes.update_fields(note_id, note_data)
-            await self._anki_client.notes.update_tags(note_id, tags)
-            logger.info(f"Updated note {note_id}")
+            if note_id is not None:
+                await self._anki_client.notes.update_fields(note_id, note_data)
+                await self._anki_client.notes.update_tags(note_id, tags)
+                logger.info(f"Updated note {note_id}")
+                return note_id
+
+            note_id = await self._anki_client.notes.add(
+                deck_name=self.deck_name,
+                model_name=self.notetype_name,
+                fields=note_data,
+                tags=tags,
+                allow_duplicate=True,
+            )
+            logger.info(f"Created note {note_id}")
             return note_id
-
-        note_id = await self._anki_client.notes.add(
-            deck_name=self.deck_name,
-            model_name=self.notetype_name,
-            fields=note_data,
-            tags=tags,
-            allow_duplicate=True,
-        )
-        logger.info(f"Created note {note_id}")
-        return note_id
 
     async def _store_media_files(self, card_data: WordCardData) -> MediaReferences:
         word_model = card_data.model

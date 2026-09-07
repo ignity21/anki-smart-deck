@@ -48,6 +48,7 @@ from ankinote.services.anki_factory import create_anki_client
 from ankinote.ui.config import load_settings
 from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.pages.word import format_error
+from ankinote.ui.sync import save_allowed, sync_feedback
 
 # ---------------------------------------------------------------------------
 # Note type specs — one per collection. These mirror the definitions that the
@@ -241,7 +242,7 @@ async def _load_status(client: AnkiCollectionClient, spec: NoteTypeSpec) -> Type
 # ---------------------------------------------------------------------------
 
 _STATE_LABEL = {
-    "synced": "Synced",
+    "synced": "Up to date",
     "update": "Update",
     "missing": "Not created",
 }
@@ -610,7 +611,7 @@ def _render_summary(statuses: list[TypeStatus], busy_all: bool, on_rescan, on_sy
         counts[status.state] += 1
 
     chip_style = {
-        "synced": ("Synced", "#047857"),
+        "synced": (t("notetypes.matched"), "#047857"),
         "update": ("Needs update", "#b45309"),
         "missing": ("Not created", "#be123c"),
     }
@@ -626,7 +627,7 @@ def _render_summary(statuses: list[TypeStatus], busy_all: bool, on_rescan, on_sy
                     ui.label(f"{counts[state]} {label}").style(f"color:{color}")
         with ui.row().classes("items-center gap-2"):
             ui.button(
-                "Rescan",
+                t("notetypes.rescan"),
                 on_click=lambda: asyncio.ensure_future(on_rescan()),
                 icon="refresh",
             ).props("flat no-caps").classes("nt-btn nt-btn-ghost")
@@ -636,7 +637,7 @@ def _render_summary(statuses: list[TypeStatus], busy_all: bool, on_rescan, on_sy
                     ui.label(t("notetypes.syncing")).classes("text-slate-500")
             else:
                 ui.button(
-                    "Sync all",
+                    t("notetypes.sync_all"),
                     on_click=lambda: asyncio.ensure_future(on_sync_all()),
                     icon="bolt",
                 ).props("unelevated no-caps").classes("nt-btn nt-btn-accent").style(
@@ -653,6 +654,9 @@ def notetypes_page() -> None:
     # Mutable state shared by the refreshable workspace below.
     state: dict = {"statuses": None, "error": None, "busy": set()}
     client = ui.context.client
+
+    with ui.column().classes("w-full max-w-5xl mx-auto px-6 pt-4"):
+        sync_feedback()
 
     def _notify(
         message: str,
@@ -729,13 +733,16 @@ def notetypes_page() -> None:
         _workspace.refresh()
 
     async def _sync_one(spec: NoteTypeSpec) -> None:
+        if not save_allowed():
+            _notify(t("sync.write_blocked"), "warning")
+            return
         state["busy"].add(spec.key)
         _workspace.refresh()
         try:
             async with Application():
                 anki_client = create_anki_client()
                 await spec.sync(anki_client)
-            _notify(f"{spec.title} card type is up to date in Anki", "positive")
+            _notify(f"{spec.title}: {t('notetypes.updated')}", "positive")
         except Exception as exc:
             _notify(f"{spec.title}: {format_error(exc)}", "negative")
         finally:

@@ -19,6 +19,12 @@ from ankinote.ui.config import (
 )
 from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.image_service import build_image_service
+from ankinote.ui.sync import (
+    retain_generated_save,
+    save_allowed,
+    saved_message,
+    sync_feedback,
+)
 
 _ERROR_MESSAGE_RE = re.compile(r'"message"\s*:\s*"([^"]+)"')
 
@@ -99,6 +105,7 @@ def word_page() -> None:
         # -- Results area ----------------------------------------------------
         results_container = ui.column().classes("w-full gap-2")
         status_label = ui.label("").classes("text-sm text-gray-500")
+        sync_feedback()
 
         # -- Generate button -------------------------------------------------
         generate_btn = (
@@ -114,6 +121,9 @@ def word_page() -> None:
         async def _generate():
             # Re-read from disk so a Settings change made after this page
             # loaded (e.g. in another tab) is picked up on every click.
+            if not save_allowed():
+                _notify(t("sync.write_blocked"), "warning")
+                return
             settings = load_settings()
             apply_env(settings)
 
@@ -193,7 +203,10 @@ def word_page() -> None:
                         ) -> tuple[int, Exception | None]:
                             async with semaphore:
                                 try:
-                                    await collection.generate_and_add_note(word)
+                                    await retain_generated_save(
+                                        lambda: collection.generate_and_add_note(word),
+                                        placeholders[index][0],
+                                    )
                                 except Exception as exc:
                                     return index, exc
                             return index, None
@@ -207,7 +220,7 @@ def word_page() -> None:
                             card, lbl = placeholders[index]
                             word = words[index]
                             if error is None:
-                                lbl.set_text(f"✓ {word} — {t('common.added_to_anki')}")
+                                lbl.set_text(f"✓ {word} — {saved_message()}")
                                 lbl.classes("text-green-700 dark:text-green-400")
                                 card.classes(add="bg-green-50 dark:bg-green-900/20")
                                 success_count += 1
@@ -222,9 +235,8 @@ def word_page() -> None:
                         status_label.text = t("word.success", total=total)
                         _notify(t("common.all_done"), "positive")
                     else:
-                        status_label.text = (
-                            f"✅ {success_count}/{total} succeeded, "
-                            f"❌ {fail_count} failed"
+                        status_label.text = t(
+                            "sync.batch_result", saved=success_count, failed=fail_count
                         )
 
             except Exception as exc:

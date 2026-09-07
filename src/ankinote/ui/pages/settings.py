@@ -27,6 +27,7 @@ from ankinote.ui.config import (
 )
 from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.pages.word import format_error
+from ankinote.ui.sync import sync_settings
 
 # The vendor options offered by each rack's "Add provider" dialog: the
 # curated templates plus the generic custom/other endpoint.
@@ -560,6 +561,8 @@ def settings_page() -> None:
 
     with ui.column().classes("w-full max-w-3xl mx-auto p-6 md:p-8 gap-7"):
         ui.label(t("settings.title")).classes("settings-title")
+
+        sync_settings()
 
         with ui.column().classes("gap-1"):
             ui.label(t("settings.generation_route")).classes("settings-eyebrow")

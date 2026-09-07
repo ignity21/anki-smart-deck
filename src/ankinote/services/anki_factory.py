@@ -16,10 +16,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from ankinote.config import envs
 from ankinote.services.anki import AnkiCollectionClient, AnkiConnectClient
+from ankinote.services.anki_credentials import CredentialStore
 from ankinote.services.anki_direct import DirectCollectionClient
+from ankinote.services.anki_sync import SyncService, SyncStateStore
+from ankinote.services.anki_sync_driver import AnkiSyncDriver
 from ankinote.services.collection_runtime import CollectionRuntime
 
 CONNECT_BACKEND = "connect"
@@ -58,7 +62,7 @@ def get_shared_runtime() -> CollectionRuntime | None:
     return _shared_runtime
 
 
-async def start_anki_backend() -> None:
+async def start_anki_backend(*, synchronize: bool = True) -> None:
     """Open the shared collection runtime for the ``collection`` backend.
 
     No-op for the ``connect`` backend, or if the runtime is already open.
@@ -68,6 +72,21 @@ async def start_anki_backend() -> None:
         return
     runtime = CollectionRuntime(_require_collection_path())
     await runtime.open()
+    try:
+        store = SyncStateStore(Path(f"{runtime.path}.sync.json"))
+        driver = AnkiSyncDriver(
+            runtime,
+            CredentialStore(runtime.path),
+            username=envs.ANKIWEB_USERNAME,
+            password=envs.ANKIWEB_PASSWORD,
+        )
+        service = SyncService(driver, snapshot=store.load(), save=store.save)
+        runtime.sync_service = service
+        runtime.sync_driver = driver
+        await service.start(authenticated=driver.authenticated, synchronize=synchronize)
+    except BaseException:
+        await runtime.close()
+        raise
     _shared_runtime = runtime
 
 
@@ -81,7 +100,7 @@ async def stop_anki_backend() -> None:
 
 
 @asynccontextmanager
-async def anki_backend_scope() -> AsyncIterator[None]:
+async def anki_backend_scope(*, synchronize: bool = True) -> AsyncIterator[None]:
     """Own backend-wide resources for one process scope.
 
     For ``collection`` this opens the shared runtime on enter and closes it on
@@ -89,7 +108,7 @@ async def anki_backend_scope() -> AsyncIterator[None]:
     closing to whichever scope opened it. A no-op for ``connect``.
     """
     opened_here = get_shared_runtime() is None
-    await start_anki_backend()
+    await start_anki_backend(synchronize=synchronize)
     try:
         yield
     finally:

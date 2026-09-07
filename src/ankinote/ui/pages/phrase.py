@@ -18,6 +18,12 @@ from ankinote.ui.config import (
 )
 from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.pages.word import format_error
+from ankinote.ui.sync import (
+    retain_generated_save,
+    save_allowed,
+    saved_message,
+    sync_feedback,
+)
 
 
 def phrase_page() -> None:
@@ -82,6 +88,7 @@ def phrase_page() -> None:
 
         results_container = ui.column().classes("w-full gap-2")
         status_label = ui.label("").classes("text-sm text-gray-500")
+        sync_feedback()
 
         generate_btn = (
             ui.button(
@@ -94,6 +101,9 @@ def phrase_page() -> None:
         )
 
         async def _generate() -> None:
+            if not save_allowed():
+                _notify(t("sync.write_blocked"), "warning")
+                return
             settings = load_settings()
             apply_env(settings)
 
@@ -163,7 +173,12 @@ def phrase_page() -> None:
                         ) -> tuple[int, Exception | None]:
                             async with semaphore:
                                 try:
-                                    await collection.generate_and_add_note(expression)
+                                    await retain_generated_save(
+                                        lambda: collection.generate_and_add_note(
+                                            expression
+                                        ),
+                                        placeholders[index][0],
+                                    )
                                 except Exception as exc:
                                     return index, exc
                             return index, None
@@ -177,9 +192,7 @@ def phrase_page() -> None:
                             card, label = placeholders[index]
                             expression = expressions[index]
                             if error is None:
-                                label.set_text(
-                                    f"✓ {expression} — {t('common.added_to_anki')}"
-                                )
+                                label.set_text(f"✓ {expression} — {saved_message()}")
                                 label.classes("text-green-700 dark:text-green-400")
                                 card.classes(add="bg-green-50 dark:bg-green-900/20")
                                 success_count += 1
@@ -196,9 +209,8 @@ def phrase_page() -> None:
                         status_label.text = t("phrase.success", total=total)
                         _notify(t("common.all_done"), "positive")
                     else:
-                        status_label.text = (
-                            f"✅ {success_count}/{total} succeeded, "
-                            f"❌ {fail_count} failed"
+                        status_label.text = t(
+                            "sync.batch_result", saved=success_count, failed=fail_count
                         )
 
             except Exception as exc:

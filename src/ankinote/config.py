@@ -15,5 +15,8 @@ class EnvVars:
     # ``ANKI_BACKEND=collection``.
     ANKI_COLLECTION_PATH: str = os.getenv("ANKI_COLLECTION_PATH", "")
 
+    ANKIWEB_USERNAME: str = os.getenv("ANKIWEB_USERNAME", "")
+    ANKIWEB_PASSWORD: str = os.getenv("ANKIWEB_PASSWORD", "")
+
 
 envs = EnvVars()

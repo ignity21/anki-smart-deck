@@ -13,7 +13,7 @@ Use `uv` for dependency and task execution.
 - `make test` or `uv run pytest`: run the full test suite.
 - `make format` or `uv run ruff format`: format Python code.
 - `make lint` or `uv run ruff check --fix`: apply lint fixes.
-- `make check` or `uv run basedpyright`: run static type checks.
+- `make check` or `uv run ty check`: run static type checks.
 - `make clean-test`: remove pytest and coverage caches.
 
 ## Coding Style & Naming Conventions

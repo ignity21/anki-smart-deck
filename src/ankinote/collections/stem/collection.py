@@ -8,6 +8,7 @@ from loguru import logger
 
 from ankinote.services.ai import ImageGenerationService, TextGenerationService
 from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
+from ankinote.services.anki_batch import anki_write_batch
 
 from .generator import StemGenerator
 from .models import (
@@ -81,8 +82,9 @@ class StemCollection:
         then ensures the deck is present. Does not start TTS or LLM services,
         so it is safe to call from the GUI setup flow.
         """
-        await self._ensure_note_type_exists()
-        await self._ensure_deck_exists()
+        async with anki_write_batch(self._anki_client):
+            await self._ensure_note_type_exists()
+            await self._ensure_deck_exists()
 
     async def _ensure_note_type_exists(self) -> None:
         """Initialize the selected type, or all four for the automatic entrypoint."""
@@ -241,39 +243,40 @@ class StemCollection:
                 logger.warning(f"Image generation failed: {exc}")
                 if on_image_error is not None:
                     on_image_error(exc)
-        if image_bytes is not None:
-            card_hash = hashlib.md5(image_key.encode()).hexdigest()[:12]
-            image_filename = f"stem_{card_hash}.png"
-            await self._anki_client.media.store_file(image_filename, image_bytes)
-            logger.info(f"Stored diagram: {image_filename}")
+        async with anki_write_batch(self._anki_client):
+            if image_bytes is not None:
+                card_hash = hashlib.md5(image_key.encode()).hexdigest()[:12]
+                image_filename = f"stem_{card_hash}.png"
+                await self._anki_client.media.store_file(image_filename, image_bytes)
+                logger.info(f"Stored diagram: {image_filename}")
 
-        note_data = self._build_note_data(stem_model, image_filename)
+            note_data = self._build_note_data(stem_model, image_filename)
 
-        all_tags = list(tags or [])
-        all_tags.extend(stem_model.tags)
-        all_tags.append("AI-generated")
+            all_tags = list(tags or [])
+            all_tags.extend(stem_model.tags)
+            all_tags.append("AI-generated")
 
-        note_id = await self._anki_client.notes.find(
-            deck_name=self.deck_name,
-            unique_fields={"front": stem_model.front},
-            model_name=notetype_name,
-        )
-
-        if note_id is not None:
-            await self._anki_client.notes.update_fields(note_id, note_data)
-            await self._anki_client.notes.update_tags(note_id, all_tags)
-            logger.info(f"Updated note {note_id}")
-        else:
-            note_id = await self._anki_client.notes.add(
+            note_id = await self._anki_client.notes.find(
                 deck_name=self.deck_name,
+                unique_fields={"front": stem_model.front},
                 model_name=notetype_name,
-                fields=note_data,
-                tags=all_tags,
-                allow_duplicate=False,
             )
-            logger.info(f"Created note {note_id}")
 
-        return note_id
+            if note_id is not None:
+                await self._anki_client.notes.update_fields(note_id, note_data)
+                await self._anki_client.notes.update_tags(note_id, all_tags)
+                logger.info(f"Updated note {note_id}")
+            else:
+                note_id = await self._anki_client.notes.add(
+                    deck_name=self.deck_name,
+                    model_name=notetype_name,
+                    fields=note_data,
+                    tags=all_tags,
+                    allow_duplicate=False,
+                )
+                logger.info(f"Created note {note_id}")
+
+            return note_id
 
     def _build_note_data(
         self,

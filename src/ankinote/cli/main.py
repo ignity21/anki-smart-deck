@@ -5,6 +5,7 @@ from loguru import logger
 
 from ankinote import __version__
 
+from .anki import anki
 from .phrase import phrase
 from .sentence import sentence
 from .stem import stem
@@ -29,6 +30,7 @@ cli.add_command(word)
 cli.add_command(phrase)
 cli.add_command(sentence)
 cli.add_command(stem)
+cli.add_command(anki)
 
 
 def main():

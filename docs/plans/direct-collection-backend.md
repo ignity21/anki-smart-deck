@@ -128,8 +128,8 @@ Verified against PyPI before planning the stages:
 ## Implementation Order
 
 Each stage is a separately committable change that leaves `main` green
-(`make test`, `make lint`, `make check` — the one known pre-existing
-`basedpyright` error in `ui/main.py` stays the only allowed failure). "Verified
+(`make test`, `make lint`, `make check`, using pytest, Ruff, and ty as configured
+in the Makefile). "Verified
 when" lists the observable state that proves the stage landed; a stage is not
 done without it.
 
@@ -238,6 +238,27 @@ retries while a credential error stops retrying; `needs_full_sync_choice`
 rejects writes and note type changes while still serving status reads; a
 temporary network outage still permits local writes.
 
+**Done 2026-09-07:** `services/anki_sync.py` provides an injected
+`SyncDriver`, immutable status snapshots, atomic JSON state persistence,
+overlapping-request coalescing, a configurable 300-second timer, capped
+exponential network backoff, and explicit reauthentication after credential
+failure. Full-sync write blocking survives logout and restart. Collection and
+media outcomes are separate; only complete success advances `last_success`.
+`CollectionRuntime.submit_write()` applies the service's admission policy to
+every direct-backend mutation and keeps active worker writes ahead of sync even
+when their caller is cancelled. Status remains readable during sync/conflicts.
+
+The service and state store are injected explicitly in this stage; the existing
+factory does not start synchronization without a real driver. Stage 6 must wire
+the service/store into backend startup, add full-sync direction resolution, and
+connect application write-batch boundaries to post-write sync requests while
+keeping the entire note save atomic relative to sync. Driver/state-machine tests
+use fake drivers and clocks and never contact AnkiWeb.
+
+Verified with the Makefile commands: `uv run ruff check --fix` and
+`uv run ty check` pass; `uv run pytest` passes all 251 tests, including 23 new
+sync tests.
+
 ### Stage 6 — Real sync driver, credentials, backups
 
 - Wire Anki's login, normal sync, full upload/download, and media sync. Persist
@@ -253,7 +274,39 @@ download, cached note type objects are invalidated and refetched; logout
 removes the credential file, pauses sync, and leaves the collection on disk.
 Media sync failures surface distinctly from collection sync failures.
 
+**Done 2026-09-07:** `anki_sync_driver.py` uses the pinned Anki library's login,
+collection sync, full upload/download, and media status APIs on the collection
+worker. Backend startup now restores the state store and starts synchronization.
+`ANKIWEB_USERNAME` / `ANKIWEB_PASSWORD` take precedence over saved credentials;
+saved tokens use an atomic `0600` file, while status snapshots contain no secrets.
+Account binding survives logout, and concurrent login/logout operations serialize.
+
+Explicit full-sync resolution rechecks the server requirement, waits behind
+admitted writes, requires a completed native collection backup, and restores the
+Python collection connection and clears note-type caches after full sync.
+Backup failure and unavailable directions leave writes blocked. Media failures
+record collection success separately, retry network failures, and require login
+after authentication failures. Cancellation drains native worker operations before
+releasing sync admission.
+
+Word, Phrase, Sentence, and STEM save/setup flows now hold one write-batch scope
+through their collection operations and await post-write sync. AI and media
+generation remain outside that scope. Fresh collections serve status reads while
+blocking writes until initialization; initialized collections remain writable
+offline. UI/CLI controls remain Stage 7 work.
+
+Verified with `make lint`, `make check`, and `make test`: all 268 tests pass,
+including 16 new driver tests and a fresh-collection factory test. Tests use fake
+network responses plus a real temporary Anki collection for native backup and
+cache invalidation; no personal AnkiWeb account was contacted. API behavior was
+checked against the installed `anki==26.8.1` source and the
+[official collection implementation](https://github.com/ankitects/anki/blob/main/pylib/anki/collection.py).
+
 ### Stage 7 — UI and CLI surfaces
+
+UI interaction design: [AnkiWeb sync UX](stage-7-sync-ui.md), covering first-run
+setup, state-dependent actions, full-sync confirmation, and separate save/sync
+feedback. This is a design specification, not a completed implementation.
 
 - Settings panel: login/logout, status, last result, manual sync, interval,
   and the upload/download choice. Separate local-write from sync reporting.
@@ -297,5 +350,6 @@ end to end against a copied throwaway data directory.
 - Verify reusing a prior data directory and initializing a new directory from
   AnkiWeb. Automated tests use no personal AnkiWeb account; provide a manual
   two-device acceptance procedure for cards, audio, images, and remote edits.
-- Run `uv run pytest`, `uv run ruff check`, and `uv run basedpyright`; identify
+- Run `make test`, `make lint`, and `make check` (`pytest`, `ruff check --fix`,
+  and `ty check` via `uv run`); identify
   any pre-existing failures separately from feature regressions.

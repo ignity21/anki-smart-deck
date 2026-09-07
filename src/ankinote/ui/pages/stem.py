@@ -14,7 +14,7 @@ from ankinote.services.ai import (
     resolve_thinking,
 )
 from ankinote.services.anki import AnkiCollectionClient
-from ankinote.services.anki_factory import create_anki_client
+from ankinote.services.anki_factory import create_anki_client, get_shared_runtime
 from ankinote.ui.config import (
     CUSTOM_VENDOR,
     ProviderProfile,
@@ -26,6 +26,12 @@ from ankinote.ui.config import (
 from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.image_service import build_image_service
 from ankinote.ui.pages.word import format_error
+from ankinote.ui.sync import (
+    retain_generated_save,
+    save_allowed,
+    saved_message,
+    sync_feedback,
+)
 
 _THINKING_OPTIONS = {
     "default": "Default (thinking on)",
@@ -188,6 +194,7 @@ def stem_page() -> None:
 
         results_container = ui.column().classes("w-full gap-2")
         status_label = ui.label("").classes("text-sm text-gray-500")
+        sync_feedback()
 
         generate_btn = (
             ui.button(
@@ -246,6 +253,9 @@ def stem_page() -> None:
             except ValueError as exc:
                 _notify(f"Invalid card: {format_error(exc)}", "negative")
                 return
+            if not save_allowed():
+                _notify(t("sync.write_blocked"), "warning")
+                return
             save_btn.props("loading")
             save_btn.update()
             status_label.text = (
@@ -271,15 +281,23 @@ def stem_page() -> None:
                         reasoning_effort=reasoning_effort,
                         card_type=model.card_type,
                     ) as collection:
-                        await collection.add_note(
-                            edited,
-                            topic=topic,
-                            on_image_error=_record_image_error,
+                        await retain_generated_save(
+                            lambda: collection.add_note(
+                                edited,
+                                topic=topic,
+                                on_image_error=_record_image_error,
+                            ),
+                            results_container,
                         )
                 results_container.clear()
                 if image_error is None:
-                    status_label.text = f"✓ {edited.front} — saved to Anki"
-                    _notify("Card saved to Anki", "positive")
+                    status_label.text = f"✓ {edited.front} — {saved_message()}"
+                    _notify(
+                        t("sync.card_saved")
+                        if get_shared_runtime() is not None
+                        else "Card saved to Anki",
+                        "positive",
+                    )
                 else:
                     message = format_error(image_error)
                     status_label.text = (

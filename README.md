@@ -66,6 +66,29 @@ GOOGLE_TTS_KEY=your_tts_api_key
 ANKI_CONNECT_URL=http://localhost:8765
 ```
 
+The in-process backend requires `ankinote-ai[headless]`,
+`ANKI_BACKEND=collection`, and `ANKI_COLLECTION_PATH` pointing to a collection
+file (for example `/data/collection.anki2`). Set both `ANKIWEB_USERNAME` and
+`ANKIWEB_PASSWORD` to configure AnkiWeb externally. These override a saved login;
+the password is never written to the credential file. The default backend remains
+AnkiConnect.
+
+The direct backend synchronizes at startup, after each note save or note-type
+setup batch, and every five minutes. A fresh collection blocks writes until its
+initial collection sync completes. An initialized collection remains writable
+when offline; collection and media sync outcomes are tracked separately. A
+required full sync blocks writes until an explicit upload/download choice is
+resolved. The Settings and CLI controls for login and that choice are planned in
+Stage 7; the service APIs are currently available to application code.
+
+Beside the collection file, `.sync.json` stores credential-free status,
+`.credentials.json` stores saved login credentials with mode `0600`, `.account`
+retains an account binding after logout, and `.backups/` holds recoverable
+collection backups made before full sync. Logout removes the saved credential
+and pauses synchronization without deleting the collection or media. Externally
+configured credentials apply again on process restart. Use a different data
+directory to switch accounts. Open a collection from only one process at a time.
+
 ### Fal images in the web UI
 
 For Word and STEM cards, select a `Fal` image provider profile with base URL

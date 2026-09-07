@@ -11,6 +11,7 @@ from ankinote.collections.common import convert_to_html_ruby
 from ankinote.consts import RUBY_ANNOTATION_LANGUAGES, Language
 from ankinote.services.ai import DISABLE_REASONING, TextGenerationService
 from ankinote.services.anki import AnkiCollectionClient, TemplateUpsert
+from ankinote.services.anki_batch import anki_write_batch
 from ankinote.services.tts import TTS_LANG_CODES, GoogleTTSService
 
 from .generator import SentenceGenerator, SentenceMediaFiles
@@ -85,8 +86,9 @@ class SentenceCollection:
         then ensures the deck is present. Does not start TTS or LLM services,
         so it is safe to call from the GUI setup flow.
         """
-        await self._ensure_note_type_exists()
-        await self._ensure_deck_exists()
+        async with anki_write_batch(self._anki_client):
+            await self._ensure_note_type_exists()
+            await self._ensure_deck_exists()
 
     async def _ensure_note_type_exists(self) -> None:
         """Ensure the note type exists in Anki, create or update it."""
@@ -175,35 +177,36 @@ class SentenceCollection:
         tags: list[str],
     ) -> int:
         """Add or update a sentence note in Anki."""
-        sentence_model = card_data.model
-        logger.info(
-            f"Adding/updating sentence note '{sentence_model.target_sentence}' "
-            f"to {self.deck_name}"
-        )
-
-        media_refs = await self._store_media_files(card_data)
-        note_data = self._convert_to_note_type(sentence_model, media_refs)
-
-        note_id = await self._anki_client.notes.find(
-            deck_name=self.deck_name,
-            unique_fields={"target_sentence": sentence_model.target_sentence},
-        )
-
-        if note_id is not None:
-            await self._anki_client.notes.update_fields(note_id, note_data)
-            await self._anki_client.notes.update_tags(note_id, tags)
-            logger.info(f"Updated sentence note {note_id}")
-        else:
-            note_id = await self._anki_client.notes.add(
-                deck_name=self.deck_name,
-                model_name=self.notetype_name,
-                fields=note_data,
-                tags=tags,
-                allow_duplicate=True,
+        async with anki_write_batch(self._anki_client):
+            sentence_model = card_data.model
+            logger.info(
+                f"Adding/updating sentence note '{sentence_model.target_sentence}' "
+                f"to {self.deck_name}"
             )
-            logger.info(f"Created sentence note {note_id}")
 
-        return note_id
+            media_refs = await self._store_media_files(card_data)
+            note_data = self._convert_to_note_type(sentence_model, media_refs)
+
+            note_id = await self._anki_client.notes.find(
+                deck_name=self.deck_name,
+                unique_fields={"target_sentence": sentence_model.target_sentence},
+            )
+
+            if note_id is not None:
+                await self._anki_client.notes.update_fields(note_id, note_data)
+                await self._anki_client.notes.update_tags(note_id, tags)
+                logger.info(f"Updated sentence note {note_id}")
+            else:
+                note_id = await self._anki_client.notes.add(
+                    deck_name=self.deck_name,
+                    model_name=self.notetype_name,
+                    fields=note_data,
+                    tags=tags,
+                    allow_duplicate=True,
+                )
+                logger.info(f"Created sentence note {note_id}")
+
+            return note_id
 
     async def _store_media_files(self, card_data: SentenceCardData) -> MediaReferences:
         """Store media files in Anki and return their references."""

@@ -14,8 +14,14 @@ from __future__ import annotations
 import asyncio
 import queue
 import threading
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from typing import Any, Protocol
+
+from loguru import logger
+
+from ankinote.services.anki_sync import SyncService
+from ankinote.services.anki_sync_driver import AnkiSyncDriver
 
 _DEFAULT_CLOSE_TIMEOUT = 30.0
 
@@ -89,6 +95,7 @@ class CollectionRuntime:
         *,
         opener: CollectionOpener | None = None,
         close_timeout: float = _DEFAULT_CLOSE_TIMEOUT,
+        sync_service: SyncService | None = None,
     ) -> None:
         self._path = path
         self._opener: CollectionOpener = opener or _default_opener
@@ -99,6 +106,9 @@ class CollectionRuntime:
         self._opened = threading.Event()
         self._open_error: BaseException | None = None
         self._closed = False
+        self.sync_service = sync_service
+        self.sync_driver: AnkiSyncDriver | None = None
+        self._batch_owner: asyncio.Task | None = None
 
     @property
     def path(self) -> str:
@@ -131,6 +141,8 @@ class CollectionRuntime:
         """Stop the worker, close the collection, and join within the timeout."""
         if self._thread is None:
             return
+        if self.sync_service is not None:
+            await self.sync_service.close()
         self._closed = True
         self._queue.put(None)
         thread = self._thread
@@ -142,6 +154,38 @@ class CollectionRuntime:
                 f"anki-collection worker did not exit within {self._close_timeout}s"
             )
         self._thread = None
+
+    @asynccontextmanager
+    async def write_batch(self) -> AsyncIterator[None]:
+        """Keep all operations in a save together and await its post-write sync."""
+        if self.sync_service is None or self._batch_owner is asyncio.current_task():
+            yield
+            return
+        async with self.sync_service.write_scope():
+            self._batch_owner = asyncio.current_task()
+            try:
+                yield
+            finally:
+                self._batch_owner = None
+        try:
+            await self.sync_service.request()
+        except Exception:
+            # The write has already completed. A sync/state-file failure must
+            # never cause callers to regenerate or repeat that successful write.
+            logger.warning("Card write completed; post-write AnkiWeb sync failed")
+
+    async def submit_write[T](self, fn: Callable[[Any], T]) -> T:
+        """Admit a mutation through sync policy, retaining the lock on cancellation."""
+        if self.sync_service is None:
+            return await self.submit(fn)
+        async with self.write_batch():
+            task = asyncio.create_task(self.submit(fn))
+            try:
+                return await asyncio.shield(task)
+            except asyncio.CancelledError:
+                # A queued worker job cannot be cancelled; do not let sync overtake it.
+                await asyncio.shield(task)
+                raise
 
     def _worker(self) -> None:
         try:
