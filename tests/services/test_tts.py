@@ -12,6 +12,20 @@ from ankinote.services.tts import GoogleTTSService
 class TestGoogleTTSService:
     """Behavior tests for warmup and synthesis."""
 
+    @pytest.fixture(autouse=True)
+    def _tts_key(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr("ankinote.config.envs.GOOGLE_TTS_KEY", "test-key")
+
+    @pytest.mark.asyncio
+    async def test_get_client_raises_when_key_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr("ankinote.config.envs.GOOGLE_TTS_KEY", "")
+        service = GoogleTTSService("en-US", "Neural2")
+
+        with pytest.raises(RuntimeError, match="Google Cloud TTS is not configured"):
+            service._get_client()
+
     @pytest.mark.asyncio
     async def test_warmup_populates_matching_voices(self, mocker: MockerFixture):
         mock_client = SimpleNamespace(

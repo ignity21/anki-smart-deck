@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import cast
 
+from ankinote.config import envs
+
 # Vendor templates — the ones the GUI offers directly in the "Add provider"
 # dialog (autofills Base URL + drives model discovery/fetch heuristics for a
 # new profile). Anything else is reached by picking ``CUSTOM_VENDOR`` instead.
@@ -638,13 +640,19 @@ def save_settings(settings: Settings) -> None:
 
 
 def apply_env(settings: Settings) -> None:
-    """Push the Google TTS API key into os.environ.
+    """Push the Google TTS API key into the running process.
 
     Provider-profile keys are now passed explicitly to each LiteLLM service
     call (see ``ProviderProfile``) rather than resolved via env-var
     indirection, so this only concerns the separate Google Cloud TTS
     integration.
+
+    ``envs`` is a singleton whose attributes are bound once at import time, so
+    updating only ``os.environ`` would leave a key entered in the UI (or pulled
+    in via config import) invisible to :mod:`ankinote.services.tts`. Keep both
+    in sync.
     """
     key = settings.api_keys.get("GOOGLE_TTS_KEY", "")
     if key:
         os.environ["GOOGLE_TTS_KEY"] = key
+        envs.GOOGLE_TTS_KEY = key

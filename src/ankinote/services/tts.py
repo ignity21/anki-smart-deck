@@ -99,6 +99,12 @@ class GoogleTTSService:
     def _get_client(self) -> TextToSpeechAsyncClient:
         """Create the Google client only when text-to-speech is actually used."""
         if self._tts_cli is None:
+            if not envs.GOOGLE_TTS_KEY:
+                raise RuntimeError(
+                    "Google Cloud TTS is not configured. Set GOOGLE_TTS_KEY "
+                    "(environment variable, .env, or the Text-to-Speech field "
+                    "in Settings) before generating audio."
+                )
             client_options = ClientOptions(api_key=envs.GOOGLE_TTS_KEY)
             self._tts_cli = TextToSpeechAsyncClient(client_options=client_options)
         return self._tts_cli

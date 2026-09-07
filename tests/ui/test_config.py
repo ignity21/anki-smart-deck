@@ -1,6 +1,7 @@
 """Tests for GUI configuration helpers."""
 
 import json
+import os
 
 import httpx
 import pytest
@@ -10,6 +11,7 @@ from ankinote.ui.config import (
     IMAGE_PROVIDERS,
     ProviderProfile,
     Settings,
+    apply_env,
     fetch_image_model_ids,
     fetch_model_ids,
     get_image_provider_models,
@@ -201,6 +203,20 @@ def test_unique_name_dedupes_against_taken_set() -> None:
     assert unique_name("OpenAI", set()) == "OpenAI"
     assert unique_name("OpenAI", {"OpenAI"}) == "OpenAI (2)"
     assert unique_name("OpenAI", {"OpenAI", "OpenAI (2)"}) == "OpenAI (3)"
+
+
+def test_apply_env_syncs_tts_key_into_envs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The TTS service reads ``envs.GOOGLE_TTS_KEY``, bound once at import, so
+    ``apply_env`` must update it and not just ``os.environ``."""
+    monkeypatch.setattr("ankinote.config.envs.GOOGLE_TTS_KEY", "")
+    monkeypatch.delenv("GOOGLE_TTS_KEY", raising=False)
+
+    apply_env(Settings(api_keys={"GOOGLE_TTS_KEY": "imported-key"}))
+
+    from ankinote.config import envs
+
+    assert envs.GOOGLE_TTS_KEY == "imported-key"
+    assert os.environ["GOOGLE_TTS_KEY"] == "imported-key"
 
 
 def test_settings_round_trip_preserves_profiles(tmp_path, monkeypatch) -> None:
