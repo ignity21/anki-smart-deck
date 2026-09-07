@@ -12,10 +12,12 @@ not require the ``headless`` extra.
 from __future__ import annotations
 
 import asyncio
+import os
 import queue
 import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Protocol
 
 from loguru import logger
@@ -34,6 +36,15 @@ class CollectionInUseError(CollectionRuntimeError):
     """Raised when the collection is already open in another process."""
 
 
+class CollectionOpenError(CollectionRuntimeError):
+    """Raised when the collection path cannot be opened (permissions, not a file).
+
+    Distinct from :class:`CollectionInUseError` (a live lock held by Anki Desktop
+    or another ankinote process) and from :class:`FileNotFoundError` (the parent
+    directory is missing): here the path is reachable but unusable.
+    """
+
+
 class CollectionOpener(Protocol):
     """Opens a collection at ``path`` and returns the live object."""
 
@@ -46,28 +57,81 @@ def _default_opener(path: str, /) -> Any:
     return Collection(path)
 
 
-def _translate_open_error(exc: BaseException, path: str) -> BaseException:
-    """Map Anki's lock error onto :class:`CollectionInUseError`."""
-    from pathlib import Path
+def _this_process() -> str:
+    """A short 'who am I' for permission-error messages (uid on POSIX)."""
+    geteuid = getattr(os, "geteuid", None)
+    return f"uid {geteuid()}" if geteuid is not None else "this process"
 
-    exc_str = str(exc).lower()
-    if "already open" in exc_str:
-        return CollectionInUseError(
-            f"The Anki collection at {path} is in use by another process "
-            f"(Anki Desktop or another ankinote process)."
+
+def _preflight_path(path: str) -> None:
+    """Raise a precise error before handing the path to Anki.
+
+    Anki opens the collection through SQLite, which collapses "directory
+    missing", "not writable", and "path is a directory" into one opaque
+    ``unable to open database file``. Checking here keeps those causes apart —
+    and a genuine lock (which cannot be detected from the filesystem) still
+    surfaces from :func:`_translate_open_error` after the open attempt.
+    """
+    p = Path(path)
+    parent = p.parent
+
+    if p.is_dir():
+        raise CollectionOpenError(
+            f"The Anki collection path {path} is a directory, not a file. "
+            f"Point ANKI_COLLECTION_PATH at the .anki2 file itself (a bind mount "
+            f"to a path that does not exist on the host creates a directory)."
         )
-
-    if type(exc).__name__ == "DBError":
-        if not Path(path).exists():
-            return FileNotFoundError(
-                f"The Anki collection file does not exist at {path}. "
-                f"Make sure the directory exists and the collection file is in place."
+    if not parent.is_dir():
+        raise FileNotFoundError(
+            f"The directory for the Anki collection does not exist: {parent}. "
+            f"Create it, or fix the volume mount, so the collection file can live "
+            f"at {path}."
+        )
+    if p.exists():
+        if not os.access(p, os.R_OK | os.W_OK):
+            raise CollectionOpenError(
+                f"The Anki collection at {path} is not readable and writable by "
+                f"{_this_process()}. Fix the file's ownership or permissions on "
+                f"the mounted volume."
             )
+    elif not os.access(parent, os.W_OK | os.X_OK):
+        raise CollectionOpenError(
+            f"Cannot create the Anki collection at {path}: {parent} is not "
+            f"writable by {_this_process()}. Fix the directory's ownership or "
+            f"permissions on the mounted volume."
+        )
+
+
+def _translate_open_error(exc: BaseException, path: str) -> BaseException:
+    """Classify an error raised while opening the collection.
+
+    Preflight (:func:`_preflight_path`) has already ruled out a missing
+    directory and wrong permissions, so a failure here is a lock, a corrupt
+    file, or something genuinely unexpected.
+    """
+    exc_str = str(exc).lower()
+    if "already open" in exc_str or "media currently syncing" in exc_str:
         return CollectionInUseError(
             f"The Anki collection at {path} is in use by another process "
             f"(Anki Desktop or another ankinote process)."
         )
-    return exc
+
+    if type(exc).__name__ != "DBError":
+        return exc
+
+    if "locked" in exc_str:
+        return CollectionInUseError(
+            f"The Anki collection at {path} is locked by another process."
+        )
+    if "not a database" in exc_str or "malformed" in exc_str or "encrypted" in exc_str:
+        return CollectionOpenError(
+            f"The file at {path} is not a valid Anki collection — it may be "
+            f"corrupt or a leftover from an interrupted run. Restore it from "
+            f"{path}.backups/ or remove it and sync a fresh copy from AnkiWeb."
+        )
+    if not Path(path).exists():
+        return FileNotFoundError(f"The Anki collection file does not exist at {path}.")
+    return CollectionOpenError(f"Could not open the Anki collection at {path}: {exc}")
 
 
 class _Job:
@@ -202,6 +266,15 @@ class CollectionRuntime:
                 raise
 
     def _worker(self) -> None:
+        # Preflight validates a real filesystem path for the real Anki opener;
+        # a custom opener (tests) owns its own path semantics.
+        if self._opener is _default_opener:
+            try:
+                _preflight_path(self._path)
+            except (CollectionRuntimeError, OSError) as exc:
+                self._open_error = exc
+                self._opened.set()
+                return
         try:
             self._collection = self._opener(self._path)
         except BaseException as exc:

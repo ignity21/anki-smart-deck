@@ -2,9 +2,15 @@
 
 import os
 
+from loguru import logger
 from nicegui import app, ui
 
-from ankinote.services.anki_factory import start_anki_backend, stop_anki_backend
+from ankinote.services.anki_factory import (
+    AnkiBackendConfigError,
+    start_anki_backend,
+    stop_anki_backend,
+)
+from ankinote.services.collection_runtime import CollectionRuntimeError
 from ankinote.ui.config import load_settings, save_settings
 from ankinote.ui.i18n import SUPPORTED_LOCALES, set_locale, t
 from ankinote.ui.pages.notetypes import notetypes_page
@@ -174,7 +180,12 @@ def _settings_page() -> None:
 @app.on_startup
 async def _open_anki_backend() -> None:
     """Open the shared collection runtime once for the whole web app."""
-    await start_anki_backend()
+    try:
+        await start_anki_backend()
+    except (CollectionRuntimeError, AnkiBackendConfigError, OSError) as exc:
+        # A misconfigured collection path or a stale lock is an operator
+        # problem, not a bug — log it plainly instead of a NiceGUI traceback.
+        logger.error("Anki backend failed to start: {}", exc)
 
 
 @app.on_shutdown
