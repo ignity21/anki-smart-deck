@@ -153,6 +153,39 @@ async def test_double_click_sync_coalesces(context):
         driver.sync.assert_awaited_once()
 
 
+async def test_deferred_rerender_keeps_page_locale(context):
+    """A click handler re-rendering labels must not fall back to English.
+
+    Event-handler and ``ui.timer`` callbacks run in their own asyncio tasks,
+    which do not inherit the request-time locale contextvar. The sync panel
+    relabels itself from inside :meth:`SyncPanel.run`, so without a
+    client-scoped locale those labels flashed back to English.
+    """
+    _, driver = context
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def slow():
+        entered.set()
+        await release.wait()
+        return SyncResult()
+
+    driver.sync.side_effect = slow
+
+    def page() -> None:
+        set_locale("zh-CN")
+        sync.sync_settings()
+
+    async with user_simulation(page) as user:
+        await user.open("/")
+        user.find(kind=ui.button, content="立即同步").click()
+        await entered.wait()
+        await user.should_see("正在同步…")
+        await user.should_not_see("Syncing…")
+        release.set()
+        await user.should_see("已同步到 AnkiWeb")
+        await user.should_not_see("Synced to AnkiWeb")
+
+
 async def test_connect_mode_has_desktop_guidance(monkeypatch):
     monkeypatch.setattr(sync, "get_shared_runtime", lambda: None)
     async with user_simulation(sync.sync_settings) as user:
