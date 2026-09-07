@@ -1,10 +1,12 @@
 """Settings page — LLM provider, TTS, and default language preferences."""
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import httpx
-from nicegui import ui
+from nicegui import events, ui
 
 from ankinote.consts import Language
 from ankinote.ui.config import (
@@ -24,6 +26,13 @@ from ankinote.ui.config import (
     load_settings,
     save_settings,
     unique_name,
+)
+from ankinote.ui.config_transfer import (
+    MIN_PASSPHRASE_LENGTH,
+    ConfigImportError,
+    export_config,
+    import_config,
+    merge_bundle,
 )
 from ankinote.ui.i18n import set_locale, t
 from ankinote.ui.pages.word import format_error
@@ -617,6 +626,110 @@ def settings_page() -> None:
         ui.button(t("settings.save"), on_click=_save, icon="save").props(
             "unelevated"
         ).classes("w-full settings-save")
+
+        # -- Backup & transfer ----------------------------------------------------
+        _section(t("settings.transfer"))
+        ui.label(t("settings.transfer_help")).classes("text-sm text-slate-500")
+        _config_transfer_controls(
+            current=lambda: _build_settings() or settings, persist=_persist
+        )
+
+
+def _config_transfer_controls(
+    *, current: Callable[[], Settings], persist: Callable[[Settings], None]
+) -> None:
+    """Render the passphrase-protected export/import of provider config."""
+    pending: dict[str, bytes] = {}
+
+    async def _run_export(passphrase: str, confirm: str, dialog: ui.dialog) -> None:
+        if len(passphrase) < MIN_PASSPHRASE_LENGTH:
+            ui.notify(
+                t("settings.passphrase_short", min=MIN_PASSPHRASE_LENGTH),
+                type="warning",
+            )
+            return
+        if passphrase != confirm:
+            ui.notify(t("settings.passphrase_mismatch"), type="warning")
+            return
+        blob = await asyncio.to_thread(export_config, current(), passphrase)
+        dialog.close()
+        stamp = datetime.now(UTC).strftime("%Y%m%d")
+        ui.download(blob, f"ankinote-config-{stamp}.json", "application/json")
+        ui.notify(t("settings.export_done"), type="positive")
+
+    def _open_export() -> None:
+        with ui.dialog() as dialog, ui.card().classes("w-96 gap-3"):
+            ui.label(t("settings.export_title")).classes("text-lg font-semibold")
+            ui.label(t("settings.passphrase_help", min=MIN_PASSPHRASE_LENGTH)).classes(
+                "text-sm text-slate-500"
+            )
+            pw = ui.input(
+                t("settings.passphrase"), password=True, password_toggle_button=True
+            ).classes("w-full")
+            pw2 = ui.input(t("settings.passphrase_confirm"), password=True).classes(
+                "w-full"
+            )
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button(t("common.cancel"), on_click=dialog.close).props(
+                    "flat no-caps"
+                )
+                ui.button(
+                    t("settings.export_run"),
+                    on_click=lambda: _run_export(
+                        pw.value or "", pw2.value or "", dialog
+                    ),
+                ).props("unelevated no-caps")
+        dialog.open()
+
+    async def _run_import(passphrase: str, dialog: ui.dialog) -> None:
+        blob = pending.get("blob")
+        if not blob:
+            return
+        try:
+            bundle = await asyncio.to_thread(import_config, blob, passphrase)
+        except ConfigImportError:
+            ui.notify(t("settings.import_failed"), type="negative")
+            return
+        persist(merge_bundle(current(), bundle))
+        dialog.close()
+        ui.notify(
+            t("settings.import_done", count=bundle.profile_count), type="positive"
+        )
+        ui.navigate.reload()
+
+    def _open_import() -> None:
+        with ui.dialog() as dialog, ui.card().classes("w-96 gap-3"):
+            ui.label(t("settings.import_title")).classes("text-lg font-semibold")
+            ui.label(t("settings.import_passphrase_help")).classes(
+                "text-sm text-slate-500"
+            )
+            pw = ui.input(
+                t("settings.passphrase"), password=True, password_toggle_button=True
+            ).classes("w-full")
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button(t("common.cancel"), on_click=dialog.close).props(
+                    "flat no-caps"
+                )
+                ui.button(
+                    t("settings.import_confirm"),
+                    on_click=lambda: _run_import(pw.value or "", dialog),
+                ).props("unelevated no-caps")
+        dialog.open()
+
+    async def _on_file(event: events.UploadEventArguments) -> None:
+        pending["blob"] = await event.file.read()
+        _open_import()
+
+    with ui.row().classes("gap-3 items-center flex-wrap"):
+        ui.button(t("settings.export"), icon="lock", on_click=_open_export).props(
+            "outline no-caps"
+        )
+        ui.upload(
+            label=t("settings.import"),
+            auto_upload=True,
+            max_files=1,
+            on_upload=_on_file,
+        ).props("accept=.json flat").classes("max-w-xs")
 
 
 def _section(title: str) -> None:

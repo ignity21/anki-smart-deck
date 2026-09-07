@@ -20,6 +20,7 @@ dependencies = [
     "httpx>=0.28.0",
     "asynciolimiter>=1.2.0",
     "click>=8.2.0",
+    "cryptography>=43.0.0",
     "google-cloud-texttospeech>=2.31.0",
     "litellm>=1.81.9",
     "loguru>=0.7.3",

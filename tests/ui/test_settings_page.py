@@ -1,5 +1,10 @@
 """Tests for the settings page route-list helpers."""
 
+import pytest
+from nicegui import ui
+from nicegui.testing.user_simulation import user_simulation
+
+from ankinote.ui import sync
 from ankinote.ui.config import (
     CUSTOM_VENDOR,
     IMAGE_PROVIDERS,
@@ -7,6 +12,7 @@ from ankinote.ui.config import (
     ProviderProfile,
     Settings,
 )
+from ankinote.ui.pages import settings as settings_module
 from ankinote.ui.pages.settings import (
     _IMAGE_VENDOR_OPTIONS,
     _TEXT_VENDOR_OPTIONS,
@@ -104,3 +110,37 @@ def test_suggest_name_dedupes_against_existing_routes() -> None:
     assert _suggest_name("OpenAI", routes) == "OpenAI (2)"
     assert _suggest_name("Anthropic", routes) == "Anthropic"
     assert _suggest_name(CUSTOM_VENDOR, routes) == "Custom"
+
+
+@pytest.fixture
+def _rendered_settings(monkeypatch):
+    """A settings page backed by an in-memory Settings, sync in connect mode."""
+    state = {
+        "settings": Settings(
+            text_providers={
+                "OpenAI": ProviderProfile("OpenAI", "gpt-4o", "https://api", "sk-old"),
+            },
+            active_text_provider="OpenAI",
+        )
+    }
+    monkeypatch.setattr(settings_module, "load_settings", lambda: state["settings"])
+    monkeypatch.setattr(
+        settings_module, "save_settings", lambda s: state.update(settings=s)
+    )
+    monkeypatch.setattr(settings_module, "apply_env", lambda _s: None)
+    monkeypatch.setattr(sync, "get_shared_runtime", lambda: None)
+    return state
+
+
+async def test_transfer_section_renders_and_export_validates(
+    _rendered_settings,
+) -> None:
+    async with user_simulation(settings_module.settings_page) as user:
+        await user.open("/")
+        await user.should_see("Backup & transfer")
+        user.find(kind=ui.button, content="Export").click()
+        await user.should_see("Export configuration")
+        user.find("Passphrase").type("short")
+        user.find("Confirm passphrase").type("short")
+        user.find(kind=ui.button, content="Export file").click()
+        await user.should_see("at least")
