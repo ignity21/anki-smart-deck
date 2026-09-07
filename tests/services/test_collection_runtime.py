@@ -26,7 +26,7 @@ class FakeCollection:
         self.closed = True
 
 
-class FakeDBError(Exception):
+class DBError(Exception):
     """Stands in for anki.errors.DBError (matched by class name)."""
 
 
@@ -70,10 +70,20 @@ async def test_exception_in_job_propagates_without_killing_worker() -> None:
 
 async def test_locked_collection_raises_in_use_error_naming_path() -> None:
     def locked_opener(path: str, /) -> object:
-        raise FakeDBError("Anki already open, or media currently syncing.")
+        raise DBError("Anki already open, or media currently syncing.")
 
     runtime = CollectionRuntime("/tmp/some/collection.anki2", opener=locked_opener)
     with pytest.raises(CollectionInUseError, match="/tmp/some/collection.anki2"):
+        await runtime.open()
+
+
+async def test_missing_collection_file_raises_file_not_found() -> None:
+    def missing_opener(path: str, /) -> object:
+        raise DBError("database disk image is malformed")
+
+    nonexistent_path = "/tmp/nonexistent/collection.anki2"
+    runtime = CollectionRuntime(nonexistent_path, opener=missing_opener)
+    with pytest.raises(FileNotFoundError, match="does not exist"):
         await runtime.open()
 
 

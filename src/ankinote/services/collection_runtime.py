@@ -48,7 +48,21 @@ def _default_opener(path: str, /) -> Any:
 
 def _translate_open_error(exc: BaseException, path: str) -> BaseException:
     """Map Anki's lock error onto :class:`CollectionInUseError`."""
-    if type(exc).__name__ == "DBError" or "already open" in str(exc).lower():
+    from pathlib import Path
+
+    exc_str = str(exc).lower()
+    if "already open" in exc_str:
+        return CollectionInUseError(
+            f"The Anki collection at {path} is in use by another process "
+            f"(Anki Desktop or another ankinote process)."
+        )
+
+    if type(exc).__name__ == "DBError":
+        if not Path(path).exists():
+            return FileNotFoundError(
+                f"The Anki collection file does not exist at {path}. "
+                f"Make sure the directory exists and the collection file is in place."
+            )
         return CollectionInUseError(
             f"The Anki collection at {path} is in use by another process "
             f"(Anki Desktop or another ankinote process)."
