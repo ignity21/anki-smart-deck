@@ -227,3 +227,7 @@ output/
 words.txt
 phrases.txt
 sentences.txt
+
+# anki
+data/
+collection.anki2
