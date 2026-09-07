@@ -639,17 +639,13 @@ def _config_transfer_controls(
     *, current: Callable[[], Settings], persist: Callable[[Settings], None]
 ) -> None:
     """Render the passphrase-protected export/import of provider config."""
-    pending: dict[str, bytes] = {}
 
-    async def _run_export(passphrase: str, confirm: str, dialog: ui.dialog) -> None:
+    async def _run_export(passphrase: str, dialog: ui.dialog) -> None:
         if len(passphrase) < MIN_PASSPHRASE_LENGTH:
             ui.notify(
                 t("settings.passphrase_short", min=MIN_PASSPHRASE_LENGTH),
                 type="warning",
             )
-            return
-        if passphrase != confirm:
-            ui.notify(t("settings.passphrase_mismatch"), type="warning")
             return
         blob = await asyncio.to_thread(export_config, current(), passphrase)
         dialog.close()
@@ -666,25 +662,18 @@ def _config_transfer_controls(
             pw = ui.input(
                 t("settings.passphrase"), password=True, password_toggle_button=True
             ).classes("w-full")
-            pw2 = ui.input(t("settings.passphrase_confirm"), password=True).classes(
-                "w-full"
-            )
+            pw.on("keydown.enter", lambda: _run_export(pw.value or "", dialog))
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button(t("common.cancel"), on_click=dialog.close).props(
                     "flat no-caps"
                 )
                 ui.button(
                     t("settings.export_run"),
-                    on_click=lambda: _run_export(
-                        pw.value or "", pw2.value or "", dialog
-                    ),
+                    on_click=lambda: _run_export(pw.value or "", dialog),
                 ).props("unelevated no-caps")
         dialog.open()
 
-    async def _run_import(passphrase: str, dialog: ui.dialog) -> None:
-        blob = pending.get("blob")
-        if not blob:
-            return
+    async def _run_import(blob: bytes, passphrase: str, dialog: ui.dialog) -> None:
         try:
             bundle = await asyncio.to_thread(import_config, blob, passphrase)
         except ConfigImportError:
@@ -697,7 +686,7 @@ def _config_transfer_controls(
         )
         ui.navigate.reload()
 
-    def _open_import() -> None:
+    def _open_import(blob: bytes) -> None:
         with ui.dialog() as dialog, ui.card().classes("w-96 gap-3"):
             ui.label(t("settings.import_title")).classes("text-lg font-semibold")
             ui.label(t("settings.import_passphrase_help")).classes(
@@ -706,30 +695,40 @@ def _config_transfer_controls(
             pw = ui.input(
                 t("settings.passphrase"), password=True, password_toggle_button=True
             ).classes("w-full")
+            pw.on(
+                "keydown.enter",
+                lambda: _run_import(blob, pw.value or "", dialog),
+            )
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button(t("common.cancel"), on_click=dialog.close).props(
                     "flat no-caps"
                 )
                 ui.button(
                     t("settings.import_confirm"),
-                    on_click=lambda: _run_import(pw.value or "", dialog),
+                    on_click=lambda: _run_import(blob, pw.value or "", dialog),
                 ).props("unelevated no-caps")
         dialog.open()
 
     async def _on_file(event: events.UploadEventArguments) -> None:
-        pending["blob"] = await event.file.read()
-        _open_import()
+        blob = await event.file.read()
+        picker.reset()
+        _open_import(blob)
+
+    picker = (
+        ui.upload(auto_upload=True, max_files=1, on_upload=_on_file)
+        .props("accept=.json")
+        .classes("hidden")
+    )
 
     with ui.row().classes("gap-3 items-center flex-wrap"):
         ui.button(t("settings.export"), icon="lock", on_click=_open_export).props(
             "outline no-caps"
         )
-        ui.upload(
-            label=t("settings.import"),
-            auto_upload=True,
-            max_files=1,
-            on_upload=_on_file,
-        ).props("accept=.json flat").classes("max-w-xs")
+        ui.button(
+            t("settings.import"),
+            icon="lock_open",
+            on_click=lambda: picker.run_method("pickFiles"),
+        ).props("outline no-caps")
 
 
 def _section(title: str) -> None:

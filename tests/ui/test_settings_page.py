@@ -141,6 +141,5 @@ async def test_transfer_section_renders_and_export_validates(
         user.find(kind=ui.button, content="Export").click()
         await user.should_see("Export configuration")
         user.find("Passphrase").type("short")
-        user.find("Confirm passphrase").type("short")
         user.find(kind=ui.button, content="Export file").click()
         await user.should_see("at least")
